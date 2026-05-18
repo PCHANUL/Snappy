@@ -1,0 +1,102 @@
+// You.com Search API 모듈
+// 회당 $0.005, 티스토리 + 브런치 담당
+// 신규 가입 시 $100 크레딧
+
+import { env } from '../_shared/env.ts';
+import { ExternalApiError } from '../_shared/errors.ts';
+import { logger } from '../_shared/logger.ts';
+import type { ContentItem, Period, Platform } from '../_shared/types.ts';
+
+interface YouComWebResult {
+  url: string;
+  title: string;
+  description?: string;
+  snippets?: string[];
+  thumbnail_url?: string;
+  page_age?: string;
+  favicon_url?: string;
+}
+
+interface YouComSearchResponse {
+  results: {
+    web?: YouComWebResult[];
+    news?: YouComWebResult[];
+  };
+  metadata: {
+    query: string;
+    search_uuid: string;
+    latency: number;
+  };
+}
+
+async function searchYouCom(
+  keyword: string,
+  domains: string[],
+  platform: Platform,
+  count: number = 10,
+  period: Period = 'month',
+): Promise<ContentItem[]> {
+  const url = `https://ydc-index.io/v1/search` +
+    `?query=${encodeURIComponent(keyword)}` +
+    `&count=${count}` +
+    `&freshness=${period}` +
+    `&country=KR` +
+    `&language=KO` +
+    `&include_domains=${domains.join(',')}`;
+
+  logger.info('You.com search started', { keyword, platform, domains });
+
+  const response = await fetch(url, {
+    headers: {
+      'X-API-KEY': env.youcom.apiKey,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new ExternalApiError('You.com', `${response.status} ${body}`);
+  }
+
+  const data: YouComSearchResponse = await response.json();
+  const webResults = data.results?.web || [];
+
+  const items = webResults.map((item) => normalizeItem(item, platform));
+
+  logger.info('You.com search completed', {
+    keyword,
+    platform,
+    found: items.length,
+    latency: data.metadata.latency,
+  });
+
+  return items;
+}
+
+function normalizeItem(item: YouComWebResult, platform: Platform): ContentItem {
+  return {
+    platform,
+    title: item.title,
+    url: item.url,
+    description: item.description || '',
+    snippet: item.snippets?.[0],
+    thumbnail: item.thumbnail_url,
+    published_at: item.page_age,
+  };
+}
+
+export function searchTistory(
+  keyword: string,
+  count: number = 10,
+  period: Period = 'month',
+): Promise<ContentItem[]> {
+  return searchYouCom(keyword, ['tistory.com'], 'tistory', count, period);
+}
+
+export function searchBrunch(
+  keyword: string,
+  count: number = 10,
+  period: Period = 'month',
+): Promise<ContentItem[]> {
+  return searchYouCom(keyword, ['brunch.co.kr'], 'brunch', count, period);
+}

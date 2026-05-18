@@ -1,19 +1,25 @@
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+
+node_modules/
+coverage/
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+supabase/.cache/
+
+# Deno cache / editor files
+.deno/
+.vscode/
+.idea/
+
+# Keep v1 Flutter output out of the v2 branch if generated locally
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.packages
-.pub-cache/
-.pub/
 build/
-coverage/
-.idea/
-*.iml
-
-android/.gradle/
-android/app/debug/
-android/app/profile/
-android/app/release/
-
-ios/Flutter/.last_build_id
-ios/Pods/
-ios/.symlinks/

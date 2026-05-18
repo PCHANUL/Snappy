@@ -1,0 +1,7 @@
+project_id = "trend-finder"
+
+[functions.trigger-search]
+verify_jwt = false
+
+[functions.manage-user]
+verify_jwt = false
