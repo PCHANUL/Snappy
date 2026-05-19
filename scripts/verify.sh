@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 배포된 시스템 검증
-# 1. 함수 응답 확인
+# 1. 함수/GitHub Pages 응답 확인
 # 2. 가입 → 노션 키 등록 → 사용량 조회 흐름 검증
 # 3. (선택) 실제 검색 흐름까지 검증
 
@@ -24,6 +24,7 @@ require_command "jq" "Mac: brew install jq / Linux: apt install jq"
 
 BASE_URL="$SUPABASE_URL/functions/v1"
 AUTH_HEADER="Authorization: Bearer $SUPABASE_ANON_KEY"
+PAGES_URL="${GITHUB_PAGES_URL:-https://pchanul.github.io/Snappy/}"
 
 log_step "1. 함수 응답 확인 (Smoke Test)"
 
@@ -75,6 +76,31 @@ elif [ "$pages_status" = "404" ]; then
   exit 1
 else
   log_warn "pages 예상치 못한 응답: $pages_status"
+fi
+
+log_info "GitHub Pages 응답 확인..."
+pages_headers_file="$(mktemp)"
+pages_body_file="$(mktemp)"
+trap 'rm -f "$pages_headers_file" "$pages_body_file"' EXIT
+
+github_pages_status=$(curl -L -sS --max-time 20 \
+  -D "$pages_headers_file" \
+  -o "$pages_body_file" \
+  -w "%{http_code}" \
+  "$PAGES_URL")
+github_pages_content_type=$(grep -i '^content-type:' "$pages_headers_file" | tail -n 1 | tr -d '\r' || true)
+
+if [ "$github_pages_status" = "200" ]; then
+  if echo "$github_pages_content_type" | grep -qi 'text/html' && grep -q 'Snappy' "$pages_body_file"; then
+    log_success "GitHub Pages 응답 정상 ($github_pages_status — ${github_pages_content_type:-content-type unknown})"
+  else
+    log_warn "GitHub Pages 응답은 200이지만 HTML 내용 확인이 필요합니다."
+    log_detail "URL: $PAGES_URL"
+  fi
+else
+  log_error "GitHub Pages 응답 이상 ($github_pages_status)"
+  log_detail "URL: $PAGES_URL"
+  exit 1
 fi
 
 log_step "2. 가입 → 노션 등록 → 사용량 조회 흐름"

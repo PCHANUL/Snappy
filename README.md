@@ -11,6 +11,8 @@
 ## 구조
 
 ```
+docs/
+└── index.html                # GitHub Pages 셋업 페이지
 supabase/
 ├── functions/
 │   ├── _shared/              # 공통 모듈
@@ -30,12 +32,15 @@ supabase/
 │   │   └── blocks.ts         # 블록 빌더
 │   ├── trigger-search/       # 메인 Edge Function
 │   │   └── index.ts
-│   └── manage-user/          # 사용자 관리
+│   ├── manage-user/          # 사용자 관리
+│   │   └── index.ts
+│   └── pages/                # Edge Function HTML fallback
 │       └── index.ts
 └── migrations/               # DB 스키마
     ├── 001_users.sql
     ├── 002_search_logs.sql
-    └── 003_usage_quotas.sql
+    ├── 003_usage_quotas.sql
+    └── 004_web_storage_bucket.sql
 ```
 
 ## 빠른 시작
@@ -72,7 +77,12 @@ supabase link --project-ref [YOUR_PROJECT_REF]
 bash scripts/deploy.sh
 ```
 
-전체 흐름: 사전 확인 → DB 마이그레이션 → 시크릿 등록 → 함수 배포 → 검증
+전체 흐름: 사전 확인 → DB 마이그레이션 → 시크릿 등록 → 함수 배포 → GitHub Pages 배포 → 검증
+
+정적 셋업 페이지는 GitHub Pages에서 제공합니다.
+
+- URL: https://pchanul.github.io/Snappy/
+- 소스: `docs/index.html`
 
 ### 4. 로컬 개발
 
@@ -89,7 +99,9 @@ bash scripts/dev.sh
 | `migrate-db.sh` | DB 마이그레이션만 실행 |
 | `set-secrets.sh` | Supabase 시크릿만 등록 |
 | `deploy-functions.sh` | Edge Function만 배포 |
+| `deploy-pages.sh` | `docs/index.html`을 GitHub Pages 기준으로 검증/배포 |
 | `verify.sh` | 배포 후 동작 검증 |
+| `upload-static.sh` | 이전 명령 호환용 wrapper (`deploy-pages.sh`로 위임) |
 | `dev.sh` | 로컬 개발 서버 실행 |
 | `logs.sh` | 함수 로그 실시간 조회 |
 
@@ -101,6 +113,9 @@ bash scripts/deploy.sh
 
 # 코드 변경 후 빠른 재배포 (함수만)
 bash scripts/deploy.sh --functions-only
+
+# 정적 셋업 페이지만 확인/배포
+bash scripts/deploy-pages.sh
 
 # 특정 함수만 배포
 bash scripts/deploy-functions.sh trigger-search
