@@ -151,13 +151,14 @@ async function createSearchDB(parentPageId) {
       '상태':         { status: {} },
       '발견 콘텐츠 수': { number: { format: 'number' } },
       '검색일시':     { created_time: {} },
+      'user_id':      { rich_text: {} },
     },
   });
 }
 
 // ── 각 페이지 콘텐츠 ────────────────────────────────────────────────────────
 
-function blocksMain(sijakLink, geomseakLink, faqLink, seoljeongLink) {
+function blocksMain() {
   return [
     b.p('키워드 하나로 매체별 인기 콘텐츠를 30초 만에 발견합니다.'),
     b.divider(),
@@ -208,6 +209,23 @@ function blocksSijak() {
 function blocksGeomseok() {
   return [
     b.callout('새 검색을 시작하려면 "+ 새로 만들기" 클릭 → 키워드 입력 → 🚀 검색 실행\n검색 결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
+    b.divider(),
+    b.h2('DB 속성 안내'),
+    b.bullet('키워드: 검색할 단어 (예: 비건 디저트)'),
+    b.bullet('매체: 네이버블로그 / 유튜브 / 티스토리 / 브런치 (복수 선택 가능)'),
+    b.bullet('기간: 1일 / 1주 / 1개월(기본) / 1년'),
+    b.bullet('결과 개수: 5 / 10(기본) / 20'),
+    b.bullet('상태: 대기 → 검색중 → 완료 / 실패 (자동 변경)'),
+    b.bullet('user_id: 셋업 완료 후 받은 ID — 새 행 추가 시 기본값으로 설정해두세요'),
+    b.divider(),
+    b.h2('매체 → API 값 매핑'),
+    b.p('버튼 자동화 HTTP 요청 Body 작성 시 아래 영어값을 사용합니다.'),
+    b.bullet('네이버블로그 → naver_blog'),
+    b.bullet('유튜브 → youtube'),
+    b.bullet('티스토리 → tistory'),
+    b.bullet('브런치 → brunch'),
+    b.p(''),
+    b.bullet('1일 → day   /   1주 → week   /   1개월 → month   /   1년 → year'),
   ];
 }
 
@@ -303,12 +321,30 @@ function blocksSeoljeong() {
     b.divider(),
     b.h2('검색 버튼 자동화 설정값'),
     b.callout([
-      '검색 DB의 🚀 버튼 자동화 → HTTP 요청에 아래 값을 입력하세요.',
+      '검색 DB의 🚀 버튼 속성 → 자동화 추가 → HTTP 요청에 아래 값을 입력하세요.',
       '',
       `URL: ${webhookUrl}`,
+      'Method: POST',
       `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
       `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+      'Content-Type: application/json',
     ].join('\n'), '⚙️'),
+    b.h2('웹훅 Body (JSON)'),
+    b.callout([
+      '아래 JSON을 HTTP 요청 Body에 붙여넣으세요.',
+      '{{...}} 값은 노션이 현재 행의 속성값으로 자동 치환합니다.',
+      '',
+      '{',
+      '  "user_id": "{{user_id}}",',
+      '  "notion_page_id": "{{현재 페이지 ID}}",',
+      '  "keyword": "{{키워드}}",',
+      '  "platforms": ["{{매체}}"],',
+      '  "period": "{{기간}}",',
+      '  "result_count": {{결과 개수}}',
+      '}',
+      '',
+      '※ 매체·기간 값은 검색 페이지의 "매체 → API 값 매핑" 참고',
+    ].join('\n'), '📋'),
     b.divider(),
     b.h2('플랜'),
     b.callout('현재 플랜: 베타 무료\n일일 한도: 3회', '📊'),
@@ -326,6 +362,7 @@ async function main() {
   // 1. 메인 페이지
   process.stdout.write('📘 메인 페이지 생성 중...');
   const mainPage = await createPage(PARENT_PAGE_ID, '트렌드 콘텐츠 발견기', '📘');
+  await appendBlocks(mainPage.id, blocksMain());
   console.log(` ✅  ${mainPage.url}`);
 
   await sleep(300);
@@ -376,18 +413,22 @@ ${mainPage.url}
 1. 검색 DB에 "🚀 검색 실행" 버튼 속성 추가
    - 속성 추가 → 버튼
    - 자동화 → 액션 1: 상태를 "검색중"으로 변경
-   - 자동화 → 액션 2: HTTP 요청 (설정 페이지의 값 참고)
+   - 자동화 → 액션 2: HTTP 요청 (설정 페이지 "검색 버튼 자동화 설정값" 참고)
 
-2. 검색 DB 뷰 3개 추가
+2. 검색 DB의 user_id 속성에 기본값 설정
+   - 셋업 완료 후 받은 user_id 값을 기본값으로 지정
+   - 새 검색 행 추가 시 자동으로 채워짐
+
+3. 검색 DB 뷰 3개 추가
    - 전체 (테이블, 검색일시 내림차순)
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-3. 설정 페이지 usage 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체
+4. 설정 페이지 usage 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체
 
-4. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
+5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
-5. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 `);
 }
 
