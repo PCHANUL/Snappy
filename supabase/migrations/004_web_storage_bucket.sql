@@ -1,5 +1,5 @@
--- Public Storage bucket for the setup web app.
--- Files are uploaded by scripts/deploy-web.sh.
+-- Legacy public Storage bucket retained because migration 004 is already applied remotely.
+-- The setup web app is now deployed from docs/index.html via GitHub Pages.
 
 INSERT INTO storage.buckets (
   id,

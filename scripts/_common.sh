@@ -3,13 +3,13 @@
 # 다른 스크립트에서 source로 불러서 사용
 
 # 색상 코드
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-GRAY='\033[0;90m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+GRAY=$'\033[0;90m'
+BOLD=$'\033[1m'
+NC=$'\033[0m' # No Color
 
 # 로그 함수
 log_info() {
