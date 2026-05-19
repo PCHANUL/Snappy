@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snappy — 사용량</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: transparent;
+      color: #1a1a1a;
+      padding: 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .stat { text-align: center; flex: 1; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: #6366f1; }
+    .stat-label { font-size: 0.75rem; color: #888; margin-top: 2px; }
+    .divider { width: 1px; height: 48px; background: #e5e7eb; }
+    .bar-wrap { flex: 2; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 0.8rem; color: #555; margin-bottom: 6px; }
+    .bar-track { background: #f3f4f6; border-radius: 99px; height: 8px; overflow: hidden; }
+    .bar-fill { background: #6366f1; height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+    .bar-fill.warn { background: #f59e0b; }
+    .bar-fill.full { background: #ef4444; }
+    .error { color: #991b1b; font-size: 0.9rem; padding: 8px; }
+    .loading { color: #999; font-size: 0.9rem; padding: 8px; }
+  </style>
+</head>
+<body>
+  <div id="root"><p class="loading">불러오는 중...</p></div>
+
+  <script>
+    const SUPABASE_URL = 'https://mmnwbkbipjnmsvtyohjg.supabase.co';
+    const params = new URLSearchParams(location.search);
+    const userId = params.get('user_id');
+
+    async function load() {
+      const root = document.getElementById('root');
+      if (!userId) {
+        root.innerHTML = '<p class="error">user_id가 필요합니다.</p>';
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${SUPABASE_URL}/functions/v1/manage-user?action=usage&user_id=${encodeURIComponent(userId)}`
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '조회 실패');
+
+        const { used, limit, remaining } = data.today;
+        const pct = Math.min(100, Math.round((used / limit) * 100));
+        const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
+
+        root.innerHTML = `
+          <div class="card">
+            <div class="stat">
+              <div class="stat-value">${remaining}</div>
+              <div class="stat-label">오늘 남은 검색</div>
+            </div>
+            <div class="divider"></div>
+            <div class="bar-wrap">
+              <div class="bar-label">
+                <span>오늘 사용량</span>
+                <span>${used} / ${limit}회</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill ${fillClass}" style="width:${pct}%"></div>
+              </div>
+            </div>
+          </div>`;
+      } catch (err) {
+        root.innerHTML = `<p class="error">${err.message}</p>`;
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
