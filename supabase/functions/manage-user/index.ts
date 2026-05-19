@@ -9,8 +9,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { encryptNotionKey } from '../_shared/crypto.ts';
 import { getSupabase } from '../_shared/db.ts';
+import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
 import {
+  AuthError,
   corsHeaders,
   errorToResponse,
   ValidationError,
@@ -35,6 +37,10 @@ serve(async (req) => {
         return await handleUsage(req, url);
       case 'list-databases':
         return await handleListDatabases(req);
+      case 'admin-create-user':
+        return await handleAdminCreateUser(req);
+      case 'admin-list-users':
+        return await handleAdminListUsers(req, url);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -231,7 +237,75 @@ async function handleListDatabases(req: Request): Promise<Response> {
   return jsonResponse({ databases });
 }
 
+// === 관리자: 사용자 생성 ===
+async function handleAdminCreateUser(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+  requireAdmin(req);
+
+  const body = await req.json();
+  const email = body.email?.trim();
+  const tier = body.subscription_tier || 'free';
+
+  if (!email || !isValidEmail(email)) {
+    throw new ValidationError('Invalid email');
+  }
+  if (!['free', 'light', 'standard', 'premium'].includes(tier)) {
+    throw new ValidationError(`Invalid subscription_tier: ${tier}`);
+  }
+
+  const { data: existing } = await getSupabase()
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existing) {
+    throw new ValidationError('Email already registered', '이미 등록된 이메일입니다.');
+  }
+
+  const { data, error } = await getSupabase()
+    .from('users')
+    .insert({ email, subscription_tier: tier })
+    .select('id, email, subscription_tier')
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Create user failed: ${error?.message}`);
+  }
+
+  logger.info('Admin created user', { user_id: data.id, email, tier });
+
+  const setupUrl = `https://pchanul.github.io/Snappy/?user_id=${data.id}`;
+  return jsonResponse({ user_id: data.id, email: data.email, subscription_tier: data.subscription_tier, setup_url: setupUrl });
+}
+
+// === 관리자: 사용자 목록 ===
+async function handleAdminListUsers(req: Request, url: URL): Promise<Response> {
+  requireAdmin(req);
+
+  const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)));
+  const from = (page - 1) * limit;
+
+  const { data, error, count } = await getSupabase()
+    .from('users')
+    .select('id, email, subscription_tier, subscription_expires_at, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, from + limit - 1);
+
+  if (error) throw new Error(`List users failed: ${error.message}`);
+
+  return jsonResponse({ users: data || [], total: count ?? 0, page, limit });
+}
+
 // === 헬퍼 함수 ===
+
+function requireAdmin(req: Request): void {
+  const secret = env.admin.secret;
+  if (!secret) throw new ValidationError('Admin not configured', '관리자 기능이 설정되지 않았습니다.');
+  const header = req.headers.get('x-admin-secret');
+  if (header !== secret) throw new AuthError('Invalid admin secret');
+}
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
