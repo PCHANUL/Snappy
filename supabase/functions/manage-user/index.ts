@@ -33,6 +33,8 @@ serve(async (req) => {
         return await handleSetupNotion(req);
       case 'usage':
         return await handleUsage(req, url);
+      case 'list-databases':
+        return await handleListDatabases(req);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -187,6 +189,46 @@ async function handleUsage(req: Request, url: URL): Promise<Response> {
       remaining: Math.max(0, limit - used),
     },
   });
+}
+
+// === 노션 데이터베이스 목록 조회 ===
+async function handleListDatabases(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+
+  const body = await req.json();
+  const { notion_api_key } = body;
+
+  if (!notion_api_key || typeof notion_api_key !== 'string') {
+    throw new ValidationError('notion_api_key required');
+  }
+
+  const res = await fetch('https://api.notion.com/v1/search', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${notion_api_key}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      filter: { value: 'database', property: 'object' },
+      sort: { direction: 'descending', timestamp: 'last_edited_time' },
+    }),
+  });
+
+  if (res.status === 401) {
+    throw new ValidationError('Invalid Notion API key', '노션 API 키가 올바르지 않습니다.');
+  }
+  if (!res.ok) {
+    throw new ValidationError(`Notion API error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const databases = data.results.map((db: any) => ({
+    id: db.id.replace(/-/g, ''),
+    title: db.title?.[0]?.plain_text || '제목 없음',
+  }));
+
+  return jsonResponse({ databases });
 }
 
 // === 헬퍼 함수 ===

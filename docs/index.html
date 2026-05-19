@@ -132,6 +132,23 @@
     }
     details ol a { color: #6366f1; text-decoration: none; }
 
+    /* DB picker */
+    .db-select {
+      padding: 10px 14px;
+      border: 1.5px solid #6366f1;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: #fff;
+      color: #1a1a1a;
+      cursor: pointer;
+      outline: none;
+      width: 100%;
+    }
+    .db-select:focus { border-color: #4f46e5; }
+    .db-hint { font-size: 0.78rem; color: #888; margin-top: 4px; }
+    .db-loading { font-size: 0.82rem; color: #6366f1; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+    .db-empty { font-size: 0.82rem; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px; margin-top: 4px; line-height: 1.5; }
+
     /* Completion screen */
     .user-id-row {
       display: flex;
@@ -243,16 +260,11 @@
             </details>
           </div>
           <div class="field">
-            <label for="dbId">노션 데이터베이스 ID</label>
-            <input type="text" id="dbId" placeholder="32자리 UUID" required>
-            <details>
-              <summary>데이터베이스 ID 찾는 방법 ▸</summary>
-              <ol>
-                <li>노션에서 검색 DB 페이지 열기</li>
-                <li>주소창 URL에서 마지막 32자리 복사 (하이픈 제외)</li>
-                <li>위 입력창에 붙여넣기</li>
-              </ol>
-            </details>
+            <label>노션 데이터베이스</label>
+            <div id="dbPickerArea">
+              <input type="text" id="dbId" placeholder="API 키를 입력하면 자동으로 불러옵니다" disabled
+                style="background:#f9fafb;color:#aaa;cursor:not-allowed;">
+            </div>
           </div>
           <button type="submit" class="btn-primary" id="setupBtn">다음 →</button>
         </form>
@@ -314,6 +326,79 @@
       });
     }
 
+    // API 키 입력 → 데이터베이스 자동 로드
+    let dbFetchTimer = null;
+    let selectedDbId = null;
+
+    function renderDbLoading() {
+      document.getElementById('dbPickerArea').innerHTML =
+        '<div class="db-loading"><span class="spinner">⟳</span> 데이터베이스 불러오는 중...</div>';
+    }
+
+    function renderDbSelect(databases) {
+      const area = document.getElementById('dbPickerArea');
+      if (databases.length === 0) {
+        area.innerHTML = `
+          <div class="db-empty">
+            연결된 데이터베이스가 없습니다.<br>
+            노션에서 검색 DB 페이지 열기 → "..." 메뉴 → 연결 → 통합 추가 후 다시 시도하세요.
+          </div>
+          <input type="text" id="dbId" placeholder="직접 ID 입력 (32자리 UUID)" style="margin-top:8px;">`;
+        selectedDbId = null;
+        return;
+      }
+      const opts = databases.map(db =>
+        `<option value="${db.id}">${db.title}</option>`
+      ).join('');
+      area.innerHTML = `
+        <select class="db-select" id="dbSelect">
+          ${opts}
+          <option value="__manual__">직접 입력...</option>
+        </select>
+        <div class="db-hint">통합이 연결된 데이터베이스만 표시됩니다</div>`;
+      selectedDbId = databases[0].id;
+      document.getElementById('dbSelect').addEventListener('change', (e) => {
+        if (e.target.value === '__manual__') {
+          document.getElementById('dbPickerArea').innerHTML =
+            '<input type="text" id="dbId" placeholder="32자리 UUID 직접 입력" autofocus>';
+          selectedDbId = null;
+        } else {
+          selectedDbId = e.target.value;
+        }
+      });
+    }
+
+    function renderDbError(msg) {
+      document.getElementById('dbPickerArea').innerHTML =
+        `<input type="text" id="dbId" placeholder="32자리 UUID 직접 입력">
+         <div class="db-hint" style="color:#b45309;">${msg} — 직접 입력해주세요.</div>`;
+      selectedDbId = null;
+    }
+
+    async function fetchDatabases(apiKey) {
+      renderDbLoading();
+      try {
+        const res = await fetch(FUNCTION_BASE + '/manage-user?action=list-databases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notion_api_key: apiKey }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '목록 조회 실패');
+        renderDbSelect(data.databases);
+      } catch (err) {
+        renderDbError(err.message);
+      }
+    }
+
+    document.getElementById('notionKey').addEventListener('input', (e) => {
+      const key = e.target.value.trim();
+      clearTimeout(dbFetchTimer);
+      if (key.startsWith('secret_') && key.length > 20) {
+        dbFetchTimer = setTimeout(() => fetchDatabases(key), 600);
+      }
+    });
+
     // Step 1: signup
     document.getElementById('signupForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -352,13 +437,17 @@
       result.className = 'message hidden';
 
       try {
+        const manualInput = document.getElementById('dbId');
+        const dbId = selectedDbId || (manualInput ? manualInput.value.trim() : '');
+        if (!dbId) throw new Error('데이터베이스를 선택하거나 ID를 입력해주세요.');
+
         const res = await fetch(FUNCTION_BASE + '/manage-user?action=setup-notion', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_id: userId,
             notion_api_key: document.getElementById('notionKey').value.trim(),
-            notion_database_id: document.getElementById('dbId').value.trim(),
+            notion_database_id: dbId,
           }),
         });
         const data = await res.json();
