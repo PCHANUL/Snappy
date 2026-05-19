@@ -37,11 +37,11 @@ function loadEnv(filePath) {
 loadEnv(path.join(ROOT, '.env.local'));
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY;
-const PARENT_PAGE_ID = (process.env.NOTION_TEMPLATE_PARENT_PAGE_ID || process.argv[2] || '').replace(/-/g, '');
+const PARENT_PAGE_ID = (process.argv[2] || process.env.NOTION_TEMPLATE_PARENT_PAGE_ID || '').replace(/-/g, '');
 const SUPABASE_URL   = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON  = process.env.SUPABASE_ANON_KEY || '';
-const PAGES_BASE     = 'https://pchanul.github.io/Snappy';
-const SETUP_URL      = `${PAGES_BASE}/setup.html`;
+const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '');
+const SETUP_URL      = `${PAGES_BASE}/`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 
 if (!NOTION_API_KEY) {
