@@ -20,7 +20,10 @@
       display: flex;
       align-items: center;
       gap: 24px;
+      border-left: 4px solid #6366f1;
     }
+    .card.warn { border-left-color: #f59e0b; }
+    .card.full { border-left-color: #ef4444; }
     .stat { text-align: center; flex: 1; }
     .stat-value { font-size: 2rem; font-weight: 800; color: #6366f1; }
     .stat-label { font-size: 0.75rem; color: #888; margin-top: 2px; }
@@ -79,7 +82,7 @@
         const tier = tierLabel(data.subscription_tier);
 
         root.innerHTML = `
-          <div class="card">
+          <div class="card ${fillClass}">
             <div class="stat">
               <div class="stat-value">${remaining}</div>
               <div class="stat-label">오늘 남은 검색</div>
