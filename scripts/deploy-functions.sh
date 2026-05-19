@@ -17,6 +17,7 @@ cd "$PROJECT_ROOT"
 FUNCTIONS=(
   "trigger-search"
   "manage-user"
+  "pages"
 )
 
 # 도움말
