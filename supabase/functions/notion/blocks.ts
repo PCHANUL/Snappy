@@ -13,11 +13,19 @@ export function buildResultBlocks(
 ): NotionBlock[] {
   const totalCount = results.reduce((sum, r) => sum + r.count, 0);
 
+  // 매체별 요약 한 줄: "📝 8개  ·  🎥 10개  ·  📚 0개  ·  ✍️ 오류"
+  const summaryParts = results.map(r => {
+    const info = PLATFORM_INFO[r.platform];
+    if (r.error) return `${info.emoji} ${info.name} ⚠️`;
+    return `${info.emoji} ${info.name} ${r.count}개`;
+  });
+
   const blocks: NotionBlock[] = [
     callout(
       `🔍 "${keyword}" — ${totalCount}개 발견 | ${(metadata.duration_ms / 1000).toFixed(1)}초`,
       '🔍',
     ),
+    paragraph(summaryParts.join('  ·  '), 'gray'),
     divider(),
   ];
 
@@ -25,16 +33,18 @@ export function buildResultBlocks(
     const info = PLATFORM_INFO[result.platform];
 
     if (result.items.length === 0) {
+      // 결과 없거나 오류인 경우 → toggle로 접어서 방해 안 되게
       const msg = result.error ? `⚠️ 검색 실패: ${result.error}` : '결과를 찾지 못했습니다.';
       blocks.push(toggle(`${info.emoji} ${info.name}`, [paragraph(msg, 'gray')]));
       continue;
     }
 
-    const children: NotionBlock[] = [];
+    // 결과 있는 경우 → heading_2로 바로 표시 (클릭 불필요)
+    blocks.push(heading2(`${info.emoji} ${info.name} (${result.count}개)`));
     for (const [idx, item] of result.items.entries()) {
-      children.push(...buildContentItemBlocks(idx + 1, item));
+      blocks.push(...buildContentItemBlocks(idx + 1, item));
     }
-    blocks.push(toggle(`${info.emoji} ${info.name}  (${result.count}개)`, children));
+    blocks.push(divider());
   }
 
   return blocks;
@@ -59,6 +69,15 @@ function buildContentItemBlocks(idx: number, item: ContentItem): NotionBlock[] {
   if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
   if (metaParts.length > 0) {
     blocks.push(paragraphIndent(metaParts.join('  •  '), 'gray'));
+  }
+
+  // 썸네일 이미지 (YouTube, 일부 Tistory/Brunch)
+  if (item.thumbnail) {
+    blocks.push({
+      object: 'block',
+      type: 'image',
+      image: { type: 'external', external: { url: item.thumbnail } },
+    });
   }
 
   const desc = item.snippet || item.description;
