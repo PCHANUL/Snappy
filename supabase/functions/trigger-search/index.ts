@@ -1,62 +1,39 @@
 // 메인 Edge Function — 노션 웹훅 진입점
-// 흐름: 요청 검증 → 사용자 확인 → 즉시 응답 → 백그라운드 처리
-//
-// 노션 자동화가 호출하는 URL:
-// POST https://[project].supabase.co/functions/v1/trigger-search
+// 흐름: 요청 검증(user_id + notion_page_id) → 즉시 202 → 백그라운드에서 페이지 속성 읽기 + 검색
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { searchAllPlatforms } from '../search/orchestrator.ts';
 import { NotionClient } from '../notion/client.ts';
 import { logger } from '../_shared/logger.ts';
-import { corsHeaders, errorToResponse } from '../_shared/errors.ts';
-import { validateSearchRequest } from '../_shared/validator.ts';
+import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
+import { validateMinimalRequest, validateSearchRequest } from '../_shared/validator.ts';
 import {
   getUserAndCheckQuota,
   incrementUsage,
   logSearch,
 } from '../_shared/db.ts';
-import type { SearchRequest, User } from '../_shared/types.ts';
+import type { Platform, User } from '../_shared/types.ts';
 
-// Deno Edge Runtime의 백그라운드 처리 API
-declare const EdgeRuntime: {
-  waitUntil(promise: Promise<any>): void;
-};
+declare const EdgeRuntime: { waitUntil(promise: Promise<any>): void };
 
 serve(async (req) => {
-  // CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', {
-      status: 405,
-      headers: corsHeaders,
-    });
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
   }
 
   try {
-    // 1. 요청 파싱 및 검증
     const body = await req.json();
-    const request = validateSearchRequest(body);
 
-    // 2. 사용자 인증 + 사용량 체크 (병렬 DB 조회)
-    const user = await getUserAndCheckQuota(request.user_id);
+    // user_id + notion_page_id만 즉시 검증 — 나머지는 백그라운드에서 Notion에서 읽음
+    const { user_id, notion_page_id } = validateMinimalRequest(body);
+    const user = await getUserAndCheckQuota(user_id);
 
-    // 3. 즉시 응답 반환 (노션 웹훅 타임아웃 방지)
-    //    실제 처리는 백그라운드에서 진행
-    EdgeRuntime.waitUntil(processSearch(request, user));
+    EdgeRuntime.waitUntil(processSearch(body, user));
 
     return new Response(
-      JSON.stringify({
-        status: 'accepted',
-        page_id: request.notion_page_id,
-        message: '검색을 시작합니다.',
-      }),
-      {
-        status: 202,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      },
+      JSON.stringify({ status: 'accepted', page_id: notion_page_id, message: '검색을 시작합니다.' }),
+      { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (error) {
     logger.error('Request handling failed', error);
@@ -64,16 +41,44 @@ serve(async (req) => {
   }
 });
 
-// 백그라운드 검색 처리
-async function processSearch(request: SearchRequest, user: User): Promise<void> {
+async function processSearch(rawBody: any, user: User): Promise<void> {
   const notion = new NotionClient(user.notion_api_key);
   const startTime = Date.now();
 
-  try {
-    // 노션 페이지 상태: 검색중
-    await notion.updatePageStatus(request.notion_page_id, '검색중');
+  // 로그용 fallback 값 (readSearchParams 실패 전에도 기록 가능하도록)
+  let keyword = (rawBody.keyword as string | undefined)?.trim() || '';
+  let platforms: Platform[] = Array.isArray(rawBody.platforms) ? rawBody.platforms : [];
 
-    // 매체별 병렬 검색
+  try {
+    await notion.updatePageStatus(rawBody.notion_page_id, '검색중');
+
+    // Notion 페이지 속성에서 검색 파라미터 읽기
+    // body에 이미 값이 있으면 그것을 우선 사용 (하위 호환)
+    const pageParams = await notion.readSearchParams(rawBody.notion_page_id);
+
+    keyword = keyword || pageParams.keyword;
+    platforms = platforms.length ? platforms : pageParams.platforms;
+    const period = rawBody.period || pageParams.period;
+    const result_count = rawBody.result_count || pageParams.result_count;
+
+    // 키워드 누락 시 사용자에게 명확한 안내
+    if (!keyword) {
+      throw new ValidationError('keyword is required', '키워드를 입력해주세요.');
+    }
+    // 매체 미선택 시 전체 매체 검색
+    const resolvedPlatforms = platforms.length
+      ? platforms
+      : ['naver_blog', 'youtube', 'tistory', 'brunch'] as Platform[];
+
+    const request = validateSearchRequest({
+      user_id: user.id,
+      notion_page_id: rawBody.notion_page_id,
+      keyword,
+      platforms: resolvedPlatforms,
+      period,
+      result_count,
+    });
+
     const orchestratorResult = await searchAllPlatforms(
       request.keyword,
       request.platforms,
@@ -81,25 +86,16 @@ async function processSearch(request: SearchRequest, user: User): Promise<void> 
       request.period,
     );
 
-    // 노션에 결과 저장
     await notion.updatePageWithResults(
       request.notion_page_id,
       request.keyword,
       orchestratorResult.results,
-      {
-        duration_ms: Date.now() - startTime,
-        cost_usd: orchestratorResult.total_cost_usd,
-      },
+      { duration_ms: Date.now() - startTime, cost_usd: orchestratorResult.total_cost_usd },
     );
 
-    // 사용량 증가
     await incrementUsage(request.user_id);
 
-    // 성공 로그
-    const totalFound = orchestratorResult.results.reduce(
-      (sum, r) => sum + r.count,
-      0,
-    );
+    const totalFound = orchestratorResult.results.reduce((s, r) => s + r.count, 0);
     await logSearch({
       user_id: request.user_id,
       keyword: request.keyword,
@@ -111,36 +107,22 @@ async function processSearch(request: SearchRequest, user: User): Promise<void> 
       status: 'success',
     });
 
-    logger.info('Search completed successfully', {
-      user_id: request.user_id,
-      keyword: request.keyword,
-      totalFound,
-      duration_ms: Date.now() - startTime,
-    });
+    logger.info('Search completed', { user_id: user.id, keyword, totalFound, duration_ms: Date.now() - startTime });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Search failed', error, {
-      user_id: request.user_id,
-      keyword: request.keyword,
-    });
+    logger.error('Search failed', error, { user_id: user.id, keyword });
 
-    // 노션에 실패 상태 반영 (best effort)
     try {
-      await notion.updatePageStatus(
-        request.notion_page_id,
-        '실패',
-        errorMessage,
-      );
+      await notion.updatePageStatus(rawBody.notion_page_id, '실패', errorMessage);
     } catch (notionError) {
       logger.error('Failed to update Notion failure status', notionError);
     }
 
-    // 실패 로그
     await logSearch({
-      user_id: request.user_id,
-      keyword: request.keyword,
-      platforms: request.platforms,
-      period: request.period,
+      user_id: user.id,
+      keyword: keyword || '(unknown)',
+      platforms: platforms.length ? platforms : ['naver_blog'],
+      period: rawBody.period || 'month',
       result_count: 0,
       duration_ms: Date.now() - startTime,
       cost_usd: 0,

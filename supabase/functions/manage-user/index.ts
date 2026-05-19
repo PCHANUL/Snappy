@@ -37,6 +37,8 @@ serve(async (req) => {
         return await handleUsage(req, url);
       case 'list-databases':
         return await handleListDatabases(req);
+      case 'history':
+        return await handleHistory(req, url);
       case 'admin-create-user':
         return await handleAdminCreateUser(req);
       case 'admin-list-users':
@@ -243,6 +245,25 @@ async function handleListDatabases(req: Request): Promise<Response> {
   }));
 
   return jsonResponse({ databases });
+}
+
+// === 검색 기록 조회 ===
+async function handleHistory(_req: Request, url: URL): Promise<Response> {
+  const user_id = url.searchParams.get('user_id');
+  if (!user_id) throw new ValidationError('user_id required');
+
+  const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '20', 10)));
+
+  const { data, error } = await getSupabase()
+    .from('search_logs')
+    .select('keyword, platforms, period, result_count, duration_ms, status, error_message, created_at')
+    .eq('user_id', user_id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`History query failed: ${error.message}`);
+
+  return jsonResponse({ searches: data || [] });
 }
 
 // === 관리자: 사용자 생성 ===

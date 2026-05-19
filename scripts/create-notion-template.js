@@ -178,13 +178,10 @@ function blocksMain(webhookUrl) {
       b.callout([
         '{',
         '  "user_id": "{{user_id}}",',
-        '  "notion_page_id": "{{현재 페이지 ID}}",',
-        '  "keyword": "{{키워드}}",',
-        '  "platforms": ["{{매체}}"],',
-        '  "period": "{{기간}}",',
-        '  "result_count": {{결과 개수}}',
+        '  "notion_page_id": "{{현재 페이지 ID}}"',
         '}',
       ].join('\n'), '📋'),
+      b.p('키워드 · 매체 · 기간 · 결과 개수는 이 DB 행의 속성에서 자동으로 읽습니다. Body에 따로 넣지 않아도 됩니다.'),
     ]),
     b.divider(),
   ];
@@ -246,15 +243,6 @@ function blocksGeomseok() {
     b.bullet('결과 개수: 5 / 10(기본) / 20'),
     b.bullet('상태: 대기 → 검색중 → 완료 / 실패 (자동 변경)'),
     b.bullet('user_id: 셋업 완료 후 받은 ID — 새 행 추가 시 기본값으로 설정해두세요'),
-    b.divider(),
-    b.h2('매체 → API 값 매핑'),
-    b.p('버튼 자동화 HTTP 요청 Body 작성 시 아래 영어값을 사용합니다.'),
-    b.bullet('네이버블로그 → naver_blog'),
-    b.bullet('유튜브 → youtube'),
-    b.bullet('티스토리 → tistory'),
-    b.bullet('브런치 → brunch'),
-    b.p(''),
-    b.bullet('1일 → day   /   1주 → week   /   1개월 → month   /   1년 → year'),
   ];
 }
 
@@ -417,8 +405,9 @@ ${mainPage.url}
 
 1. 검색 DB에 "🚀 검색 실행" 버튼 속성 추가
    - 속성 추가 → 버튼
-   - 자동화 → 액션 1: 상태를 "검색중"으로 변경
-   - 자동화 → 액션 2: HTTP 요청 (설정 페이지 "검색 버튼 자동화 설정값" 참고)
+   - 자동화 → 액션 1: 상태를 "대기"로 변경
+   - 자동화 → 액션 2: HTTP 요청 (메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글 참고)
+   - Body는 user_id + notion_page_id 2개만 입력 — 나머지는 자동으로 읽힘
 
 2. 검색 DB의 user_id 속성에 기본값 설정
    - 셋업 완료 후 받은 user_id 값을 기본값으로 지정

@@ -4,7 +4,22 @@
 import { NotionApiError } from '../_shared/errors.ts';
 import { logger } from '../_shared/logger.ts';
 import { buildResultBlocks } from './blocks.ts';
-import type { SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
+import type { Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
+
+// Notion DB 옵션값 → 내부 ID 매핑
+const PLATFORM_MAP: Record<string, Platform> = {
+  '네이버블로그': 'naver_blog', '네이버 블로그': 'naver_blog', 'naver_blog': 'naver_blog',
+  '유튜브': 'youtube', 'youtube': 'youtube',
+  '티스토리': 'tistory', 'tistory': 'tistory',
+  '브런치': 'brunch', 'brunch': 'brunch',
+};
+
+const PERIOD_MAP: Record<string, Period> = {
+  '1일': 'day', 'day': 'day',
+  '1주': 'week', 'week': 'week',
+  '1개월': 'month', 'month': 'month',
+  '1년': 'year', 'year': 'year',
+};
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_API_VERSION = '2022-06-28';
@@ -94,6 +109,31 @@ export class NotionClient {
       totalCount,
       blockCount: blocks.length,
     });
+  }
+
+  // Notion DB 행의 속성에서 검색 파라미터를 읽어온다
+  async readSearchParams(pageId: string): Promise<{
+    keyword: string;
+    platforms: Platform[];
+    period: Period;
+    result_count: number;
+  }> {
+    const data = await this.fetchApi(`pages/${pageId}`, { method: 'GET' });
+    const props = data.properties || {};
+
+    const keyword = (props['키워드']?.title || [])
+      .map((t: any) => t.plain_text).join('').trim();
+
+    const platforms = ((props['매체']?.multi_select || []) as { name: string }[])
+      .map(s => PLATFORM_MAP[s.name.trim()])
+      .filter((p): p is Platform => Boolean(p));
+
+    const period: Period = PERIOD_MAP[props['기간']?.select?.name?.trim() || ''] || 'month';
+
+    const countRaw = props['결과 개수']?.select?.name;
+    const result_count = countRaw ? Math.max(5, Math.min(20, parseInt(countRaw, 10))) : 10;
+
+    return { keyword, platforms, period, result_count };
   }
 
   // 블록 추가 (100개 단위 분할)
