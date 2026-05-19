@@ -133,7 +133,10 @@ export class NotionClient {
     const countRaw = props['결과 개수']?.select?.name;
     const result_count = countRaw ? Math.max(5, Math.min(20, parseInt(countRaw, 10))) : 10;
 
-    return { keyword, platforms, period, result_count };
+    // 페이지의 부모 DB ID (소유권 검증용)
+    const parentDbId = ((data.parent?.database_id as string) || '').replace(/-/g, '');
+
+    return { keyword, platforms, period, result_count, parentDbId };
   }
 
   // 블록 추가 (100개 단위 분할)

@@ -56,6 +56,14 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     // body에 이미 값이 있으면 그것을 우선 사용 (하위 호환)
     const pageParams = await notion.readSearchParams(rawBody.notion_page_id);
 
+    // 페이지 소유권 검증: 부모 DB가 사용자의 notion_database_id와 일치해야 함
+    if (pageParams.parentDbId && user.notion_database_id) {
+      const userDbId = user.notion_database_id.replace(/-/g, '');
+      if (pageParams.parentDbId !== userDbId) {
+        throw new Error('Page does not belong to user database — 이 페이지는 연동된 데이터베이스에 속하지 않습니다.');
+      }
+    }
+
     keyword = keyword || pageParams.keyword;
     platforms = platforms.length ? platforms : pageParams.platforms;
     const period = rawBody.period || pageParams.period;

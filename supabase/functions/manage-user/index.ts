@@ -37,6 +37,8 @@ serve(async (req) => {
         return await handleUsage(req, url);
       case 'list-databases':
         return await handleListDatabases(req);
+      case 'verify-user':
+        return await handleVerifyUser(url);
       case 'history':
         return await handleHistory(req, url);
       case 'admin-create-user':
@@ -245,6 +247,28 @@ async function handleListDatabases(req: Request): Promise<Response> {
   }));
 
   return jsonResponse({ databases });
+}
+
+// === user_id 유효성 검증 ===
+async function handleVerifyUser(url: URL): Promise<Response> {
+  const user_id = url.searchParams.get('user_id');
+  if (!user_id) throw new ValidationError('user_id required');
+
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('id, subscription_tier, notion_database_id')
+    .eq('id', user_id)
+    .single();
+
+  if (error || !data) {
+    return jsonResponse({ valid: false }, 200);
+  }
+
+  return jsonResponse({
+    valid: true,
+    subscription_tier: data.subscription_tier,
+    notion_configured: !!data.notion_database_id,
+  });
 }
 
 // === 검색 기록 조회 ===
