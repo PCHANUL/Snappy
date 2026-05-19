@@ -62,6 +62,21 @@ else
   log_warn "manage-user 예상치 못한 응답: $manage_status"
 fi
 
+# pages 함수 응답 (GET 시 200 + text/html 기대)
+log_info "pages 함수 응답 확인..."
+pages_status=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X GET "$BASE_URL/pages" \
+  -H "$AUTH_HEADER")
+
+if [ "$pages_status" = "200" ]; then
+  log_success "pages 응답 정상 ($pages_status)"
+elif [ "$pages_status" = "404" ]; then
+  log_error "pages 함수가 배포되지 않았습니다."
+  exit 1
+else
+  log_warn "pages 예상치 못한 응답: $pages_status"
+fi
+
 log_step "2. 가입 → 노션 등록 → 사용량 조회 흐름"
 
 if ! confirm "이 흐름을 테스트하시겠습니까? (테스트 사용자가 DB에 추가됩니다)" "Y"; then
