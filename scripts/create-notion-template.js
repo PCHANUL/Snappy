@@ -160,15 +160,16 @@ async function createSearchDB(parentPageId) {
 
 function blocksMain() {
   return [
-    b.p('키워드 하나로 매체별 인기 콘텐츠를 30초 만에 발견합니다.'),
+    b.callout('키워드 입력 후 🚀 검색 실행을 누르면 10초 내로 결과가 나타납니다.', '⚡'),
+    b.callout('처음이신가요? 아래 시작하기 페이지에서 2분 셋업 후 검색하세요.', '💡'),
     b.divider(),
-    b.callout('처음이신가요? 시작하기 페이지에서 2분만 셋업하면 바로 사용할 수 있습니다.', '💡'),
+  ];
+}
+
+function blocksMainBottom() {
+  return [
     b.divider(),
-    b.h2('🗂 페이지'),
-    b.p('📖 시작하기 — 처음 사용하는 경우 여기부터'),
-    b.p('🔍 검색 — 키워드로 트렌드 콘텐츠 찾기'),
-    b.p('❓ 자주 묻는 질문 — 궁금한 점이 있다면'),
-    b.p('⚙️ 설정 — 사용량 확인 및 계정 관리'),
+    b.p('📖 시작하기   ❓ 자주 묻는 질문   ⚙️ 설정'),
   ];
 }
 
@@ -359,7 +360,7 @@ function blocksSeoljeong() {
 async function main() {
   console.log('\n🚀 트렌드 콘텐츠 발견기 노션 템플릿 생성 시작\n');
 
-  // 1. 메인 페이지
+  // 1. 메인 페이지 상단 블록
   process.stdout.write('📘 메인 페이지 생성 중...');
   const mainPage = await createPage(PARENT_PAGE_ID, '트렌드 콘텐츠 발견기', '📘');
   await appendBlocks(mainPage.id, blocksMain());
@@ -367,7 +368,19 @@ async function main() {
 
   await sleep(300);
 
-  // 2. 시작하기 페이지
+  // 2. 검색 DB — 메인 페이지에 인라인으로 생성 (서브페이지 이동 불필요)
+  process.stdout.write('🔍 검색 DB 생성 중...');
+  const db = await createSearchDB(mainPage.id);
+  console.log(` ✅  DB ID: ${db.id}`);
+
+  await sleep(300);
+
+  // 3. DB 아래 매핑 안내 블록 추가
+  await appendBlocks(mainPage.id, [...blocksGeomseok(), ...blocksMainBottom()]);
+
+  await sleep(300);
+
+  // 4. 시작하기 서브페이지 (셋업 + 문제해결)
   process.stdout.write('📖 시작하기 페이지 생성 중...');
   const sijakPage = await createPage(mainPage.id, '시작하기', '📖');
   await appendBlocks(sijakPage.id, blocksSijak());
@@ -375,19 +388,7 @@ async function main() {
 
   await sleep(300);
 
-  // 3. 검색 페이지 + DB
-  process.stdout.write('🔍 검색 페이지 생성 중...');
-  const geomseokPage = await createPage(mainPage.id, '검색', '🔍');
-  await appendBlocks(geomseokPage.id, blocksGeomseok());
-  console.log(` ✅`);
-
-  process.stdout.write('   검색 DB 생성 중...');
-  const db = await createSearchDB(geomseokPage.id);
-  console.log(` ✅  DB ID: ${db.id}`);
-
-  await sleep(300);
-
-  // 4. FAQ 페이지
+  // 5. FAQ 페이지
   process.stdout.write('❓ FAQ 페이지 생성 중...');
   const faqPage = await createPage(mainPage.id, '자주 묻는 질문', '❓');
   await appendBlocks(faqPage.id, blocksFaq());
@@ -395,7 +396,7 @@ async function main() {
 
   await sleep(300);
 
-  // 5. 설정 페이지
+  // 6. 설정 페이지
   process.stdout.write('⚙️  설정 페이지 생성 중...');
   const seoljeongPage = await createPage(mainPage.id, '설정', '⚙️');
   await appendBlocks(seoljeongPage.id, blocksSeoljeong());
