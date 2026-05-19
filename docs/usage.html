@@ -56,11 +56,11 @@
     const userId = params.get('user_id');
 
     function tierLabel(tier) {
-      if (!tier) return '베타 무료';
-      if (tier === 'beta_free') return '베타 무료';
-      if (tier === 'free') return '무료';
-      if (tier === 'pro') return '프로';
-      return tier;
+      const map = {
+        beta_free: '베타 무료', free: '무료',
+        light: '라이트', standard: '스탠다드', premium: '프리미엄',
+      };
+      return map[tier] || tier || '베타 무료';
     }
 
     async function load() {
@@ -99,6 +99,10 @@
               </div>
               <div class="reset-note">오늘 자정에 초기화됩니다</div>
             </div>
+          </div>
+          <div style="margin-top:10px;text-align:right;">
+            <a href="./history.html?user_id=${encodeURIComponent(userId)}" target="_blank"
+               style="font-size:0.72rem;color:#6366f1;text-decoration:none;">검색 기록 보기 →</a>
           </div>`;
       } catch (err) {
         root.innerHTML = `<p class="error">${err.message}</p>`;

@@ -120,7 +120,8 @@
         root.innerHTML = `
           <div class="header">
             <span class="title">최근 검색 기록</span>
-            <span class="count">최근 ${searches.length}건</span>
+            <a href="./usage.html?user_id=${encodeURIComponent(userId)}" target="_blank"
+               class="count" style="color:#6366f1;text-decoration:none;">사용량 보기 →</a>
           </div>
           <div class="list">
             ${searches.map(s => {

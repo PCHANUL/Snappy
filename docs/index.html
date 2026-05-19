@@ -245,6 +245,7 @@
       <!-- Step 2: 노션 연동 -->
       <div class="step" id="step2">
         <h2>노션 연동</h2>
+        <div id="adminNotice" class="message hidden"></div>
         <form id="setupForm">
           <div class="field">
             <label for="notionKey">노션 API 키</label>
@@ -426,6 +427,16 @@
         btn.textContent = '다음 →';
       }
     });
+
+    // URL에 user_id가 있으면 관리자가 미리 생성한 계정 → 가입 건너뛰고 Step 2로
+    const presetUserId = new URLSearchParams(location.search).get('user_id');
+    if (presetUserId) {
+      userId = presetUserId;
+      goToStep(2);
+      const notice = document.getElementById('adminNotice');
+      notice.className = 'message success';
+      notice.textContent = '계정이 준비되었습니다. 아래에서 노션을 연동해주세요.';
+    }
 
     // Step 2: setup-notion
     document.getElementById('setupForm').addEventListener('submit', async (e) => {

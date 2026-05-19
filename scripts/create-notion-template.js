@@ -43,6 +43,13 @@ const SUPABASE_ANON  = process.env.SUPABASE_ANON_KEY || '';
 const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '');
 const SETUP_URL      = `${PAGES_BASE}/`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
+const HISTORY_URL    = `${PAGES_BASE}/history.html`;
+
+// --user-id <value> 플래그: 임베드 URL에 user_id 자동 삽입
+const userIdFlagIdx = process.argv.indexOf('--user-id');
+const USER_ID = (userIdFlagIdx !== -1 ? process.argv[userIdFlagIdx + 1] : '')
+  || process.env.TEMPLATE_USER_ID
+  || 'YOUR_USER_ID';
 
 if (!NOTION_API_KEY) {
   console.error('❌  NOTION_API_KEY 가 없습니다. .env.local 에 추가하세요.');
@@ -165,7 +172,7 @@ function blocksMain(webhookUrl) {
     // 신규 사용자: 토글 열어서 처리, 이후 접어두면 방해 없음
     b.toggle('🆕 처음 설정하기 (완료 후 접어두세요)', [
       b.embed(SETUP_URL),
-      b.embed(`${USAGE_URL}?user_id=YOUR_USER_ID`),
+      b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
     ]),
     b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
       b.callout([
@@ -319,8 +326,10 @@ function blocksSeoljeong() {
     b.callout('사용자 ID (user_id)\n\n셋업 완료 후 여기에 user_id를 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
     b.divider(),
     b.h2('사용량'),
-    b.embed(`${USAGE_URL}?user_id=YOUR_USER_ID`),
-    b.p('※ 위 URL의 YOUR_USER_ID 부분을 실제 user_id로 교체하세요.'),
+    b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
+    b.h2('검색 기록'),
+    b.embed(`${HISTORY_URL}?user_id=${USER_ID}`),
+    ...(USER_ID === 'YOUR_USER_ID' ? [b.p('※ YOUR_USER_ID를 실제 user_id로 교체하거나, 스크립트 실행 시 --user-id <id> 옵션을 사용하세요.')] : []),
     b.divider(),
     b.h2('연동 정보'),
     b.toggle('노션 연동 다시 설정', [
@@ -418,7 +427,9 @@ ${mainPage.url}
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-4. 설정 페이지 usage 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체
+4. ${USER_ID === 'YOUR_USER_ID'
+    ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
+    : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
 5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
