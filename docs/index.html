@@ -103,8 +103,44 @@
     .message.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
     .message.hidden  { display: none; }
 
+    /* Collapsible guide */
+    details {
+      margin-top: 6px;
+      background: #f8f9ff;
+      border: 1px solid #e0e4ff;
+      border-radius: 8px;
+      padding: 0;
+      font-size: 0.82rem;
+    }
+    details summary {
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #6366f1;
+      font-weight: 600;
+      list-style: none;
+      user-select: none;
+    }
+    details summary::-webkit-details-marker { display: none; }
+    details[open] summary { border-bottom: 1px solid #e0e4ff; }
+    details ol {
+      padding: 10px 12px 10px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #444;
+      line-height: 1.5;
+    }
+    details ol a { color: #6366f1; text-decoration: none; }
+
     /* Completion screen */
+    .user-id-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
     .user-id-box {
+      flex: 1;
       background: #eef2ff;
       border: 1.5px solid #c7d2fe;
       border-radius: 8px;
@@ -113,8 +149,21 @@
       font-size: 0.95rem;
       color: #3730a3;
       word-break: break-all;
-      margin-bottom: 24px;
     }
+    .btn-copy {
+      flex-shrink: 0;
+      padding: 8px 14px;
+      background: #eef2ff;
+      color: #4f46e5;
+      border: 1.5px solid #c7d2fe;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn-copy:hover { background: #e0e7ff; }
     .next-steps { margin-top: 0; }
     .next-steps p { font-size: 0.875rem; font-weight: 600; color: #333; margin-bottom: 12px; }
     .next-steps ol {
@@ -166,10 +215,27 @@
           <div class="field">
             <label for="notionKey">노션 API 키</label>
             <input type="password" id="notionKey" placeholder="secret_..." required>
+            <details>
+              <summary>API 키 얻는 방법 ▸</summary>
+              <ol>
+                <li><a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a> 접속</li>
+                <li>"+ 새 통합" 클릭</li>
+                <li>통합 이름 입력 (예: Snappy) → 제출</li>
+                <li>"내부 통합 시크릿" 복사 → 위 입력창에 붙여넣기</li>
+              </ol>
+            </details>
           </div>
           <div class="field">
             <label for="dbId">노션 데이터베이스 ID</label>
             <input type="text" id="dbId" placeholder="32자리 UUID" required>
+            <details>
+              <summary>데이터베이스 ID 찾는 방법 ▸</summary>
+              <ol>
+                <li>노션에서 검색 DB 페이지 열기</li>
+                <li>주소창 URL에서 마지막 32자리 복사 (하이픈 제외)</li>
+                <li>위 입력창에 붙여넣기</li>
+              </ol>
+            </details>
           </div>
           <button type="submit" class="btn-primary" id="setupBtn">다음 →</button>
         </form>
@@ -180,7 +246,10 @@
       <div class="step" id="step3">
         <h2>가입 완료!</h2>
         <p style="font-size:0.875rem;color:#555;margin-bottom:12px;">아래 User ID를 노션 DB에 등록해주세요.</p>
-        <div class="user-id-box" id="displayUserId"></div>
+        <div class="user-id-row">
+          <div class="user-id-box" id="displayUserId"></div>
+          <button class="btn-copy" id="copyBtn" onclick="copyUserId()">복사</button>
+        </div>
         <div class="next-steps">
           <p>다음 단계</p>
           <ol>
@@ -214,6 +283,14 @@
         if (i < n) dot.classList.add('done');
         else if (i === n) dot.classList.add('active');
       }
+    }
+
+    function copyUserId() {
+      const btn = document.getElementById('copyBtn');
+      navigator.clipboard.writeText(userId).then(() => {
+        btn.textContent = '✓ 복사됨';
+        setTimeout(() => { btn.textContent = '복사'; }, 2000);
+      });
     }
 
     // Step 1: signup

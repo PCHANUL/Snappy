@@ -31,6 +31,15 @@
     .bar-fill { background: #6366f1; height: 100%; border-radius: 99px; transition: width 0.6s ease; }
     .bar-fill.warn { background: #f59e0b; }
     .bar-fill.full { background: #ef4444; }
+    .stat-tier { font-size: 0.72rem; color: #6366f1; font-weight: 600; margin-top: 4px; background: #eef2ff; border-radius: 99px; padding: 2px 8px; display: inline-block; }
+    .reset-note { font-size: 0.72rem; color: #aaa; margin-top: 6px; }
+    .no-user {
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      color: #555;
+      line-height: 1.6;
+    }
+    .no-user a { color: #6366f1; text-decoration: none; }
     .error { color: #991b1b; font-size: 0.9rem; padding: 8px; }
     .loading { color: #999; font-size: 0.9rem; padding: 8px; }
   </style>
@@ -43,10 +52,18 @@
     const params = new URLSearchParams(location.search);
     const userId = params.get('user_id');
 
+    function tierLabel(tier) {
+      if (!tier) return '베타 무료';
+      if (tier === 'beta_free') return '베타 무료';
+      if (tier === 'free') return '무료';
+      if (tier === 'pro') return '프로';
+      return tier;
+    }
+
     async function load() {
       const root = document.getElementById('root');
       if (!userId) {
-        root.innerHTML = '<p class="error">user_id가 필요합니다.</p>';
+        root.innerHTML = `<p class="no-user">사용량을 보려면 노션 설정 페이지에서 user_id를 입력하세요.<br><a href="https://pchanul.github.io/Snappy/" target="_blank">→ Snappy 설정 페이지로 이동</a></p>`;
         return;
       }
       try {
@@ -59,12 +76,14 @@
         const { used, limit, remaining } = data.today;
         const pct = Math.min(100, Math.round((used / limit) * 100));
         const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
+        const tier = tierLabel(data.subscription_tier);
 
         root.innerHTML = `
           <div class="card">
             <div class="stat">
               <div class="stat-value">${remaining}</div>
               <div class="stat-label">오늘 남은 검색</div>
+              <div class="stat-tier">${tier}</div>
             </div>
             <div class="divider"></div>
             <div class="bar-wrap">
@@ -75,6 +94,7 @@
               <div class="bar-track">
                 <div class="bar-fill ${fillClass}" style="width:${pct}%"></div>
               </div>
+              <div class="reset-note">오늘 자정에 초기화됩니다</div>
             </div>
           </div>`;
       } catch (err) {
