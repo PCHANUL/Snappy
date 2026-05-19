@@ -63,8 +63,10 @@ export const DAILY_QUOTAS: Record<SubscriptionTier, number> = {
   premium: 30,
 };
 
-// 구독 만료 여부를 반영한 실제 티어 반환
+// 구독 만료 여부를 반영한 실제 티어 반환 (만료 후 7일 유예)
 export function getEffectiveTier(tier: SubscriptionTier, expiresAt: string | null): SubscriptionTier {
-  if (expiresAt && new Date(expiresAt) < new Date()) return 'free';
+  if (!expiresAt) return tier;
+  const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+  if (Date.now() > new Date(expiresAt).getTime() + GRACE_MS) return 'free';
   return tier;
 }
