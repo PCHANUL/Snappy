@@ -11,8 +11,7 @@ import { logger } from '../_shared/logger.ts';
 import { corsHeaders, errorToResponse } from '../_shared/errors.ts';
 import { validateSearchRequest } from '../_shared/validator.ts';
 import {
-  getUser,
-  checkQuota,
+  getUserAndCheckQuota,
   incrementUsage,
   logSearch,
 } from '../_shared/db.ts';
@@ -41,9 +40,8 @@ serve(async (req) => {
     const body = await req.json();
     const request = validateSearchRequest(body);
 
-    // 2. 사용자 인증 + 사용량 체크
-    const user = await getUser(request.user_id);
-    await checkQuota(user);
+    // 2. 사용자 인증 + 사용량 체크 (병렬 DB 조회)
+    const user = await getUserAndCheckQuota(request.user_id);
 
     // 3. 즉시 응답 반환 (노션 웹훅 타임아웃 방지)
     //    실제 처리는 백그라운드에서 진행

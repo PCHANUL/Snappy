@@ -93,8 +93,8 @@ export class NotionClient {
     }
   }
 
-  // 공통 fetch 함수
-  private async fetchApi(path: string, init: RequestInit): Promise<any> {
+  // 공통 fetch 함수 — 429/5xx 시 최대 2회 재시도
+  private async fetchApi(path: string, init: RequestInit, retries = 2): Promise<any> {
     const response = await fetch(`${NOTION_API_BASE}/${path}`, {
       ...init,
       headers: {
@@ -106,6 +106,12 @@ export class NotionClient {
     });
 
     if (!response.ok) {
+      if (retries > 0 && (response.status === 429 || response.status >= 500)) {
+        const delay = response.status === 429 ? 1500 : 800;
+        await sleep(delay);
+        return this.fetchApi(path, init, retries - 1);
+      }
+
       const body = await response.text();
       logger.error('Notion API error', undefined, {
         path,

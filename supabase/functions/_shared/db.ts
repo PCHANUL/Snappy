@@ -6,7 +6,7 @@ import { decryptNotionKey } from './crypto.ts';
 import { env } from '../_shared/env.ts';
 import { AuthError, QuotaExceededError, ValidationError } from '../_shared/errors.ts';
 import { DAILY_QUOTAS } from '../_shared/types.ts';
-import type { Platform, User } from '../_shared/types.ts';
+import type { Platform, SubscriptionTier, User } from '../_shared/types.ts';
 
 let _client: SupabaseClient | null = null;
 
@@ -63,6 +63,48 @@ export async function checkQuota(user: User): Promise<void> {
   if (currentCount >= limit) {
     throw new QuotaExceededError(limit);
   }
+}
+
+// 사용자 조회 + 사용량 체크를 병렬 실행 — 202 응답 전 DB 왕복 1회 절감
+export async function getUserAndCheckQuota(userId: string): Promise<User> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [userResult, quotaResult] = await Promise.all([
+    getSupabase()
+      .from('users')
+      .select('id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id')
+      .eq('id', userId)
+      .single(),
+    getSupabase()
+      .from('usage_quotas')
+      .select('search_count')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .maybeSingle(),
+  ]);
+
+  if (userResult.error || !userResult.data) {
+    throw new AuthError('User not found');
+  }
+
+  const data = userResult.data;
+  if (!data.notion_api_key_encrypted || !data.notion_database_id) {
+    throw new ValidationError('Notion integration not configured', '노션 연동을 먼저 완료해주세요.');
+  }
+
+  const limit = DAILY_QUOTAS[data.subscription_tier as SubscriptionTier] ?? DAILY_QUOTAS.free;
+  if ((quotaResult.data?.search_count ?? 0) >= limit) {
+    throw new QuotaExceededError(limit);
+  }
+
+  return {
+    id: data.id,
+    email: data.email,
+    subscription_tier: data.subscription_tier,
+    subscription_expires_at: data.subscription_expires_at,
+    notion_api_key: await decryptNotionKey(data.notion_api_key_encrypted),
+    notion_database_id: data.notion_database_id,
+  };
 }
 
 // 사용량 증가 (RPC 호출)
