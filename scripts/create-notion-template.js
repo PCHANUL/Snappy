@@ -158,10 +158,31 @@ async function createSearchDB(parentPageId) {
 
 // ── 각 페이지 콘텐츠 ────────────────────────────────────────────────────────
 
-function blocksMain() {
+function blocksMain(webhookUrl) {
   return [
     b.callout('키워드 입력 후 🚀 검색 실행을 누르면 10초 내로 결과가 나타납니다.', '⚡'),
-    b.callout('처음이신가요? 아래 시작하기 페이지에서 2분 셋업 후 검색하세요.', '💡'),
+    b.toggle('🆕 처음 설정하기 (신규 사용자 — 완료 후 접어두세요)', [
+      b.embed(SETUP_URL),
+    ]),
+    b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
+      b.callout([
+        `URL: ${webhookUrl}`,
+        'Method: POST',
+        `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        'Content-Type: application/json',
+      ].join('\n'), '⚙️'),
+      b.callout([
+        '{',
+        '  "user_id": "{{user_id}}",',
+        '  "notion_page_id": "{{현재 페이지 ID}}",',
+        '  "keyword": "{{키워드}}",',
+        '  "platforms": ["{{매체}}"],',
+        '  "period": "{{기간}}",',
+        '  "result_count": {{결과 개수}}',
+        '}',
+      ].join('\n'), '📋'),
+    ]),
     b.divider(),
   ];
 }
@@ -296,7 +317,6 @@ function blocksFaq() {
 }
 
 function blocksSeoljeong() {
-  const webhookUrl = `${SUPABASE_URL}/functions/v1/trigger-search`;
   return [
     b.h1('설정'),
     b.divider(),
@@ -320,32 +340,7 @@ function blocksSeoljeong() {
       b.p('연동 해제 후에는 검색이 동작하지 않습니다.'),
     ]),
     b.divider(),
-    b.h2('검색 버튼 자동화 설정값'),
-    b.callout([
-      '검색 DB의 🚀 버튼 속성 → 자동화 추가 → HTTP 요청에 아래 값을 입력하세요.',
-      '',
-      `URL: ${webhookUrl}`,
-      'Method: POST',
-      `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-      `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-      'Content-Type: application/json',
-    ].join('\n'), '⚙️'),
-    b.h2('웹훅 Body (JSON)'),
-    b.callout([
-      '아래 JSON을 HTTP 요청 Body에 붙여넣으세요.',
-      '{{...}} 값은 노션이 현재 행의 속성값으로 자동 치환합니다.',
-      '',
-      '{',
-      '  "user_id": "{{user_id}}",',
-      '  "notion_page_id": "{{현재 페이지 ID}}",',
-      '  "keyword": "{{키워드}}",',
-      '  "platforms": ["{{매체}}"],',
-      '  "period": "{{기간}}",',
-      '  "result_count": {{결과 개수}}',
-      '}',
-      '',
-      '※ 매체·기간 값은 검색 페이지의 "매체 → API 값 매핑" 참고',
-    ].join('\n'), '📋'),
+    b.callout('검색 버튼 자동화 설정값은 메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글을 참고하세요.', '⚙️'),
     b.divider(),
     b.h2('플랜'),
     b.callout('현재 플랜: 베타 무료\n일일 한도: 3회', '📊'),
@@ -360,10 +355,12 @@ function blocksSeoljeong() {
 async function main() {
   console.log('\n🚀 트렌드 콘텐츠 발견기 노션 템플릿 생성 시작\n');
 
+  const webhookUrl = `${SUPABASE_URL}/functions/v1/trigger-search`;
+
   // 1. 메인 페이지 상단 블록
   process.stdout.write('📘 메인 페이지 생성 중...');
   const mainPage = await createPage(PARENT_PAGE_ID, '트렌드 콘텐츠 발견기', '📘');
-  await appendBlocks(mainPage.id, blocksMain());
+  await appendBlocks(mainPage.id, blocksMain(webhookUrl));
   console.log(` ✅  ${mainPage.url}`);
 
   await sleep(300);
