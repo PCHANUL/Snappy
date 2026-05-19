@@ -5,7 +5,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { decryptNotionKey } from './crypto.ts';
 import { env } from '../_shared/env.ts';
 import { AuthError, QuotaExceededError, ValidationError } from '../_shared/errors.ts';
-import { DAILY_QUOTAS } from '../_shared/types.ts';
+import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
 import type { Platform, SubscriptionTier, User } from '../_shared/types.ts';
 
 let _client: SupabaseClient | null = null;
@@ -50,7 +50,8 @@ export async function getUser(userId: string): Promise<User> {
 // 사용량 한도 체크
 export async function checkQuota(user: User): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const limit = DAILY_QUOTAS[user.subscription_tier] || DAILY_QUOTAS.free;
+  const effectiveTier = getEffectiveTier(user.subscription_tier, user.subscription_expires_at);
+  const limit = DAILY_QUOTAS[effectiveTier] || DAILY_QUOTAS.free;
 
   const { data } = await getSupabase()
     .from('usage_quotas')
@@ -92,7 +93,18 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
     throw new ValidationError('Notion integration not configured', '노션 연동을 먼저 완료해주세요.');
   }
 
-  const limit = DAILY_QUOTAS[data.subscription_tier as SubscriptionTier] ?? DAILY_QUOTAS.free;
+  const effectiveTier = getEffectiveTier(data.subscription_tier as SubscriptionTier, data.subscription_expires_at);
+
+  // 구독 만료 시 DB 자동 다운그레이드 (fire-and-forget)
+  if (effectiveTier !== data.subscription_tier) {
+    getSupabase()
+      .from('users')
+      .update({ subscription_tier: 'free', subscription_expires_at: null })
+      .eq('id', data.id)
+      .then(({ error }) => { if (error) console.error('Auto-downgrade failed', error); });
+  }
+
+  const limit = DAILY_QUOTAS[effectiveTier] ?? DAILY_QUOTAS.free;
   if ((quotaResult.data?.search_count ?? 0) >= limit) {
     throw new QuotaExceededError(limit);
   }
@@ -100,8 +112,8 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
   return {
     id: data.id,
     email: data.email,
-    subscription_tier: data.subscription_tier,
-    subscription_expires_at: data.subscription_expires_at,
+    subscription_tier: effectiveTier,
+    subscription_expires_at: effectiveTier === 'free' && effectiveTier !== data.subscription_tier ? null : data.subscription_expires_at,
     notion_api_key: await decryptNotionKey(data.notion_api_key_encrypted),
     notion_database_id: data.notion_database_id,
   };

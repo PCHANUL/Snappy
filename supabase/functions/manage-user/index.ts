@@ -17,7 +17,8 @@ import {
   errorToResponse,
   ValidationError,
 } from '../_shared/errors.ts';
-import { DAILY_QUOTAS } from '../_shared/types.ts';
+import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
+import type { SubscriptionTier } from '../_shared/types.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -45,6 +46,8 @@ serve(async (req) => {
         return await handleAdminCreateUser(req);
       case 'admin-list-users':
         return await handleAdminListUsers(req, url);
+      case 'admin-upgrade-user':
+        return await handleAdminUpgradeUser(req);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -194,12 +197,15 @@ async function handleUsage(req: Request, url: URL): Promise<Response> {
     .eq('date', today)
     .maybeSingle();
 
-  const limit = DAILY_QUOTAS[user.subscription_tier as keyof typeof DAILY_QUOTAS]
-    || DAILY_QUOTAS.free;
+  const effectiveTier = getEffectiveTier(
+    user.subscription_tier as SubscriptionTier,
+    user.subscription_expires_at,
+  );
+  const limit = DAILY_QUOTAS[effectiveTier] || DAILY_QUOTAS.free;
   const used = todayUsage?.search_count || 0;
 
   return jsonResponse({
-    subscription_tier: user.subscription_tier,
+    subscription_tier: effectiveTier,
     subscription_expires_at: user.subscription_expires_at,
     today: {
       used,
@@ -349,6 +355,46 @@ async function handleAdminListUsers(req: Request, url: URL): Promise<Response> {
   if (error) throw new Error(`List users failed: ${error.message}`);
 
   return jsonResponse({ users: data || [], total: count ?? 0, page, limit });
+}
+
+// === 관리자: 사용자 등급 변경 ===
+async function handleAdminUpgradeUser(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+  requireAdmin(req);
+
+  const body = await req.json();
+  const { user_id, subscription_tier, days } = body;
+
+  if (!user_id || typeof user_id !== 'string') {
+    throw new ValidationError('user_id required');
+  }
+  if (!['free', 'light', 'standard', 'premium'].includes(subscription_tier)) {
+    throw new ValidationError(`Invalid subscription_tier: ${subscription_tier}`);
+  }
+
+  let subscription_expires_at: string | null = null;
+  if (days !== undefined) {
+    const d = parseInt(String(days), 10);
+    if (isNaN(d) || d < 1) throw new ValidationError('days must be a positive integer');
+    const exp = new Date();
+    exp.setDate(exp.getDate() + d);
+    subscription_expires_at = exp.toISOString();
+  }
+
+  const update: Record<string, string | null> = { subscription_tier };
+  // tier가 free이거나 days 미지정 시 만료일 초기화
+  update.subscription_expires_at = subscription_expires_at;
+
+  const { error } = await getSupabase()
+    .from('users')
+    .update(update)
+    .eq('id', user_id);
+
+  if (error) throw new Error(`Upgrade failed: ${error.message}`);
+
+  logger.info('Admin upgraded user', { user_id, subscription_tier, subscription_expires_at });
+
+  return jsonResponse({ success: true, user_id, subscription_tier, subscription_expires_at });
 }
 
 // === 헬퍼 함수 ===

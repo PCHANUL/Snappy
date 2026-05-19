@@ -62,3 +62,9 @@ export const DAILY_QUOTAS: Record<SubscriptionTier, number> = {
   standard: 10,
   premium: 30,
 };
+
+// 구독 만료 여부를 반영한 실제 티어 반환
+export function getEffectiveTier(tier: SubscriptionTier, expiresAt: string | null): SubscriptionTier {
+  if (expiresAt && new Date(expiresAt) < new Date()) return 'free';
+  return tier;
+}

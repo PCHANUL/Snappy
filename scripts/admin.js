@@ -5,6 +5,8 @@
 //   node scripts/admin.js create <email> [--tier free|light|standard|premium]
 //   node scripts/admin.js list [--page 1] [--limit 20]
 //   node scripts/admin.js info <user_id>
+//   node scripts/admin.js upgrade <user_id> --tier <tier> [--days <days>]
+//   node scripts/admin.js downgrade <user_id>
 //
 // Requires .env.local with SUPABASE_URL and ADMIN_SECRET
 
@@ -92,11 +94,12 @@ async function cmdList(args) {
     console.log('  (none)');
     return;
   }
-  const pad = (s, n) => String(s).padEnd(n);
-  console.log(`  ${pad('user_id', 38)} ${pad('email', 30)} ${pad('tier', 10)} created_at`);
-  console.log(`  ${'-'.repeat(38)} ${'-'.repeat(30)} ${'-'.repeat(10)} ----------`);
+  const pad = (s, n) => String(s ?? '').padEnd(n);
+  console.log(`  ${pad('user_id', 38)} ${pad('email', 30)} ${pad('tier', 10)} ${pad('expires_at', 12)} created_at`);
+  console.log(`  ${'-'.repeat(38)} ${'-'.repeat(30)} ${'-'.repeat(10)} ${'-'.repeat(12)} ----------`);
   for (const u of data.users) {
-    console.log(`  ${pad(u.id, 38)} ${pad(u.email, 30)} ${pad(u.subscription_tier, 10)} ${u.created_at?.slice(0, 10) || ''}`);
+    const expires = u.subscription_expires_at?.slice(0, 10) || '';
+    console.log(`  ${pad(u.id, 38)} ${pad(u.email, 30)} ${pad(u.subscription_tier, 10)} ${pad(expires, 12)} ${u.created_at?.slice(0, 10) || ''}`);
   }
 }
 
@@ -122,17 +125,59 @@ async function cmdInfo(args) {
   }
 }
 
+async function cmdUpgrade(args) {
+  const userId = args[0];
+  if (!userId) {
+    console.error('Usage: admin.js upgrade <user_id> --tier <tier> [--days <days>]');
+    process.exit(1);
+  }
+  const tierIdx = args.indexOf('--tier');
+  if (tierIdx === -1) { console.error('--tier required'); process.exit(1); }
+  const tier = args[tierIdx + 1];
+  const daysIdx = args.indexOf('--days');
+  const days = daysIdx !== -1 ? parseInt(args[daysIdx + 1], 10) : undefined;
+
+  const body = { user_id: userId, subscription_tier: tier };
+  if (days !== undefined) body.days = days;
+
+  const data = await apiFetch('?action=admin-upgrade-user', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+
+  console.log('User updated:');
+  console.log(`  user_id                 : ${data.user_id}`);
+  console.log(`  subscription_tier       : ${data.subscription_tier}`);
+  console.log(`  subscription_expires_at : ${data.subscription_expires_at || '(none)'}`);
+}
+
+async function cmdDowngrade(args) {
+  const userId = args[0];
+  if (!userId) { console.error('Usage: admin.js downgrade <user_id>'); process.exit(1); }
+
+  const data = await apiFetch('?action=admin-upgrade-user', {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId, subscription_tier: 'free' }),
+  });
+
+  console.log('User downgraded to free:');
+  console.log(`  user_id           : ${data.user_id}`);
+  console.log(`  subscription_tier : ${data.subscription_tier}`);
+}
+
 // --- dispatch ---
 
 const [,, cmd, ...rest] = process.argv;
 
-const commands = { create: cmdCreate, list: cmdList, info: cmdInfo };
+const commands = { create: cmdCreate, list: cmdList, info: cmdInfo, upgrade: cmdUpgrade, downgrade: cmdDowngrade };
 
 if (!cmd || !commands[cmd]) {
   console.log('Usage:');
   console.log('  node scripts/admin.js create <email> [--tier free|light|standard|premium]');
   console.log('  node scripts/admin.js list [--page 1] [--limit 20]');
   console.log('  node scripts/admin.js info <user_id>');
+  console.log('  node scripts/admin.js upgrade <user_id> --tier <tier> [--days <days>]');
+  console.log('  node scripts/admin.js downgrade <user_id>');
   process.exit(0);
 }
 
