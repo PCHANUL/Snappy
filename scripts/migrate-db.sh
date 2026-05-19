@@ -20,7 +20,7 @@ if [ "$migration_count" -eq 0 ]; then
   exit 1
 fi
 
-log_info "발견된 마이그레이션 파일: $migration_count개"
+log_info "발견된 마이그레이션 파일: ${migration_count}개"
 find supabase/migrations -name "*.sql" | sort | while read -r file; do
   log_detail "$(basename "$file")"
 done
