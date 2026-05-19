@@ -160,9 +160,12 @@ async function createSearchDB(parentPageId) {
 
 function blocksMain(webhookUrl) {
   return [
-    b.callout('키워드 입력 후 🚀 검색 실행을 누르면 10초 내로 결과가 나타납니다.', '⚡'),
-    b.toggle('🆕 처음 설정하기 (신규 사용자 — 완료 후 접어두세요)', [
+    // 재방문 사용자: 이 한 줄만 보고 바로 DB로 진입
+    b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
+    // 신규 사용자: 토글 열어서 처리, 이후 접어두면 방해 없음
+    b.toggle('🆕 처음 설정하기 (완료 후 접어두세요)', [
       b.embed(SETUP_URL),
+      b.embed(`${USAGE_URL}?user_id=YOUR_USER_ID`),
     ]),
     b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
       b.callout([
@@ -190,7 +193,11 @@ function blocksMain(webhookUrl) {
 function blocksMainBottom() {
   return [
     b.divider(),
-    b.p('📖 시작하기   ❓ 자주 묻는 질문   ⚙️ 설정'),
+    b.toggle('도움말 및 추가 정보', [
+      b.p('📖 시작하기 — 셋업 문제 해결'),
+      b.p('❓ 자주 묻는 질문 — API 정확도, 요금제, 보안'),
+      b.p('⚙️ 설정 — 사용량 확인, 연동 해제'),
+    ]),
   ];
 }
 
