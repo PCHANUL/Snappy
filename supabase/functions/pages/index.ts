@@ -5,19 +5,25 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const HTML_HEADERS = {
-  'Content-Type': 'text/html; charset=utf-8',
-  'X-Content-Type-Options': 'nosniff',
-};
+const encoder = new TextEncoder();
+
+function htmlResponse(html: string): Response {
+  return new Response(encoder.encode(html), {
+    status: 200,
+    headers: new Headers({
+      'Content-Type': 'text/html; charset=utf-8',
+    }),
+  });
+}
 
 serve((req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: {
+      headers: new Headers({
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      },
+      }),
     });
   }
 
@@ -30,10 +36,10 @@ serve((req) => {
 
   switch (page) {
     case 'setup':
-      return new Response(renderSetupPage(), { headers: HTML_HEADERS });
+      return htmlResponse(renderSetupPage());
     case 'signup':
     default:
-      return new Response(renderSignupPage(), { headers: HTML_HEADERS });
+      return htmlResponse(renderSignupPage());
   }
 });
 
