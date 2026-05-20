@@ -148,6 +148,36 @@
     .db-hint { font-size: 0.78rem; color: #888; margin-top: 4px; }
     .db-loading { font-size: 0.82rem; color: #6366f1; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
     .db-empty { font-size: 0.82rem; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px; margin-top: 4px; line-height: 1.5; }
+    .db-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .db-list-title { font-size: 0.8rem; font-weight: 700; color: #333; }
+    .db-item {
+      border: 1px solid #e0e7ff;
+      border-radius: 8px;
+      padding: 10px;
+      background: #f8f9ff;
+    }
+    .db-item.selected { border-color: #6366f1; background: #eef2ff; }
+    .db-item-name { font-size: 0.86rem; font-weight: 700; color: #1f2937; margin-bottom: 4px; }
+    .db-id-row { display: flex; align-items: center; gap: 8px; }
+    .db-id {
+      flex: 1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.74rem;
+      color: #3730a3;
+      word-break: break-all;
+    }
+    .db-use-btn {
+      flex-shrink: 0;
+      padding: 6px 9px;
+      background: #fff;
+      color: #4f46e5;
+      border: 1px solid #c7d2fe;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .db-use-btn:hover { background: #eef2ff; }
 
     /* Completion screen */
     .user-id-row {
@@ -348,6 +378,12 @@
         '<div class="db-loading"><span class="spinner">⟳</span> 데이터베이스 불러오는 중...</div>';
     }
 
+    function escapeHtml(value) {
+      const div = document.createElement('div');
+      div.textContent = String(value ?? '');
+      return div.innerHTML;
+    }
+
     function renderDbSelect(databases) {
       const area = document.getElementById('dbPickerArea');
       if (databases.length === 0) {
@@ -361,14 +397,27 @@
         return;
       }
       const opts = databases.map(db =>
-        `<option value="${db.id}">${db.title}</option>`
+        `<option value="${escapeHtml(db.id)}">${escapeHtml(db.title)} — ${escapeHtml(db.id)}</option>`
+      ).join('');
+      const items = databases.map((db, index) =>
+        `<div class="db-item${index === 0 ? ' selected' : ''}" data-db-id="${escapeHtml(db.id)}">
+          <div class="db-item-name">${escapeHtml(db.title)}</div>
+          <div class="db-id-row">
+            <code class="db-id">${escapeHtml(db.id)}</code>
+            <button type="button" class="db-use-btn" data-db-id="${escapeHtml(db.id)}">선택</button>
+          </div>
+        </div>`
       ).join('');
       area.innerHTML = `
         <select class="db-select" id="dbSelect">
           ${opts}
           <option value="__manual__">직접 입력...</option>
         </select>
-        <div class="db-hint">통합이 연결된 데이터베이스만 표시됩니다</div>`;
+        <div class="db-hint">통합이 연결된 데이터베이스만 표시됩니다. 아래 DB ID를 복사해 수동 검증에도 사용할 수 있습니다.</div>
+        <div class="db-list">
+          <div class="db-list-title">DB ID 목록</div>
+          ${items}
+        </div>`;
       selectedDbId = databases[0].id;
       document.getElementById('dbSelect').addEventListener('change', (e) => {
         if (e.target.value === '__manual__') {
@@ -377,7 +426,21 @@
           selectedDbId = null;
         } else {
           selectedDbId = e.target.value;
+          highlightSelectedDb(selectedDbId);
         }
+      });
+      area.querySelectorAll('.db-use-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          selectedDbId = btn.dataset.dbId;
+          document.getElementById('dbSelect').value = selectedDbId;
+          highlightSelectedDb(selectedDbId);
+        });
+      });
+    }
+
+    function highlightSelectedDb(dbId) {
+      document.querySelectorAll('.db-item').forEach((item) => {
+        item.classList.toggle('selected', item.dataset.dbId === dbId);
       });
     }
 

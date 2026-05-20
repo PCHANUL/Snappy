@@ -25,6 +25,64 @@ require_command "jq" "Mac: brew install jq / Linux: apt install jq"
 BASE_URL="$SUPABASE_URL/functions/v1"
 AUTH_HEADER="Authorization: Bearer $SUPABASE_ANON_KEY"
 PAGES_URL="${GITHUB_PAGES_URL:-https://pchanul.github.io/Snappy/}"
+FIRST_NOTION_DB_ID=""
+
+list_notion_databases() {
+  local notion_key="$1"
+  local response_file
+  local status
+  local count
+
+  response_file="$(mktemp)"
+
+  if ! status=$(curl -sS -o "$response_file" -w "%{http_code}" \
+    -X POST "https://api.notion.com/v1/search" \
+    -H "Authorization: Bearer $notion_key" \
+    -H "Notion-Version: 2022-06-28" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "filter": { "value": "database", "property": "object" },
+      "sort": { "direction": "descending", "timestamp": "last_edited_time" },
+      "page_size": 100
+    }'); then
+    rm -f "$response_file"
+    log_error "노션 데이터베이스 목록 조회 요청 실패"
+    return 1
+  fi
+
+  if [ "$status" != "200" ]; then
+    log_error "노션 데이터베이스 목록 조회 실패 (HTTP $status)"
+    jq '.' "$response_file" 2>/dev/null || cat "$response_file"
+    rm -f "$response_file"
+    return 1
+  fi
+
+  count=$(jq '.results | length' "$response_file")
+  FIRST_NOTION_DB_ID=$(jq -r '.results[0].id // "" | gsub("-"; "")' "$response_file")
+
+  if [ "$count" -eq 0 ]; then
+    log_warn "접근 가능한 노션 데이터베이스가 없습니다."
+    log_detail "노션 DB 페이지에서 우측 상단 ... → 연결 → 통합 추가 후 다시 시도하세요."
+    rm -f "$response_file"
+    return 2
+  fi
+
+  log_success "접근 가능한 노션 데이터베이스: ${count}개"
+  jq -r '
+    .results[]
+    | [
+        (.id | gsub("-"; "")),
+        ((.title // []) | map(.plain_text) | join("") | if . == "" then "제목 없음" else . end),
+        (.last_edited_time // "")
+      ]
+    | @tsv
+  ' "$response_file" | while IFS=$'\t' read -r db_id title last_edited; do
+    log_detail "- $db_id | $title | 수정: $last_edited"
+  done
+
+  rm -f "$response_file"
+  return 0
+}
 
 log_step "1. 함수 응답 확인 (Smoke Test)"
 
@@ -137,25 +195,45 @@ log_success "가입 성공 (user_id: $USER_ID)"
 # 2) 노션 키 등록 (선택)
 echo ""
 if confirm "노션 API 키 등록도 테스트하시겠습니까?" "N"; then
-  read -p "노션 API 키 입력 (ntn_... 또는 secret_...): " notion_key
-  read -p "노션 DB ID 입력: " notion_db_id
-
-  log_info "노션 키 등록 요청..."
-  notion_setup_response=$(curl -s -X POST "$BASE_URL/manage-user?action=setup-notion" \
-    -H "$AUTH_HEADER" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"user_id\": \"$USER_ID\",
-      \"notion_api_key\": \"$notion_key\",
-      \"notion_database_id\": \"$notion_db_id\"
-    }")
-
-  echo "$notion_setup_response" | jq '.'
-
-  if echo "$notion_setup_response" | jq -e '.success' > /dev/null; then
-    log_success "노션 키 등록 성공"
+  if [ -n "${NOTION_API_KEY:-}" ]; then
+    read -p "노션 API 키 입력 (Enter=.env.local NOTION_API_KEY 사용): " notion_key
+    notion_key="${notion_key:-$NOTION_API_KEY}"
   else
-    log_error "노션 키 등록 실패"
+    read -p "노션 API 키 입력 (ntn_... 또는 secret_...): " notion_key
+  fi
+
+  if [ -z "$notion_key" ]; then
+    log_error "노션 API 키가 없어 노션 등록 테스트를 스킵합니다."
+  else
+    log_info "노션 API로 접근 가능한 데이터베이스 목록 조회..."
+    if list_notion_databases "$notion_key" && [ -n "$FIRST_NOTION_DB_ID" ]; then
+      read -p "노션 DB ID 입력 (Enter=첫 번째 DB 사용): " notion_db_id
+      notion_db_id="${notion_db_id:-$FIRST_NOTION_DB_ID}"
+    else
+      read -p "노션 DB ID 입력 (목록에서 직접 복사 또는 수동 입력): " notion_db_id
+    fi
+
+    if [ -z "$notion_db_id" ]; then
+      log_error "노션 DB ID가 없어 노션 등록 테스트를 스킵합니다."
+    else
+      log_info "노션 키 등록 요청..."
+      notion_setup_response=$(curl -s -X POST "$BASE_URL/manage-user?action=setup-notion" \
+        -H "$AUTH_HEADER" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"user_id\": \"$USER_ID\",
+          \"notion_api_key\": \"$notion_key\",
+          \"notion_database_id\": \"$notion_db_id\"
+        }")
+
+      echo "$notion_setup_response" | jq '.'
+
+      if echo "$notion_setup_response" | jq -e '.success' > /dev/null; then
+        log_success "노션 키 등록 성공"
+      else
+        log_error "노션 키 등록 실패"
+      fi
+    fi
   fi
 fi
 

@@ -75,7 +75,19 @@ async function notion(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(`Notion ${method} ${path} → ${JSON.stringify(json)}`);
+  if (!res.ok) {
+    if (json?.code === 'object_not_found') {
+      throw new Error([
+        `Notion ${method} ${path} → ${json.message}`,
+        '',
+        '확인할 것:',
+        '1. 부모 페이지 ID가 맞는지 확인하세요.',
+        '2. 해당 부모 페이지 우측 상단 ... → 연결(Add connections)에서 이 통합을 추가하세요.',
+        '3. 개인 페이지/복제된 템플릿의 DB도 통합에 명시적으로 연결해야 API에서 보입니다.',
+      ].join('\n'));
+    }
+    throw new Error(`Notion ${method} ${path} → ${JSON.stringify(json)}`);
+  }
   return json;
 }
 
@@ -175,6 +187,14 @@ function blocksMain(webhookUrl, loadMoreUrl) {
       b.embed(SETUP_URL),
       b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
     ]),
+    b.toggle('🔌 DB가 셋업 페이지 목록에 안 보일 때', [
+      b.p('Notion API는 개인 페이지의 모든 DB를 자동으로 보여주지 않습니다. 검색 DB 또는 그 상위 페이지를 사용자가 만든 Notion 통합에 연결해야 목록에 표시됩니다.'),
+      b.num('이 템플릿을 복제한 개인 페이지를 엽니다.'),
+      b.num('검색 DB가 들어있는 메인 페이지 우측 상단 "..." 메뉴를 엽니다.'),
+      b.num('"연결" 또는 "Add connections"에서 사용자가 만든 통합을 추가합니다.'),
+      b.num('셋업 페이지로 돌아가 노션 API 키를 다시 입력하면 DB 목록과 DB ID가 표시됩니다.'),
+      b.p('그래도 보이지 않으면 DB를 전체 페이지로 열고 URL의 32자리 ID를 직접 입력하세요. 복제된 템플릿은 원본과 DB ID가 다릅니다.'),
+    ]),
     b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
       b.callout([
         `URL: ${webhookUrl}`,
@@ -242,11 +262,12 @@ function blocksSijak() {
       b.num('"내부 통합 시크릿" 복사 → 셋업 마법사에 붙여넣기'),
     ]),
     b.toggle('데이터베이스 목록에 검색 DB가 안 보여요', [
-      b.p('방금 만든 통합이 검색 DB 페이지에 연결되지 않았습니다.'),
-      b.num('🔍 검색 페이지 열기'),
-      b.num('오른쪽 상단 "..." → 연결 → 연결 추가'),
-      b.num('만든 통합 선택'),
-      b.num('셋업 마법사로 돌아가 재시도'),
+      b.p('방금 만든 통합이 검색 DB 또는 DB가 들어있는 개인 페이지에 연결되지 않았습니다.'),
+      b.num('이 템플릿을 복제한 메인 페이지 열기'),
+      b.num('오른쪽 상단 "..." → 연결 또는 Add connections'),
+      b.num('방금 만든 통합 선택'),
+      b.num('셋업 마법사로 돌아가 API 키를 다시 입력'),
+      b.p('복제된 템플릿은 원본과 DB ID가 다릅니다. 셋업 페이지의 DB 목록에 표시되는 ID를 사용하세요.'),
     ]),
     b.toggle('검색 버튼을 눌렀는데 반응이 없어요', [
       b.bullet('설정 페이지에서 user_id가 입력되어 있는지 확인'),
@@ -259,6 +280,9 @@ function blocksSijak() {
 function blocksGeomseok() {
   return [
     b.callout('새 검색을 시작하려면 "+ 새로 만들기" 클릭 → 키워드 입력 → 🚀 검색 실행\n검색 결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
+    b.divider(),
+    b.h2('노션 통합 연결'),
+    b.callout('개인 페이지 또는 복제된 템플릿의 DB는 통합에 연결해야 셋업 페이지에서 조회됩니다.\n메인 페이지 우측 상단 "..." → 연결(Add connections) → 사용자가 만든 통합을 추가하세요.', '🔌'),
     b.divider(),
     b.h2('DB 속성 안내'),
     b.bullet('키워드: 검색할 단어 (예: 비건 디저트)'),
@@ -450,13 +474,18 @@ ${mainPage.url}
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-4. ${USER_ID === 'YOUR_USER_ID'
+4. 개인 페이지/복제 템플릿 DB를 Notion 통합에 연결
+   - 메인 페이지 우측 상단 "..." → 연결(Add connections)
+   - 사용자가 만든 통합 선택
+   - 셋업 페이지에서 API 키 입력 후 DB 목록과 DB ID 확인
+
+5. ${USER_ID === 'YOUR_USER_ID'
     ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
     : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
-5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
+6. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
-6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+7. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 `);
 }
 
