@@ -10,93 +10,156 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #f5f5f5;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       color: #1a1a1a;
+      padding: 40px 24px 80px;
     }
-    .container { width: 100%; max-width: 440px; padding: 24px; }
-    header { text-align: center; margin-bottom: 32px; }
-    h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
-    .subtitle { margin-top: 8px; color: #666; font-size: 0.95rem; }
+    .container { width: 100%; max-width: 520px; margin: 0 auto; }
 
-    /* Step indicator */
-    .step-indicator {
+    header { text-align: center; margin-bottom: 40px; }
+    header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+    header p { margin-top: 6px; color: #666; font-size: 0.9rem; }
+
+    /* ── 섹션 레이아웃 ── */
+    .flow { display: flex; flex-direction: column; }
+
+    .flow-row { display: flex; gap: 0; }
+    .flow-gutter {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-bottom: 28px;
+      width: 48px;
+      flex-shrink: 0;
     }
-    .step-dot {
-      width: 28px;
-      height: 28px;
+    .flow-body { flex: 1; padding-bottom: 8px; }
+
+    /* 번호 원 */
+    .sec-num {
+      width: 36px; height: 36px;
       border-radius: 50%;
-      border: 2px solid #e0e0e0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #aaa;
-      background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700;
+      flex-shrink: 0;
       transition: background 0.2s, border-color 0.2s, color 0.2s;
+      border: 2px solid #d1d5db;
+      background: #fff;
+      color: #9ca3af;
     }
-    .step-dot.active {
-      background: #6366f1;
-      border-color: #6366f1;
-      color: #fff;
-    }
-    .step-dot.done {
-      background: #c7d2fe;
-      border-color: #c7d2fe;
-      color: #4f46e5;
-    }
-    .step-line {
+    .sec-num.active  { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .sec-num.done    { background: #10b981; border-color: #10b981; color: #fff; }
+
+    /* 연결선 */
+    .flow-line {
       flex: 1;
-      height: 2px;
-      background: #e0e0e0;
-      max-width: 40px;
+      width: 2px;
+      background: #e5e7eb;
+      margin: 4px 0;
+      min-height: 20px;
+      transition: background 0.3s;
+    }
+    .flow-line.done { background: #10b981; }
+
+    /* 섹션 카드 */
+    .sec-card {
+      background: #fff;
+      border: 2px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
+    }
+    .sec-card.active {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px #eef2ff;
+    }
+    .sec-card.done {
+      border-color: #d1fae5;
+      background: #f9fffe;
+    }
+    .sec-card.locked {
+      opacity: 0.45;
+      pointer-events: none;
     }
 
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 32px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    /* 섹션 헤더 */
+    .sec-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0;
     }
-    h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 24px; }
-    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-    label { font-size: 0.875rem; font-weight: 600; color: #333; }
+    .sec-head h2 { font-size: 1rem; font-weight: 700; color: #111; }
+    .sec-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #10b981;
+      background: #d1fae5;
+      border-radius: 20px;
+      padding: 2px 8px;
+    }
+
+    /* 섹션 본문 */
+    .sec-body { margin-top: 16px; }
+    .sec-body.hidden { display: none; }
+
+    /* 완료 요약 */
+    .sec-summary {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: #374151;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .sec-summary.hidden { display: none; }
+    .sec-summary-text { display: flex; flex-direction: column; gap: 4px; }
+    .btn-change {
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6366f1;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .btn-change:hover { background: #e0e7ff; }
+
+    /* 폼 요소 */
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    label { font-size: 0.82rem; font-weight: 600; color: #374151; }
     input {
-      padding: 10px 14px;
+      padding: 10px 13px;
       border: 1.5px solid #e0e0e0;
       border-radius: 8px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       outline: none;
       transition: border-color 0.15s;
+      width: 100%;
     }
     input:focus { border-color: #6366f1; }
+
     .btn-primary {
       width: 100%;
-      padding: 12px;
+      padding: 11px;
       background: #6366f1;
       color: #fff;
       border: none;
       border-radius: 8px;
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 8px;
       transition: background 0.15s;
     }
     .btn-primary:hover { background: #4f46e5; }
     .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+
     .message {
-      margin-top: 16px;
-      padding: 12px 14px;
+      margin-top: 12px;
+      padding: 10px 13px;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       line-height: 1.5;
     }
     .message.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
@@ -105,12 +168,11 @@
 
     /* Collapsible guide */
     details {
-      margin-top: 6px;
+      margin-bottom: 14px;
       background: #f8f9ff;
       border: 1px solid #e0e4ff;
       border-radius: 8px;
-      padding: 0;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
     }
     details summary {
       padding: 8px 12px;
@@ -126,260 +188,307 @@
       padding: 10px 12px 10px 28px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       color: #444;
       line-height: 1.5;
     }
-    details ol a { color: #6366f1; text-decoration: none; }
+
+    /* 안내 박스 */
+    .info-box {
+      background: #f8f9ff;
+      border: 1px solid #e0e4ff;
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 0.8rem;
+      color: #444;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+    .info-box strong { color: #6366f1; }
 
     /* DB picker */
     .db-select {
-      padding: 10px 14px;
+      padding: 10px 13px;
       border: 1.5px solid #6366f1;
       border-radius: 8px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       background: #fff;
       color: #1a1a1a;
       cursor: pointer;
       outline: none;
       width: 100%;
+      margin-bottom: 6px;
     }
-    .db-select:focus { border-color: #4f46e5; }
-    .db-hint { font-size: 0.78rem; color: #888; margin-top: 4px; }
-    .db-loading { font-size: 0.82rem; color: #6366f1; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
-    .db-empty { font-size: 0.82rem; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px; margin-top: 4px; line-height: 1.5; }
-    .db-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-    .db-list-title { font-size: 0.8rem; font-weight: 700; color: #333; }
+    .db-hint { font-size: 0.76rem; color: #888; margin-bottom: 12px; }
+    .db-loading { font-size: 0.8rem; color: #6366f1; display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+    .db-empty {
+      font-size: 0.8rem; color: #b45309;
+      background: #fffbeb; border: 1px solid #fde68a;
+      border-radius: 6px; padding: 8px 10px;
+      margin-bottom: 10px; line-height: 1.5;
+    }
+    .db-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
     .db-item {
       border: 1px solid #e0e7ff;
       border-radius: 8px;
-      padding: 10px;
+      padding: 9px 12px;
       background: #f8f9ff;
+      cursor: pointer;
     }
     .db-item.selected { border-color: #6366f1; background: #eef2ff; }
-    .db-item-name { font-size: 0.86rem; font-weight: 700; color: #1f2937; margin-bottom: 4px; }
-    .db-id-row { display: flex; align-items: center; gap: 8px; }
-    .db-id {
-      flex: 1;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.74rem;
-      color: #3730a3;
-      word-break: break-all;
-    }
-    .db-use-btn {
-      flex-shrink: 0;
-      padding: 6px 9px;
-      background: #fff;
-      color: #4f46e5;
-      border: 1px solid #c7d2fe;
-      border-radius: 6px;
-      font-size: 0.74rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .db-use-btn:hover { background: #eef2ff; }
+    .db-item-name { font-size: 0.84rem; font-weight: 700; color: #1f2937; }
+    .db-item-id { font-family: monospace; font-size: 0.7rem; color: #6b7280; margin-top: 2px; }
 
-    /* Completion screen */
-    .user-id-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 24px;
+    /* User ID 표시 */
+    .uid-row {
+      display: flex; align-items: center; gap: 8px;
+      background: #eef2ff; border: 1.5px solid #c7d2fe;
+      border-radius: 8px; padding: 10px 14px;
+      margin-top: 8px;
     }
-    .user-id-box {
-      flex: 1;
-      background: #eef2ff;
-      border: 1.5px solid #c7d2fe;
-      border-radius: 8px;
-      padding: 12px 16px;
-      font-family: monospace;
-      font-size: 0.95rem;
-      color: #3730a3;
-      word-break: break-all;
+    .uid-text {
+      flex: 1; font-family: monospace; font-size: 0.85rem;
+      color: #3730a3; word-break: break-all;
     }
     .btn-copy {
-      flex-shrink: 0;
-      padding: 8px 14px;
-      background: #eef2ff;
-      color: #4f46e5;
-      border: 1.5px solid #c7d2fe;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-      white-space: nowrap;
+      flex-shrink: 0; padding: 5px 11px;
+      background: #fff; color: #4f46e5;
+      border: 1px solid #c7d2fe; border-radius: 6px;
+      font-size: 0.75rem; font-weight: 600; cursor: pointer;
     }
     .btn-copy:hover { background: #e0e7ff; }
-    .next-steps { margin-top: 0; }
-    .next-steps p { font-size: 0.875rem; font-weight: 600; color: #333; margin-bottom: 12px; }
-    .next-steps ol {
-      padding-left: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .next-steps li { font-size: 0.875rem; color: #444; line-height: 1.55; }
 
-    .step { display: none; }
-    .step.active { display: block; }
-    .step.slide-in {
-      animation: slideIn 260ms ease-out both;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateX(40px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
+    /* 완료 섹션 */
+    .next-steps ol { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .next-steps li { font-size: 0.875rem; color: #374151; line-height: 1.55; }
 
     /* Spinner */
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
       display: inline-block;
       animation: spin 0.7s linear infinite;
-      margin-right: 6px;
+      margin-right: 4px;
     }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 240ms ease-out both; }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>Snappy</h1>
-      <p class="subtitle" id="headerSubtitle">Step 1 / 4 — 이메일 가입</p>
+      <p>Notion 기반 트렌드 콘텐츠 검색 도구</p>
     </header>
 
-    <!-- Step indicator -->
-    <div class="step-indicator">
-      <div class="step-dot active" id="dot1">1</div>
-      <div class="step-line"></div>
-      <div class="step-dot" id="dot2">2</div>
-      <div class="step-line"></div>
-      <div class="step-dot" id="dot3">3</div>
-      <div class="step-line"></div>
-      <div class="step-dot" id="dot4">4</div>
-    </div>
+    <div class="flow">
 
-    <div class="card">
-      <!-- Step 1: 이메일 가입 -->
-      <div class="step active" id="step1">
-        <h2>이메일 가입</h2>
-        <form id="signupForm">
-          <div class="field">
-            <label for="email">이메일</label>
-            <input type="email" id="email" placeholder="you@example.com" required>
-          </div>
-          <button type="submit" class="btn-primary" id="signupBtn">다음 →</button>
-        </form>
-        <div id="signupResult" class="message hidden"></div>
-      </div>
-
-      <!-- Step 2: Notion OAuth 연결 -->
-      <div class="step" id="step2">
-        <h2>Notion 연결</h2>
-        <div id="adminNotice" class="message hidden"></div>
-        <p style="font-size:0.875rem;color:#555;margin-bottom:16px;line-height:1.55;">
-          Notion 승인 화면에서 복제한 Snappy 페이지 또는 검색 DB를 선택해 주세요.
-          선택한 페이지/DB만 Snappy가 접근할 수 있습니다.
-        </p>
-        <details style="margin-bottom:16px;">
-          <summary>연결 전에 확인할 것 ▸</summary>
-          <ol>
-            <li>먼저 Notion 템플릿을 개인 워크스페이스로 복제합니다.</li>
-            <li>아래 버튼을 누르면 Notion 승인 화면으로 이동합니다.</li>
-            <li>승인 화면에서 복제한 Snappy 페이지 또는 검색 DB를 선택합니다.</li>
-            <li>허용 후 이 페이지로 돌아오면 DB 목록이 자동으로 표시됩니다.</li>
-          </ol>
-        </details>
-        <button class="btn-primary" id="oauthBtn">Notion으로 연결하기</button>
-        <div id="oauthResult" class="message hidden"></div>
-      </div>
-
-      <!-- Step 3: 데이터베이스 선택 -->
-      <div class="step" id="step3">
-        <h2>데이터베이스 선택</h2>
-        <form id="setupForm">
-          <div class="field">
-            <label>노션 데이터베이스</label>
-            <div id="dbPickerArea">
-              <div class="db-loading"><span class="spinner">⟳</span> 데이터베이스 불러오는 중...</div>
+      <!-- ── 1. 계정 만들기 ── -->
+      <div class="flow-row">
+        <div class="flow-gutter">
+          <div class="sec-num active" id="num1">1</div>
+          <div class="flow-line" id="line1"></div>
+        </div>
+        <div class="flow-body">
+          <div class="sec-card active" id="sec1">
+            <div class="sec-head">
+              <h2>계정 만들기</h2>
+            </div>
+            <div class="sec-body" id="sec1-body">
+              <form id="signupForm" style="margin-top:16px;">
+                <div class="field">
+                  <label for="email">이메일</label>
+                  <input type="email" id="email" placeholder="you@example.com" required>
+                </div>
+                <button type="submit" class="btn-primary" id="signupBtn">시작하기 →</button>
+              </form>
+              <div id="signupResult" class="message hidden"></div>
+            </div>
+            <div class="sec-summary hidden" id="sec1-summary">
+              <div class="sec-summary-text">
+                <span id="summary-email" style="font-weight:600;"></span>
+                <div class="uid-row">
+                  <span class="uid-text" id="displayUserId"></span>
+                  <button class="btn-copy" id="copyBtn">복사</button>
+                </div>
+              </div>
             </div>
           </div>
-          <button type="submit" class="btn-primary" id="setupBtn">연동하기</button>
-        </form>
-        <div id="setupResult" class="message hidden"></div>
+        </div>
       </div>
 
-      <!-- Step 4: 완료 -->
-      <div class="step" id="step4">
-        <h2>가입 완료!</h2>
-        <p style="font-size:0.875rem;color:#555;margin-bottom:12px;">아래 User ID를 노션 DB에 등록해주세요.</p>
-        <div class="user-id-row">
-          <div class="user-id-box" id="displayUserId"></div>
-          <button class="btn-copy" id="copyBtn" onclick="copyUserId()">복사</button>
+      <!-- ── 2. Notion 연결 ── -->
+      <div class="flow-row">
+        <div class="flow-gutter">
+          <div class="sec-num" id="num2">2</div>
+          <div class="flow-line" id="line2"></div>
         </div>
-        <div class="next-steps">
-          <p>다음 단계</p>
-          <ol>
-            <li>노션 검색 DB의 <strong>user_id</strong> 속성 기본값에 위 ID를 입력하세요</li>
-            <li>🚀 검색 실행 버튼 자동화를 설정하세요 (노션 템플릿 안내 참고)</li>
-            <li>새 행을 추가하고 키워드를 입력한 후 🚀를 눌러 첫 검색을 시작하세요</li>
-          </ol>
+        <div class="flow-body">
+          <div class="sec-card locked" id="sec2">
+            <div class="sec-head">
+              <h2>Notion 연결</h2>
+            </div>
+            <div class="sec-body hidden" id="sec2-body">
+              <div style="margin-top:14px;">
+                <p style="font-size:0.85rem;color:#555;margin-bottom:12px;line-height:1.55;">
+                  Notion 계정을 연결하면 워크스페이스의 데이터베이스에 자동으로 접근할 수 있습니다.
+                </p>
+                <div class="info-box">
+                  <strong>연결 버튼을 누르면 Notion 승인 화면이 열립니다.</strong><br>
+                  승인 화면에서 <strong>Snappy와 함께 사용할 페이지 또는 데이터베이스를 반드시 선택</strong>해주세요.
+                  선택하지 않으면 다음 단계에서 목록이 표시되지 않습니다.
+                </div>
+                <details>
+                  <summary>연결 전에 확인할 것 ▸</summary>
+                  <ol>
+                    <li>먼저 Notion 템플릿을 개인 워크스페이스로 복제합니다.</li>
+                    <li>아래 버튼을 누르면 Notion 승인 화면으로 이동합니다.</li>
+                    <li>승인 화면에서 복제한 Snappy 페이지 또는 검색 DB를 선택합니다.</li>
+                    <li>허용 후 이 페이지로 돌아오면 DB 목록이 자동으로 표시됩니다.</li>
+                  </ol>
+                </details>
+                <button class="btn-primary" id="oauthBtn">Notion으로 연결하기</button>
+                <div id="oauthResult" class="message hidden"></div>
+              </div>
+            </div>
+            <div class="sec-summary hidden" id="sec2-summary">
+              <div class="sec-summary-text">
+                <span style="color:#10b981;font-weight:600;">✓ Notion 연결 완료</span>
+              </div>
+              <button class="btn-change" id="reconnectBtn">다시 연결</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
+
+      <!-- ── 3. 데이터베이스 선택 ── -->
+      <div class="flow-row">
+        <div class="flow-gutter">
+          <div class="sec-num" id="num3">3</div>
+          <div class="flow-line" id="line3"></div>
+        </div>
+        <div class="flow-body">
+          <div class="sec-card locked" id="sec3">
+            <div class="sec-head">
+              <h2>데이터베이스 선택</h2>
+            </div>
+            <div class="sec-body hidden" id="sec3-body">
+              <div style="margin-top:14px;">
+                <div id="dbPickerArea">
+                  <div class="db-loading"><span class="spinner">⟳</span> 데이터베이스 불러오는 중...</div>
+                </div>
+                <button class="btn-primary" id="setupBtn">연동 완료</button>
+                <div id="setupResult" class="message hidden"></div>
+              </div>
+            </div>
+            <div class="sec-summary hidden" id="sec3-summary">
+              <div class="sec-summary-text">
+                <span style="color:#10b981;font-weight:600;">✓ 연동 완료</span>
+                <span id="summary-db" style="font-size:0.8rem;color:#6b7280;"></span>
+              </div>
+              <button class="btn-change" id="changeDbBtn">변경</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 4. 시작하기 ── -->
+      <div class="flow-row">
+        <div class="flow-gutter">
+          <div class="sec-num" id="num4">4</div>
+        </div>
+        <div class="flow-body">
+          <div class="sec-card locked" id="sec4">
+            <div class="sec-head">
+              <h2>시작하기</h2>
+            </div>
+            <div class="sec-body hidden" id="sec4-body">
+              <div style="margin-top:14px;" class="next-steps">
+                <ol>
+                  <li>노션 검색 DB의 <strong>user_id</strong> 속성 기본값에 복사한 ID를 입력하세요</li>
+                  <li>🚀 검색 실행 버튼 자동화를 설정하세요 (노션 템플릿 안내 참고)</li>
+                  <li>새 행을 추가하고 키워드를 입력한 후 🚀를 눌러 첫 검색을 시작하세요</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.flow -->
+  </div><!-- /.container -->
 
   <script>
     const SUPABASE_URL = 'https://mmnwbkbipjnmsvtyohjg.supabase.co';
     const FUNCTION_BASE = SUPABASE_URL + '/functions/v1';
 
-    const TOTAL_STEPS = 4;
-    let currentStep = 1;
     let userId = null;
     let selectedDbId = null;
+    let selectedDbName = null;
 
-    const subtitles = [
-      'Step 1 / 4 — 이메일 가입',
-      'Step 2 / 4 — Notion 연결',
-      'Step 3 / 4 — 데이터베이스 선택',
-      'Step 4 / 4 — 완료',
-    ];
-
-    function goToStep(n) {
-      document.getElementById('step' + currentStep).classList.remove('active', 'slide-in');
-      currentStep = n;
-      const next = document.getElementById('step' + currentStep);
-      next.classList.add('active');
-      void next.offsetWidth;
-      next.classList.add('slide-in');
-      document.getElementById('headerSubtitle').textContent = subtitles[n - 1];
-
-      for (let i = 1; i <= TOTAL_STEPS; i++) {
-        const dot = document.getElementById('dot' + i);
-        dot.classList.remove('active', 'done');
-        if (i < n) dot.classList.add('done');
-        else if (i === n) dot.classList.add('active');
-      }
+    // ── 섹션 상태 전환 ──────────────────────────
+    function activateSection(n) {
+      const card = document.getElementById('sec' + n);
+      const num  = document.getElementById('num' + n);
+      const body = document.getElementById('sec' + n + '-body');
+      card.classList.remove('locked', 'done');
+      card.classList.add('active');
+      num.classList.remove('done');
+      num.classList.add('active');
+      if (body) { body.classList.remove('hidden'); body.classList.add('fade-in'); }
     }
 
-    function copyUserId() {
-      const btn = document.getElementById('copyBtn');
-      navigator.clipboard.writeText(userId).then(() => {
-        btn.textContent = '✓ 복사됨';
-        setTimeout(() => { btn.textContent = '복사'; }, 2000);
-      });
+    function completeSection(n) {
+      const card    = document.getElementById('sec' + n);
+      const num     = document.getElementById('num' + n);
+      const body    = document.getElementById('sec' + n + '-body');
+      const summary = document.getElementById('sec' + n + '-summary');
+      const line    = document.getElementById('line' + n);
+      card.classList.remove('active', 'locked');
+      card.classList.add('done');
+      num.classList.remove('active');
+      num.classList.add('done');
+      if (body)    body.classList.add('hidden');
+      if (summary) { summary.classList.remove('hidden'); }
+      if (line)    line.classList.add('done');
+    }
+
+    function reopenSection(n) {
+      const card    = document.getElementById('sec' + n);
+      const num     = document.getElementById('num' + n);
+      const body    = document.getElementById('sec' + n + '-body');
+      const summary = document.getElementById('sec' + n + '-summary');
+      card.classList.remove('done', 'locked');
+      card.classList.add('active');
+      num.classList.remove('done');
+      num.classList.add('active');
+      if (body)    { body.classList.remove('hidden'); body.classList.add('fade-in'); }
+      if (summary) summary.classList.add('hidden');
+    }
+
+    function lockSection(n) {
+      const card = document.getElementById('sec' + n);
+      const num  = document.getElementById('num' + n);
+      const body = document.getElementById('sec' + n + '-body');
+      card.classList.remove('active', 'done');
+      card.classList.add('locked');
+      num.classList.remove('active', 'done');
+      if (body) body.classList.add('hidden');
+    }
+
+    // ── DB 피커 렌더링 ────────────────────────
+    function escapeHtml(v) {
+      const d = document.createElement('div');
+      d.textContent = String(v ?? '');
+      return d.innerHTML;
     }
 
     function renderDbLoading() {
       document.getElementById('dbPickerArea').innerHTML =
         '<div class="db-loading"><span class="spinner">⟳</span> 데이터베이스 불러오는 중...</div>';
-    }
-
-    function escapeHtml(value) {
-      const div = document.createElement('div');
-      div.textContent = String(value ?? '');
-      return div.innerHTML;
     }
 
     function renderDbSelect(databases) {
@@ -388,64 +497,38 @@
         area.innerHTML = `
           <div class="db-empty">
             연결된 데이터베이스가 없습니다.<br>
-            노션에서 검색 DB 페이지 열기 → "..." 메뉴 → 연결 → 통합 추가 후 다시 시도하세요.
+            Notion 승인 화면에서 페이지 또는 DB를 선택했는지 확인하고
+            <button style="color:#6366f1;background:none;border:none;cursor:pointer;font-weight:600;padding:0;" id="retryOauthBtn">다시 연결</button>하세요.
           </div>
           <input type="text" id="dbId" placeholder="직접 ID 입력 (32자리 UUID)" style="margin-top:8px;">`;
         selectedDbId = null;
+        document.getElementById('retryOauthBtn')?.addEventListener('click', startOAuth);
         return;
       }
-      const opts = databases.map(db =>
-        `<option value="${escapeHtml(db.id)}">${escapeHtml(db.title)} — ${escapeHtml(db.id)}</option>`
-      ).join('');
-      const items = databases.map((db, index) =>
-        `<div class="db-item${index === 0 ? ' selected' : ''}" data-db-id="${escapeHtml(db.id)}">
+      const items = databases.map((db, i) =>
+        `<div class="db-item${i === 0 ? ' selected' : ''}" data-id="${escapeHtml(db.id)}" data-name="${escapeHtml(db.title)}">
           <div class="db-item-name">${escapeHtml(db.title)}</div>
-          <div class="db-id-row">
-            <code class="db-id">${escapeHtml(db.id)}</code>
-            <button type="button" class="db-use-btn" data-db-id="${escapeHtml(db.id)}">선택</button>
-          </div>
+          <div class="db-item-id">${escapeHtml(db.id)}</div>
         </div>`
       ).join('');
-      area.innerHTML = `
-        <select class="db-select" id="dbSelect">
-          ${opts}
-          <option value="__manual__">직접 입력...</option>
-        </select>
-        <div class="db-hint">통합이 연결된 데이터베이스만 표시됩니다. 아래 DB ID를 복사해 수동 검증에도 사용할 수 있습니다.</div>
-        <div class="db-list">
-          <div class="db-list-title">DB ID 목록</div>
-          ${items}
-        </div>`;
-      selectedDbId = databases[0].id;
-      document.getElementById('dbSelect').addEventListener('change', (e) => {
-        if (e.target.value === '__manual__') {
-          document.getElementById('dbPickerArea').innerHTML =
-            '<input type="text" id="dbId" placeholder="32자리 UUID 직접 입력" autofocus>';
-          selectedDbId = null;
-        } else {
-          selectedDbId = e.target.value;
-          highlightSelectedDb(selectedDbId);
-        }
-      });
-      area.querySelectorAll('.db-use-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          selectedDbId = btn.dataset.dbId;
-          document.getElementById('dbSelect').value = selectedDbId;
-          highlightSelectedDb(selectedDbId);
-        });
-      });
-    }
+      area.innerHTML = `<div class="db-list">${items}</div>`;
+      selectedDbId   = databases[0].id;
+      selectedDbName = databases[0].title;
 
-    function highlightSelectedDb(dbId) {
-      document.querySelectorAll('.db-item').forEach((item) => {
-        item.classList.toggle('selected', item.dataset.dbId === dbId);
+      area.querySelectorAll('.db-item').forEach(el => {
+        el.addEventListener('click', () => {
+          area.querySelectorAll('.db-item').forEach(x => x.classList.remove('selected'));
+          el.classList.add('selected');
+          selectedDbId   = el.dataset.id;
+          selectedDbName = el.dataset.name;
+        });
       });
     }
 
     function renderDbError(msg) {
       document.getElementById('dbPickerArea').innerHTML =
-        `<input type="text" id="dbId" placeholder="32자리 UUID 직접 입력">
-         <div class="db-hint" style="color:#b45309;">${msg} — 직접 입력해주세요.</div>`;
+        `<div class="db-empty">${escapeHtml(msg)}</div>
+         <input type="text" id="dbId" placeholder="32자리 UUID 직접 입력">`;
       selectedDbId = null;
     }
 
@@ -465,46 +548,16 @@
       }
     }
 
-    // Step 1: signup
-    document.getElementById('signupForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('signupBtn');
-      const result = document.getElementById('signupResult');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner">⟳</span>처리 중';
-      result.className = 'message hidden';
-
-      try {
-        const res = await fetch(FUNCTION_BASE + '/manage-user?action=signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: document.getElementById('email').value.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || '가입에 실패했습니다.');
-        userId = data.user_id;
-        goToStep(2);
-      } catch (err) {
-        result.className = 'message error';
-        result.textContent = err.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '다음 →';
-      }
-    });
-
-    // Step 2: Notion OAuth 연결 시작
-    document.getElementById('oauthBtn').addEventListener('click', async () => {
-      const btn = document.getElementById('oauthBtn');
+    // ── OAuth ────────────────────────────────
+    async function startOAuth() {
+      const btn    = document.getElementById('oauthBtn');
       const result = document.getElementById('oauthResult');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner">⟳</span>연결 중...';
       result.className = 'message hidden';
-
       try {
-        if (!userId) throw new Error('먼저 이메일 가입을 완료해주세요.');
         const res = await fetch(
-          `${FUNCTION_BASE}/notion-oauth?action=authorize&user_id=${encodeURIComponent(userId)}`,
+          `${FUNCTION_BASE}/notion-oauth?action=authorize&user_id=${encodeURIComponent(userId)}`
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || '연결 요청 실패');
@@ -515,100 +568,164 @@
         btn.disabled = false;
         btn.textContent = 'Notion으로 연결하기';
       }
+    }
+
+    // ── 섹션 1: 가입 ─────────────────────────
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn    = document.getElementById('signupBtn');
+      const result = document.getElementById('signupResult');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner">⟳</span>처리 중';
+      result.className = 'message hidden';
+      try {
+        const res = await fetch(FUNCTION_BASE + '/manage-user?action=signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('email').value.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '가입에 실패했습니다.');
+        userId = data.user_id;
+        finishSection1(document.getElementById('email').value.trim());
+      } catch (err) {
+        result.className = 'message error';
+        result.textContent = err.message;
+        btn.disabled = false;
+        btn.textContent = '시작하기 →';
+      }
     });
 
-    // URL 파라미터 처리
-    const _params = new URLSearchParams(location.search);
-    const presetUserId = _params.get('user_id');
-    const notionConnected = _params.get('notion_connected') === '1';
-    const oauthError = _params.get('error');
-
-    const OAUTH_ERROR_MESSAGES = {
-      access_denied: 'Notion 연결이 취소되었습니다.',
-      missing_params: 'Notion 연결 응답이 올바르지 않습니다. 다시 시도해주세요.',
-      oauth_failed: '인증 코드 교환에 실패했습니다. 다시 시도해주세요.',
-      store_failed: '토큰 저장에 실패했습니다. 다시 시도해주세요.',
-      server_error: '서버 오류가 발생했습니다. 다시 시도해주세요.',
-    };
-
-    if (presetUserId) {
-      userId = presetUserId;
-
-      if (notionConnected) {
-        goToStep(3);
-        fetchDatabases();
-      } else if (oauthError) {
-        goToStep(2);
-        const notice = document.getElementById('adminNotice');
-        notice.className = 'message error';
-        notice.textContent = OAUTH_ERROR_MESSAGES[oauthError] || 'Notion 연결에 실패했습니다. 다시 시도해주세요.';
-      } else {
-        (async () => {
-          try {
-            const res = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(presetUserId)}`);
-            const data = await res.json();
-            if (data.valid && data.notion_configured) {
-              document.getElementById('displayUserId').textContent = userId;
-              goToStep(4);
-            } else {
-              goToStep(2);
-              const notice = document.getElementById('adminNotice');
-              notice.className = 'message success';
-              notice.textContent = data.valid
-                ? '계정이 준비되었습니다. 아래에서 Notion을 연결해주세요.'
-                : '알 수 없는 user_id입니다. 다시 가입해주세요.';
-            }
-          } catch {
-            goToStep(2);
-          }
-        })();
-      }
+    function finishSection1(email) {
+      document.getElementById('summary-email').textContent = email;
+      document.getElementById('displayUserId').textContent = userId;
+      document.getElementById('copyBtn').addEventListener('click', () => {
+        navigator.clipboard.writeText(userId).then(() => {
+          const btn = document.getElementById('copyBtn');
+          btn.textContent = '✓ 복사됨';
+          setTimeout(() => { btn.textContent = '복사'; }, 2000);
+        });
+      });
+      completeSection(1);
+      activateSection(2);
     }
 
-    if (!presetUserId) {
-      const staleOAuthParams = notionConnected || oauthError;
-      if (staleOAuthParams) {
-        goToStep(2);
-        const notice = document.getElementById('adminNotice');
-        notice.className = 'message error';
-        notice.textContent = '사용자 정보가 없어 Notion 연결을 완료할 수 없습니다. 이메일 가입부터 다시 진행해주세요.';
-      }
-    }
+    // ── 섹션 2: Notion OAuth ─────────────────
+    document.getElementById('oauthBtn').addEventListener('click', startOAuth);
 
-    // Step 3: 데이터베이스 선택 → setup-notion 호출
-    document.getElementById('setupForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('setupBtn');
+    document.getElementById('reconnectBtn').addEventListener('click', () => {
+      reopenSection(2);
+      lockSection(3);
+      lockSection(4);
+      selectedDbId = null;
+    });
+
+    // ── 섹션 3: DB 선택 ──────────────────────
+    document.getElementById('setupBtn').addEventListener('click', async () => {
+      const btn    = document.getElementById('setupBtn');
       const result = document.getElementById('setupResult');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner">⟳</span>처리 중';
       result.className = 'message hidden';
-
       try {
         const manualInput = document.getElementById('dbId');
         const dbId = selectedDbId || (manualInput ? manualInput.value.trim() : '');
         if (!dbId) throw new Error('데이터베이스를 선택하거나 ID를 입력해주세요.');
-
         const res = await fetch(FUNCTION_BASE + '/manage-user?action=setup-notion', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: userId,
-            notion_database_id: dbId,
-          }),
+          body: JSON.stringify({ user_id: userId, notion_database_id: dbId }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || '연동에 실패했습니다.');
-        document.getElementById('displayUserId').textContent = userId;
-        goToStep(4);
+        document.getElementById('summary-db').textContent = selectedDbName || dbId;
+        completeSection(3);
+        activateSection(4);
       } catch (err) {
         result.className = 'message error';
         result.textContent = err.message;
-      } finally {
         btn.disabled = false;
-        btn.textContent = '연동하기';
+        btn.textContent = '연동 완료';
       }
     });
+
+    document.getElementById('changeDbBtn').addEventListener('click', () => {
+      reopenSection(3);
+      lockSection(4);
+      fetchDatabases();
+    });
+
+    // ── URL 파라미터 복원 ────────────────────
+    const OAUTH_ERRORS = {
+      access_denied:  'Notion 연결이 취소되었습니다.',
+      oauth_failed:   '인증 코드 교환에 실패했습니다. 다시 시도해주세요.',
+      store_failed:   '토큰 저장에 실패했습니다. 다시 시도해주세요.',
+      server_error:   '서버 오류가 발생했습니다. 다시 시도해주세요.',
+    };
+
+    (async () => {
+      const params         = new URLSearchParams(location.search);
+      const presetUserId   = params.get('user_id');
+      const notionConnected = params.get('notion_connected') === '1';
+      const oauthError     = params.get('error');
+
+      if (!presetUserId) return;
+      userId = presetUserId;
+
+      if (notionConnected) {
+        // OAuth 완료 후 복귀 — 계정 정보를 verify 후 섹션 복원
+        await restoreAccount();
+        completeSection(1);
+        completeSection(2);
+        activateSection(3);
+        fetchDatabases();
+        return;
+      }
+
+      if (oauthError) {
+        await restoreAccount();
+        completeSection(1);
+        activateSection(2);
+        const result = document.getElementById('oauthResult');
+        result.className = 'message error';
+        result.textContent = OAUTH_ERRORS[oauthError] || 'Notion 연결에 실패했습니다.';
+        return;
+      }
+
+      // 일반 user_id 파라미터 — 상태 확인
+      try {
+        const res  = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(presetUserId)}`);
+        const data = await res.json();
+        if (data.valid && data.notion_configured) {
+          await restoreAccount();
+          completeSection(1);
+          completeSection(2);
+          completeSection(3);
+          activateSection(4);
+        } else if (data.valid) {
+          await restoreAccount();
+          completeSection(1);
+          activateSection(2);
+        }
+      } catch { /* 복원 실패 시 초기 상태 유지 */ }
+    })();
+
+    async function restoreAccount() {
+      try {
+        const res  = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(userId)}`);
+        const data = await res.json();
+        // email은 verify 응답에 없으므로 user_id만 표시
+        document.getElementById('summary-email').textContent = '';
+        document.getElementById('displayUserId').textContent = userId;
+        document.getElementById('copyBtn').addEventListener('click', () => {
+          navigator.clipboard.writeText(userId).then(() => {
+            const btn = document.getElementById('copyBtn');
+            btn.textContent = '✓ 복사됨';
+            setTimeout(() => { btn.textContent = '복사'; }, 2000);
+          });
+        });
+      } catch { /* ignore */ }
+    }
   </script>
 </body>
 </html>
