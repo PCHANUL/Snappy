@@ -65,7 +65,7 @@ fi
 
 # pages 함수 응답 (GET 시 200 + text/html 기대)
 log_info "pages 함수 응답 확인..."
-pages_status=$(curl -s -o /dev/null -w "%{http_code}" \
+pages_status=$(curl -L -s -o /dev/null -w "%{http_code}" \
   -X GET "$BASE_URL/pages" \
   -H "$AUTH_HEADER")
 
@@ -137,7 +137,7 @@ log_success "가입 성공 (user_id: $USER_ID)"
 # 2) 노션 키 등록 (선택)
 echo ""
 if confirm "노션 API 키 등록도 테스트하시겠습니까?" "N"; then
-  read -p "노션 API 키 입력 (secret_...): " notion_key
+  read -p "노션 API 키 입력 (ntn_... 또는 secret_...): " notion_key
   read -p "노션 DB ID 입력: " notion_db_id
 
   log_info "노션 키 등록 요청..."

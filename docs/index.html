@@ -251,7 +251,7 @@
         <form id="apiForm">
           <div class="field">
             <label for="notionKey">노션 API 키</label>
-            <input type="password" id="notionKey" placeholder="secret_..." required>
+            <input type="password" id="notionKey" placeholder="ntn_... 또는 secret_..." required>
             <details>
               <summary>API 키 얻는 방법 ▸</summary>
               <ol>
@@ -444,8 +444,8 @@
       result.className = 'message hidden';
 
       try {
-        if (!key.startsWith('secret_') || key.length < 20) {
-          throw new Error('올바른 노션 API 키를 입력해주세요. (secret_... 형식)');
+        if (key.length < 20) {
+          throw new Error('올바른 노션 API 키를 입력해주세요.');
         }
         goToStep(3);
         fetchDatabases(key);

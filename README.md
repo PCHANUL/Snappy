@@ -144,7 +144,7 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/manage-user?action=setup-no
   -H 'Content-Type: application/json' \
   -d '{
     "user_id": "...",
-    "notion_api_key": "secret_...",
+    "notion_api_key": "ntn_... 또는 secret_...",
     "notion_database_id": "..."
   }'
 ```
