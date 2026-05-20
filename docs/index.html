@@ -11,13 +11,13 @@
       background: #f5f5f5;
       min-height: 100vh;
       color: #1a1a1a;
-      padding: 40px 24px 80px;
+      padding: 60px 32px 100px;
     }
-    .container { width: 100%; max-width: 520px; margin: 0 auto; }
+    .container { width: 100%; max-width: 720px; margin: 0 auto; }
 
-    header { text-align: center; margin-bottom: 40px; }
-    header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
-    header p { margin-top: 6px; color: #666; font-size: 0.9rem; }
+    header { text-align: center; margin-bottom: 52px; }
+    header h1 { font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; }
+    header p { margin-top: 8px; color: #666; font-size: 1rem; }
 
     /* ── 섹션 레이아웃 ── */
     .flow { display: flex; flex-direction: column; }
@@ -27,17 +27,17 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: 48px;
+      width: 64px;
       flex-shrink: 0;
     }
-    .flow-body { flex: 1; padding-bottom: 8px; }
+    .flow-body { flex: 1; padding-bottom: 12px; }
 
     /* 번호 원 */
     .sec-num {
-      width: 36px; height: 36px;
+      width: 44px; height: 44px;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 0.8rem; font-weight: 700;
+      font-size: 0.9rem; font-weight: 700;
       flex-shrink: 0;
       transition: background 0.2s, border-color 0.2s, color 0.2s;
       border: 2px solid #d1d5db;
@@ -62,9 +62,9 @@
     .sec-card {
       background: #fff;
       border: 2px solid #e5e7eb;
-      border-radius: 14px;
-      padding: 20px 24px;
-      margin-bottom: 8px;
+      border-radius: 18px;
+      padding: 28px 36px;
+      margin-bottom: 12px;
       transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
     }
     .sec-card.active {
@@ -87,7 +87,7 @@
       justify-content: space-between;
       margin-bottom: 0;
     }
-    .sec-head h2 { font-size: 1rem; font-weight: 700; color: #111; }
+    .sec-head h2 { font-size: 1.2rem; font-weight: 700; color: #111; }
     .sec-badge {
       font-size: 0.72rem;
       font-weight: 600;
@@ -98,7 +98,7 @@
     }
 
     /* 섹션 본문 */
-    .sec-body { margin-top: 16px; }
+    .sec-body { margin-top: 20px; }
     .sec-body.hidden { display: none; }
 
     /* 완료 요약 */
@@ -127,13 +127,13 @@
     .btn-change:hover { background: #e0e7ff; }
 
     /* 폼 요소 */
-    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
-    label { font-size: 0.82rem; font-weight: 600; color: #374151; }
+    .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+    label { font-size: 0.9rem; font-weight: 600; color: #374151; }
     input {
-      padding: 10px 13px;
+      padding: 13px 16px;
       border: 1.5px solid #e0e0e0;
-      border-radius: 8px;
-      font-size: 0.92rem;
+      border-radius: 10px;
+      font-size: 1rem;
       outline: none;
       transition: border-color 0.15s;
       width: 100%;
@@ -142,12 +142,12 @@
 
     .btn-primary {
       width: 100%;
-      padding: 11px;
+      padding: 14px;
       background: #6366f1;
       color: #fff;
       border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
+      border-radius: 10px;
+      font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
       transition: background 0.15s;
@@ -219,48 +219,49 @@
       width: 100%;
       margin-bottom: 6px;
     }
-    .db-hint { font-size: 0.76rem; color: #888; margin-bottom: 12px; }
-    .db-loading { font-size: 0.8rem; color: #6366f1; display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+    .db-hint { font-size: 0.82rem; color: #888; margin-bottom: 14px; }
+    .db-loading { font-size: 0.88rem; color: #6366f1; display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
     .db-empty {
-      font-size: 0.8rem; color: #b45309;
+      font-size: 0.88rem; color: #b45309;
       background: #fffbeb; border: 1px solid #fde68a;
-      border-radius: 6px; padding: 8px 10px;
-      margin-bottom: 10px; line-height: 1.5;
+      border-radius: 8px; padding: 12px 14px;
+      margin-bottom: 12px; line-height: 1.6;
     }
-    .db-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .db-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
     .db-item {
-      border: 1px solid #e0e7ff;
-      border-radius: 8px;
-      padding: 9px 12px;
+      border: 1.5px solid #e0e7ff;
+      border-radius: 10px;
+      padding: 14px 18px;
       background: #f8f9ff;
       cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
     }
     .db-item.selected { border-color: #6366f1; background: #eef2ff; }
-    .db-item-name { font-size: 0.84rem; font-weight: 700; color: #1f2937; }
-    .db-item-id { font-family: monospace; font-size: 0.7rem; color: #6b7280; margin-top: 2px; }
+    .db-item-name { font-size: 0.95rem; font-weight: 700; color: #1f2937; }
+    .db-item-id { font-family: monospace; font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
 
     /* User ID 표시 */
     .uid-row {
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 10px;
       background: #eef2ff; border: 1.5px solid #c7d2fe;
-      border-radius: 8px; padding: 10px 14px;
-      margin-top: 8px;
+      border-radius: 10px; padding: 14px 18px;
+      margin-top: 10px;
     }
     .uid-text {
-      flex: 1; font-family: monospace; font-size: 0.85rem;
+      flex: 1; font-family: monospace; font-size: 0.95rem;
       color: #3730a3; word-break: break-all;
     }
     .btn-copy {
-      flex-shrink: 0; padding: 5px 11px;
+      flex-shrink: 0; padding: 7px 14px;
       background: #fff; color: #4f46e5;
-      border: 1px solid #c7d2fe; border-radius: 6px;
-      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      border: 1px solid #c7d2fe; border-radius: 8px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
     }
     .btn-copy:hover { background: #e0e7ff; }
 
     /* 완료 섹션 */
-    .next-steps ol { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
-    .next-steps li { font-size: 0.875rem; color: #374151; line-height: 1.55; }
+    .next-steps ol { padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .next-steps li { font-size: 0.95rem; color: #374151; line-height: 1.6; }
 
     /* Spinner */
     @keyframes spin { to { transform: rotate(360deg); } }
