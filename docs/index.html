@@ -382,6 +382,10 @@
                 </div>
                 <button class="btn-primary" id="setupBtn">연동 완료</button>
                 <div id="setupResult" class="message hidden"></div>
+                <p style="margin-top:12px;font-size:0.78rem;color:#9ca3af;text-align:center;">
+                  원하는 DB가 없나요?
+                  <button id="sec3ReconnectBtn" style="color:#6366f1;background:none;border:none;cursor:pointer;font-weight:600;padding:0;font-size:inherit;">Notion 페이지 다시 선택</button>
+                </p>
               </div>
             </div>
             <div class="sec-summary hidden" id="sec3-summary">
@@ -511,7 +515,13 @@
           <div class="db-item-id">${escapeHtml(db.id)}</div>
         </div>`
       ).join('');
-      area.innerHTML = `<div class="db-list">${items}</div>`;
+      area.innerHTML = `
+        <div class="db-list">${items}</div>
+        <div class="db-hint" style="margin-top:10px;">
+          원하는 DB가 없으면
+          <button id="retryOauthBtn" style="color:#6366f1;background:none;border:none;cursor:pointer;font-weight:600;padding:0;font-size:inherit;">Notion에서 페이지 추가 선택</button>
+          후 새로고침하세요.
+        </div>`;
       selectedDbId   = databases[0].id;
       selectedDbName = databases[0].title;
 
@@ -523,6 +533,7 @@
           selectedDbName = el.dataset.name;
         });
       });
+      document.getElementById('retryOauthBtn')?.addEventListener('click', startOAuth);
     }
 
     function renderDbError(msg) {
@@ -654,6 +665,8 @@
       lockSection(4);
       fetchDatabases();
     });
+
+    document.getElementById('sec3ReconnectBtn').addEventListener('click', startOAuth);
 
     // ── URL 파라미터 복원 ────────────────────
     const OAUTH_ERRORS = {
