@@ -20,7 +20,10 @@
       display: flex;
       align-items: center;
       gap: 24px;
+      border-left: 4px solid #6366f1;
     }
+    .card.warn { border-left-color: #f59e0b; }
+    .card.full { border-left-color: #ef4444; }
     .stat { text-align: center; flex: 1; }
     .stat-value { font-size: 2rem; font-weight: 800; color: #6366f1; }
     .stat-label { font-size: 0.75rem; color: #888; margin-top: 2px; }
@@ -31,6 +34,15 @@
     .bar-fill { background: #6366f1; height: 100%; border-radius: 99px; transition: width 0.6s ease; }
     .bar-fill.warn { background: #f59e0b; }
     .bar-fill.full { background: #ef4444; }
+    .stat-tier { font-size: 0.72rem; color: #6366f1; font-weight: 600; margin-top: 4px; background: #eef2ff; border-radius: 99px; padding: 2px 8px; display: inline-block; }
+    .reset-note { font-size: 0.72rem; color: #aaa; margin-top: 6px; }
+    .no-user {
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      color: #555;
+      line-height: 1.6;
+    }
+    .no-user a { color: #6366f1; text-decoration: none; }
     .error { color: #991b1b; font-size: 0.9rem; padding: 8px; }
     .loading { color: #999; font-size: 0.9rem; padding: 8px; }
   </style>
@@ -43,10 +55,18 @@
     const params = new URLSearchParams(location.search);
     const userId = params.get('user_id');
 
+    function tierLabel(tier) {
+      const map = {
+        beta_free: '베타 무료', free: '무료',
+        light: '라이트', standard: '스탠다드', premium: '프리미엄',
+      };
+      return map[tier] || tier || '베타 무료';
+    }
+
     async function load() {
       const root = document.getElementById('root');
       if (!userId) {
-        root.innerHTML = '<p class="error">user_id가 필요합니다.</p>';
+        root.innerHTML = `<p class="no-user">사용량을 보려면 노션 설정 페이지에서 user_id를 입력하세요.<br><a href="https://pchanul.github.io/Snappy/" target="_blank">→ Snappy 설정 페이지로 이동</a></p>`;
         return;
       }
       try {
@@ -59,12 +79,14 @@
         const { used, limit, remaining } = data.today;
         const pct = Math.min(100, Math.round((used / limit) * 100));
         const fillClass = pct >= 100 ? 'full' : pct >= 80 ? 'warn' : '';
+        const tier = tierLabel(data.subscription_tier);
 
         root.innerHTML = `
-          <div class="card">
+          <div class="card ${fillClass}">
             <div class="stat">
               <div class="stat-value">${remaining}</div>
               <div class="stat-label">오늘 남은 검색</div>
+              <div class="stat-tier">${tier}</div>
             </div>
             <div class="divider"></div>
             <div class="bar-wrap">
@@ -75,7 +97,12 @@
               <div class="bar-track">
                 <div class="bar-fill ${fillClass}" style="width:${pct}%"></div>
               </div>
+              <div class="reset-note">오늘 자정에 초기화됩니다</div>
             </div>
+          </div>
+          <div style="margin-top:10px;text-align:right;">
+            <a href="./history.html?user_id=${encodeURIComponent(userId)}" target="_blank"
+               style="font-size:0.72rem;color:#6366f1;text-decoration:none;">검색 기록 보기 →</a>
           </div>`;
       } catch (err) {
         root.innerHTML = `<p class="error">${err.message}</p>`;

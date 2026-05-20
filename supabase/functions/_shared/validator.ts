@@ -8,6 +8,18 @@ const VALID_PLATFORMS: Platform[] = ['naver_blog', 'youtube', 'tistory', 'brunch
 const VALID_PERIODS: Period[] = ['day', 'week', 'month', 'year'];
 const VALID_COUNTS = [5, 10, 20];
 
+// webhook body 최소 검증 — user_id + notion_page_id만 필요
+export function validateMinimalRequest(body: any): { user_id: string; notion_page_id: string } {
+  if (!body || typeof body !== 'object') throw new ValidationError('Invalid request body');
+  if (!body.user_id || typeof body.user_id !== 'string') {
+    throw new ValidationError('user_id is required', '사용자 정보가 누락되었습니다.');
+  }
+  if (!body.notion_page_id || typeof body.notion_page_id !== 'string') {
+    throw new ValidationError('notion_page_id is required', '노션 페이지 정보가 누락되었습니다.');
+  }
+  return { user_id: body.user_id, notion_page_id: body.notion_page_id };
+}
+
 export function validateSearchRequest(body: any): SearchRequest {
   if (!body || typeof body !== 'object') {
     throw new ValidationError('Invalid request body');
