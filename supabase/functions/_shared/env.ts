@@ -39,6 +39,11 @@ export const env = {
   admin: {
     secret: optional('ADMIN_SECRET', ''),
   },
+  notion: {
+    clientId: optional('NOTION_CLIENT_ID', ''),
+    clientSecret: optional('NOTION_CLIENT_SECRET', ''),
+    redirectUri: optional('NOTION_REDIRECT_URI', ''),
+  },
 };
 
 export const isDev = env.app.environment === 'development';

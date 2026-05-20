@@ -7,7 +7,7 @@
 //   GET  /functions/v1/manage-user?action=usage&user_id=...
 //
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { encryptNotionKey } from '../_shared/crypto.ts';
+import { decryptNotionKey, encryptNotionKey } from '../_shared/crypto.ts';
 import { getSupabase } from '../_shared/db.ts';
 import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
@@ -115,19 +115,31 @@ async function handleSetupNotion(req: Request): Promise<Response> {
   }
 
   const body = await req.json();
-  const { user_id, notion_api_key, notion_database_id } = body;
+  const { user_id, notion_api_key: providedKey, notion_database_id } = body;
 
   if (!user_id || typeof user_id !== 'string') {
     throw new ValidationError('user_id required');
-  }
-  if (!notion_api_key || typeof notion_api_key !== 'string') {
-    throw new ValidationError('notion_api_key required', '노션 API 키를 입력해주세요.');
   }
   if (!notion_database_id || typeof notion_database_id !== 'string') {
     throw new ValidationError(
       'notion_database_id required',
       '노션 데이터베이스 ID를 입력해주세요.',
     );
+  }
+
+  // OAuth 플로우: notion_api_key 미제공 시 DB에 저장된 토큰 사용
+  let notion_api_key = providedKey;
+  if (!notion_api_key) {
+    const { data } = await getSupabase()
+      .from('users')
+      .select('notion_api_key_encrypted')
+      .eq('id', user_id)
+      .single();
+
+    if (!data?.notion_api_key_encrypted) {
+      throw new ValidationError('notion_api_key required', '노션 API 키를 입력해주세요.');
+    }
+    notion_api_key = await decryptNotionKey(data.notion_api_key_encrypted);
   }
 
   // 노션 API 키 + DB 접근 권한 검증
@@ -147,14 +159,14 @@ async function handleSetupNotion(req: Request): Promise<Response> {
     );
   }
 
-  const encryptedNotionKey = await encryptNotionKey(notion_api_key);
+  // API 키 방식이면 암호화 후 저장, OAuth 방식이면 DB ID만 업데이트
+  const update = providedKey
+    ? { notion_api_key_encrypted: await encryptNotionKey(notion_api_key), notion_database_id }
+    : { notion_database_id };
 
   const { error } = await getSupabase()
     .from('users')
-    .update({
-      notion_api_key_encrypted: encryptedNotionKey,
-      notion_database_id,
-    })
+    .update(update)
     .eq('id', user_id);
 
   if (error) {
@@ -220,10 +232,24 @@ async function handleListDatabases(req: Request): Promise<Response> {
   if (req.method !== 'POST') throw new ValidationError('POST required');
 
   const body = await req.json();
-  const { notion_api_key } = body;
+  let { notion_api_key, user_id } = body;
+
+  // OAuth 플로우: user_id만 제공된 경우 저장된 토큰 사용
+  if (!notion_api_key && user_id) {
+    const { data } = await getSupabase()
+      .from('users')
+      .select('notion_api_key_encrypted')
+      .eq('id', user_id)
+      .single();
+
+    if (!data?.notion_api_key_encrypted) {
+      throw new ValidationError('No token stored for user', '노션 연동이 필요합니다.');
+    }
+    notion_api_key = await decryptNotionKey(data.notion_api_key_encrypted);
+  }
 
   if (!notion_api_key || typeof notion_api_key !== 'string') {
-    throw new ValidationError('notion_api_key required');
+    throw new ValidationError('notion_api_key or user_id required');
   }
 
   const res = await fetch('https://api.notion.com/v1/search', {
