@@ -23,6 +23,9 @@ SECRETS_TO_SET=(
   "YOUTUBE_API_KEY"
   "YOUCOM_API_KEY"
   "NOTION_KEY_ENCRYPTION_SECRET"
+  "NOTION_CLIENT_ID"
+  "NOTION_CLIENT_SECRET"
+  "NOTION_REDIRECT_URI"
 )
 
 # 운영 환경 변수 (선택)
@@ -31,6 +34,9 @@ if [ -n "${ENVIRONMENT:-}" ]; then
 fi
 if [ -n "${LOG_LEVEL:-}" ]; then
   SECRETS_TO_SET+=("LOG_LEVEL")
+fi
+if [ -n "${SETUP_PAGE_URL:-}" ]; then
+  SECRETS_TO_SET+=("SETUP_PAGE_URL")
 fi
 
 log_info "등록할 시크릿: ${#SECRETS_TO_SET[@]}개"

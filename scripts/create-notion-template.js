@@ -188,7 +188,7 @@ function blocksMain(webhookUrl, loadMoreUrl) {
       b.num('우측 상단 "복제" 또는 Duplicate 클릭'),
       b.num('사용할 개인 워크스페이스 선택'),
       b.num('복제된 Snappy 페이지에서 "..." → 연결(Add connections) → 만든 Notion 연결 추가'),
-      b.num('아래 셋업 마법사에서 이메일과 액세스 토큰을 입력'),
+      b.num('아래 셋업 마법사에서 이메일 가입 후 Notion 승인 화면에서 복제한 페이지를 선택'),
       b.embed(SETUP_URL),
       b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
     ]),
@@ -197,7 +197,7 @@ function blocksMain(webhookUrl, loadMoreUrl) {
       b.num('이 템플릿을 복제한 개인 페이지를 엽니다.'),
       b.num('검색 DB가 들어있는 메인 페이지 우측 상단 "..." 메뉴를 엽니다.'),
       b.num('"연결" 또는 "Add connections"에서 사용자가 만든 통합을 추가합니다.'),
-      b.num('셋업 페이지로 돌아가 노션 API 키를 다시 입력하면 DB 목록과 DB ID가 표시됩니다.'),
+      b.num('셋업 페이지로 돌아가 "Notion으로 연결하기"를 다시 진행하면 DB 목록과 DB ID가 표시됩니다.'),
       b.p('그래도 보이지 않으면 DB를 전체 페이지로 열고 URL의 32자리 ID를 직접 입력하세요. 복제된 템플릿은 원본과 DB ID가 다릅니다.'),
     ]),
     b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
@@ -274,9 +274,9 @@ function blocksSijak() {
     b.h2('🤔 셋업 중 막히는 부분이 있나요?'),
     b.toggle('API 키를 어디서 받나요?', [
       b.num('notion.so/my-integrations 접속'),
-      b.num('"신규 연결" 클릭'),
-      b.num('신규 연결 이름 입력, 액세스 토큰 선택, "연결 생성하기" 클릭'),
-      b.num('"API 통합 토큰" 섹션의 "액세스 토큰" 복사 → 셋업 마법사에 붙여넣기'),
+      b.num('셋업 마법사에서 "Notion으로 연결하기" 클릭'),
+      b.num('Notion 승인 화면에서 복제한 Snappy 페이지 또는 검색 DB 선택'),
+      b.num('허용 후 셋업 페이지로 돌아오면 DB 목록이 자동으로 표시됩니다'),
     ]),
     b.toggle('데이터베이스 목록에 검색 DB가 안 보여요', [
       b.p('방금 만든 통합이 검색 DB 또는 DB가 들어있는 개인 페이지에 연결되지 않았습니다.'),
@@ -349,7 +349,7 @@ function blocksFaq() {
     b.h2('문제 해결'),
     b.toggle('검색이 "실패" 상태로 끝났어요', [
       b.bullet('일일 사용량 초과 (설정 페이지에서 확인)'),
-      b.bullet('노션 API 키 만료'),
+      b.bullet('Notion 연결 만료 또는 권한 해제'),
       b.bullet('일시적인 서버 문제'),
       b.p('문제가 지속되면 support@example.com 으로 연락주세요.'),
     ]),
@@ -392,7 +392,7 @@ function blocksSeoljeong() {
     b.h2('연동 정보'),
     b.toggle('노션 연동 다시 설정', [
       b.p('다음 경우에 다시 설정이 필요합니다:'),
-      b.bullet('노션 API 키를 변경했을 때'),
+      b.bullet('Notion 연결 권한을 다시 승인해야 할 때'),
       b.bullet('다른 데이터베이스로 변경하고 싶을 때'),
       b.p('→ 시작하기 페이지의 셋업 마법사 다시 실행'),
     ]),

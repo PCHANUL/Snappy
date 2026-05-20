@@ -274,27 +274,25 @@
         <div id="signupResult" class="message hidden"></div>
       </div>
 
-      <!-- Step 2: 노션 API 키 -->
+      <!-- Step 2: Notion OAuth 연결 -->
       <div class="step" id="step2">
-        <h2>노션 API 키</h2>
+        <h2>Notion 연결</h2>
         <div id="adminNotice" class="message hidden"></div>
-        <form id="apiForm">
-          <div class="field">
-            <label for="notionKey">노션 API 키</label>
-            <input type="password" id="notionKey" placeholder="ntn_... 또는 secret_..." required>
-            <details>
-              <summary>API 키 얻는 방법 ▸</summary>
-              <ol>
-                <li><a href="https://www.notion.so/my-integrations" target="_blank">notion.so/my-integrations</a> 접속</li>
-                <li>"신규 연결" 클릭</li>
-                <li>신규 연결 이름 입력, 액세스 토큰 선택, "연결 생성하기" 클릭</li>
-                <li>"API 통합 토큰" 섹션의 "액세스 토큰" 복사 → 위 입력창에 붙여넣기</li>
-              </ol>
-            </details>
-          </div>
-          <button type="submit" class="btn-primary" id="apiBtn">다음 →</button>
-        </form>
-        <div id="apiResult" class="message hidden"></div>
+        <p style="font-size:0.875rem;color:#555;margin-bottom:16px;line-height:1.55;">
+          Notion 승인 화면에서 복제한 Snappy 페이지 또는 검색 DB를 선택해 주세요.
+          선택한 페이지/DB만 Snappy가 접근할 수 있습니다.
+        </p>
+        <details style="margin-bottom:16px;">
+          <summary>연결 전에 확인할 것 ▸</summary>
+          <ol>
+            <li>먼저 Notion 템플릿을 개인 워크스페이스로 복제합니다.</li>
+            <li>아래 버튼을 누르면 Notion 승인 화면으로 이동합니다.</li>
+            <li>승인 화면에서 복제한 Snappy 페이지 또는 검색 DB를 선택합니다.</li>
+            <li>허용 후 이 페이지로 돌아오면 DB 목록이 자동으로 표시됩니다.</li>
+          </ol>
+        </details>
+        <button class="btn-primary" id="oauthBtn">Notion으로 연결하기</button>
+        <div id="oauthResult" class="message hidden"></div>
       </div>
 
       <!-- Step 3: 데이터베이스 선택 -->
@@ -339,12 +337,11 @@
     const TOTAL_STEPS = 4;
     let currentStep = 1;
     let userId = null;
-    let notionApiKey = null;
     let selectedDbId = null;
 
     const subtitles = [
       'Step 1 / 4 — 이메일 가입',
-      'Step 2 / 4 — 노션 API 키',
+      'Step 2 / 4 — Notion 연결',
       'Step 3 / 4 — 데이터베이스 선택',
       'Step 4 / 4 — 완료',
     ];
@@ -452,13 +449,13 @@
       selectedDbId = null;
     }
 
-    async function fetchDatabases(apiKey) {
+    async function fetchDatabases() {
       renderDbLoading();
       try {
         const res = await fetch(FUNCTION_BASE + '/manage-user?action=list-databases', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notion_api_key: apiKey }),
+          body: JSON.stringify({ user_id: userId }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || '목록 조회 실패');
@@ -496,57 +493,86 @@
       }
     });
 
-    // Step 2: API 키 입력 → DB 목록 불러오기 후 Step 3 이동
-    document.getElementById('apiForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('apiBtn');
-      const result = document.getElementById('apiResult');
-      const key = document.getElementById('notionKey').value.trim();
-
+    // Step 2: Notion OAuth 연결 시작
+    document.getElementById('oauthBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('oauthBtn');
+      const result = document.getElementById('oauthResult');
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner">⟳</span>확인 중';
+      btn.innerHTML = '<span class="spinner">⟳</span>연결 중...';
       result.className = 'message hidden';
 
       try {
-        if (key.length < 20) {
-          throw new Error('올바른 노션 API 키를 입력해주세요.');
-        }
-        notionApiKey = key;
-        goToStep(3);
-        fetchDatabases(notionApiKey);
+        if (!userId) throw new Error('먼저 이메일 가입을 완료해주세요.');
+        const res = await fetch(
+          `${FUNCTION_BASE}/notion-oauth?action=authorize&user_id=${encodeURIComponent(userId)}`,
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '연결 요청 실패');
+        window.location.href = data.url;
       } catch (err) {
         result.className = 'message error';
         result.textContent = err.message;
         btn.disabled = false;
-        btn.textContent = '다음 →';
+        btn.textContent = 'Notion으로 연결하기';
       }
     });
 
     // URL 파라미터 처리
     const _params = new URLSearchParams(location.search);
     const presetUserId = _params.get('user_id');
+    const notionConnected = _params.get('notion_connected') === '1';
+    const oauthError = _params.get('error');
+
+    const OAUTH_ERROR_MESSAGES = {
+      access_denied: 'Notion 연결이 취소되었습니다.',
+      missing_params: 'Notion 연결 응답이 올바르지 않습니다. 다시 시도해주세요.',
+      oauth_failed: '인증 코드 교환에 실패했습니다. 다시 시도해주세요.',
+      store_failed: '토큰 저장에 실패했습니다. 다시 시도해주세요.',
+      server_error: '서버 오류가 발생했습니다. 다시 시도해주세요.',
+    };
 
     if (presetUserId) {
       userId = presetUserId;
-      (async () => {
-        try {
-          const res = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(presetUserId)}`);
-          const data = await res.json();
-          if (data.valid && data.notion_configured) {
-            document.getElementById('displayUserId').textContent = userId;
-            goToStep(4);
-          } else {
+
+      if (notionConnected) {
+        goToStep(3);
+        fetchDatabases();
+      } else if (oauthError) {
+        goToStep(2);
+        const notice = document.getElementById('adminNotice');
+        notice.className = 'message error';
+        notice.textContent = OAUTH_ERROR_MESSAGES[oauthError] || 'Notion 연결에 실패했습니다. 다시 시도해주세요.';
+      } else {
+        (async () => {
+          try {
+            const res = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(presetUserId)}`);
+            const data = await res.json();
+            if (data.valid && data.notion_configured) {
+              document.getElementById('displayUserId').textContent = userId;
+              goToStep(4);
+            } else {
+              goToStep(2);
+              const notice = document.getElementById('adminNotice');
+              notice.className = 'message success';
+              notice.textContent = data.valid
+                ? '계정이 준비되었습니다. 아래에서 Notion을 연결해주세요.'
+                : '알 수 없는 user_id입니다. 다시 가입해주세요.';
+            }
+          } catch {
             goToStep(2);
-            const notice = document.getElementById('adminNotice');
-            notice.className = 'message success';
-            notice.textContent = data.valid
-              ? '계정이 준비되었습니다. 아래에서 노션 API 키를 입력해주세요.'
-              : '알 수 없는 user_id입니다. 다시 가입해주세요.';
           }
-        } catch {
-          goToStep(2);
-        }
-      })();
+        })();
+      }
+    }
+
+    if (!presetUserId) {
+      const staleOAuthParams = notionConnected || oauthError;
+      if (staleOAuthParams) {
+        goToStep(2);
+        const notice = document.getElementById('adminNotice');
+        notice.className = 'message error';
+        notice.textContent = '사용자 정보가 없어 Notion 연결을 완료할 수 없습니다. 이메일 가입부터 다시 진행해주세요.';
+      }
     }
 
     // Step 3: 데이터베이스 선택 → setup-notion 호출
@@ -568,7 +594,6 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             user_id: userId,
-            notion_api_key: notionApiKey,
             notion_database_id: dbId,
           }),
         });

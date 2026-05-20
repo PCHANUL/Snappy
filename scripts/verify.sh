@@ -121,6 +121,20 @@ else
   log_warn "manage-user 예상치 못한 응답: $manage_status"
 fi
 
+# notion-oauth 응답 (user_id 없이 호출 시 400 기대)
+log_info "notion-oauth 응답 확인..."
+oauth_status=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X GET "$BASE_URL/notion-oauth?action=authorize")
+
+if [ "$oauth_status" = "400" ]; then
+  log_success "notion-oauth 응답 정상 ($oauth_status — validation 작동)"
+elif [ "$oauth_status" = "404" ]; then
+  log_error "notion-oauth 함수가 배포되지 않았습니다."
+  exit 1
+else
+  log_warn "notion-oauth 예상치 못한 응답: $oauth_status"
+fi
+
 # pages 함수 응답 (GET 시 200 + text/html 기대)
 log_info "pages 함수 응답 확인..."
 pages_status=$(curl -L -s -o /dev/null -w "%{http_code}" \
@@ -192,9 +206,9 @@ fi
 
 log_success "가입 성공 (user_id: $USER_ID)"
 
-# 2) 노션 키 등록 (선택)
+# 2) 노션 직접 토큰 등록 (선택, OAuth 우회 테스트용)
 echo ""
-if confirm "노션 API 키 등록도 테스트하시겠습니까?" "N"; then
+if confirm "노션 API 키 직접 등록도 테스트하시겠습니까? (OAuth 우회)" "N"; then
   if [ -n "${NOTION_API_KEY:-}" ]; then
     read -p "노션 API 키 입력 (Enter=.env.local NOTION_API_KEY 사용): " notion_key
     notion_key="${notion_key:-$NOTION_API_KEY}"

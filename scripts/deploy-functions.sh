@@ -17,6 +17,8 @@ cd "$PROJECT_ROOT"
 FUNCTIONS=(
   "trigger-search"
   "manage-user"
+  "notion-oauth"
+  "load-more"
   "pages"
 )
 

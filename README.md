@@ -34,6 +34,10 @@ supabase/
 │   │   └── index.ts
 │   ├── manage-user/          # 사용자 관리
 │   │   └── index.ts
+│   ├── notion-oauth/         # Notion OAuth 연결
+│   │   └── index.ts
+│   ├── load-more/            # 결과 더보기
+│   │   └── index.ts
 │   └── pages/                # Edge Function HTML fallback
 │       └── index.ts
 └── migrations/               # DB 스키마
@@ -51,7 +55,14 @@ supabase/
 - **YouTube Data API v3**: Google Cloud Console에서 발급
 - **You.com**: https://you.com/platform 에서 발급 ($100 무료 크레딧)
 - **Supabase**: https://supabase.com 에서 프로젝트 생성
+- **Notion OAuth**: Notion integration에서 `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` 발급
 - **암호화 시크릿**: `openssl rand -base64 32` 등으로 `NOTION_KEY_ENCRYPTION_SECRET` 생성
+
+Notion OAuth redirect URI:
+
+```text
+https://[ref].supabase.co/functions/v1/notion-oauth/callback
+```
 
 ### 2. 초기 셋업
 
@@ -139,12 +150,13 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/manage-user?action=signup' 
 
 ### 노션 연동
 
+OAuth 플로우에서는 먼저 Notion 연결을 완료해 토큰을 저장한 뒤 DB ID만 등록합니다.
+
 ```bash
 curl -X POST 'https://[ref].supabase.co/functions/v1/manage-user?action=setup-notion' \
   -H 'Content-Type: application/json' \
   -d '{
     "user_id": "...",
-    "notion_api_key": "ntn_... 또는 secret_...",
     "notion_database_id": "..."
   }'
 ```
@@ -181,5 +193,5 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/trigger-search' \
 
 ## 보안 메모
 
-- 노션 API 키는 `NOTION_KEY_ENCRYPTION_SECRET`에서 파생한 AES-GCM 키로 암호화해 `users.notion_api_key_encrypted`에 저장합니다.
+- Notion OAuth access token은 `NOTION_KEY_ENCRYPTION_SECRET`에서 파생한 AES-GCM 키로 암호화해 `users.notion_api_key_encrypted`에 저장합니다.
 - `.env.local`은 커밋하지 않습니다. 공유 가능한 예시는 `.env.example`만 사용합니다.

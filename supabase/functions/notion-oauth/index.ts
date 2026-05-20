@@ -5,7 +5,8 @@ import { env } from '../_shared/env.ts';
 import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
 import { logger } from '../_shared/logger.ts';
 
-const SETUP_PAGE = 'https://pchanul.github.io/Snappy/';
+const SETUP_PAGE = (Deno.env.get('SETUP_PAGE_URL') || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '/');
+const NOTION_VERSION = '2022-06-28';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,7 +15,7 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get('action');
+    const action = resolveAction(url);
 
     switch (action) {
       case 'authorize':
@@ -30,12 +31,22 @@ serve(async (req) => {
   }
 });
 
+function resolveAction(url: URL): string | null {
+  const queryAction = url.searchParams.get('action');
+  if (queryAction) return queryAction;
+
+  const path = url.pathname.replace(/\/+$/, '');
+  if (path.endsWith('/authorize')) return 'authorize';
+  if (path.endsWith('/callback')) return 'callback';
+  return null;
+}
+
 function handleAuthorize(url: URL): Response {
   const userId = url.searchParams.get('user_id');
   if (!userId) throw new ValidationError('user_id required');
 
   const { clientId, redirectUri } = env.notion;
-  if (!clientId) {
+  if (!clientId || !redirectUri) {
     throw new ValidationError('Notion OAuth not configured', 'OAuth 설정이 완료되지 않았습니다.');
   }
 
@@ -64,13 +75,19 @@ async function handleCallback(url: URL): Promise<Response> {
 
   try {
     const { clientId, clientSecret, redirectUri } = env.notion;
+    if (!clientId || !clientSecret || !redirectUri) {
+      return Response.redirect(`${redirectBase}&error=server_error`, 302);
+    }
+
     const credentials = btoa(`${clientId}:${clientSecret}`);
 
     const tokenRes = await fetch('https://api.notion.com/v1/oauth/token', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${credentials}`,
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Notion-Version': NOTION_VERSION,
       },
       body: JSON.stringify({
         grant_type: 'authorization_code',

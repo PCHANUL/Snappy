@@ -6,5 +6,11 @@ verify_jwt = false
 [functions.manage-user]
 verify_jwt = false
 
+[functions.notion-oauth]
+verify_jwt = false
+
+[functions.load-more]
+verify_jwt = false
+
 [functions.pages]
 verify_jwt = false
