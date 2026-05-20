@@ -56,7 +56,7 @@
       flex: 1;
       height: 2px;
       background: #e0e0e0;
-      max-width: 48px;
+      max-width: 40px;
     }
 
     .card {
@@ -216,7 +216,7 @@
   <div class="container">
     <header>
       <h1>Snappy</h1>
-      <p class="subtitle" id="headerSubtitle">Step 1 / 3 — 이메일 가입</p>
+      <p class="subtitle" id="headerSubtitle">Step 1 / 4 — 이메일 가입</p>
     </header>
 
     <!-- Step indicator -->
@@ -226,6 +226,8 @@
       <div class="step-dot" id="dot2">2</div>
       <div class="step-line"></div>
       <div class="step-dot" id="dot3">3</div>
+      <div class="step-line"></div>
+      <div class="step-dot" id="dot4">4</div>
     </div>
 
     <div class="card">
@@ -242,11 +244,11 @@
         <div id="signupResult" class="message hidden"></div>
       </div>
 
-      <!-- Step 2: 노션 연동 -->
+      <!-- Step 2: 노션 API 키 -->
       <div class="step" id="step2">
-        <h2>노션 연동</h2>
+        <h2>노션 API 키</h2>
         <div id="adminNotice" class="message hidden"></div>
-        <form id="setupForm">
+        <form id="apiForm">
           <div class="field">
             <label for="notionKey">노션 API 키</label>
             <input type="password" id="notionKey" placeholder="secret_..." required>
@@ -260,20 +262,28 @@
               </ol>
             </details>
           </div>
+          <button type="submit" class="btn-primary" id="apiBtn">다음 →</button>
+        </form>
+        <div id="apiResult" class="message hidden"></div>
+      </div>
+
+      <!-- Step 3: 데이터베이스 선택 -->
+      <div class="step" id="step3">
+        <h2>데이터베이스 선택</h2>
+        <form id="setupForm">
           <div class="field">
             <label>노션 데이터베이스</label>
             <div id="dbPickerArea">
-              <input type="text" id="dbId" placeholder="API 키를 입력하면 자동으로 불러옵니다" disabled
-                style="background:#f9fafb;color:#aaa;cursor:not-allowed;">
+              <div class="db-loading"><span class="spinner">⟳</span> 데이터베이스 불러오는 중...</div>
             </div>
           </div>
-          <button type="submit" class="btn-primary" id="setupBtn">다음 →</button>
+          <button type="submit" class="btn-primary" id="setupBtn">연동하기</button>
         </form>
         <div id="setupResult" class="message hidden"></div>
       </div>
 
-      <!-- Step 3: 완료 -->
-      <div class="step" id="step3">
+      <!-- Step 4: 완료 -->
+      <div class="step" id="step4">
         <h2>가입 완료!</h2>
         <p style="font-size:0.875rem;color:#555;margin-bottom:12px;">아래 User ID를 노션 DB에 등록해주세요.</p>
         <div class="user-id-row">
@@ -296,22 +306,28 @@
     const SUPABASE_URL = 'https://mmnwbkbipjnmsvtyohjg.supabase.co';
     const FUNCTION_BASE = SUPABASE_URL + '/functions/v1';
 
+    const TOTAL_STEPS = 4;
     let currentStep = 1;
     let userId = null;
+    let selectedDbId = null;
 
-    const subtitles = ['Step 1 / 3 — 이메일 가입', 'Step 2 / 3 — 노션 연동', 'Step 3 / 3 — 완료'];
+    const subtitles = [
+      'Step 1 / 4 — 이메일 가입',
+      'Step 2 / 4 — 노션 API 키',
+      'Step 3 / 4 — 데이터베이스 선택',
+      'Step 4 / 4 — 완료',
+    ];
 
     function goToStep(n) {
       document.getElementById('step' + currentStep).classList.remove('active', 'slide-in');
       currentStep = n;
       const next = document.getElementById('step' + currentStep);
       next.classList.add('active');
-      // Trigger reflow so animation restarts cleanly
       void next.offsetWidth;
       next.classList.add('slide-in');
       document.getElementById('headerSubtitle').textContent = subtitles[n - 1];
 
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= TOTAL_STEPS; i++) {
         const dot = document.getElementById('dot' + i);
         dot.classList.remove('active', 'done');
         if (i < n) dot.classList.add('done');
@@ -326,10 +342,6 @@
         setTimeout(() => { btn.textContent = '복사'; }, 2000);
       });
     }
-
-    // API 키 입력 → 데이터베이스 자동 로드
-    let dbFetchTimer = null;
-    let selectedDbId = null;
 
     function renderDbLoading() {
       document.getElementById('dbPickerArea').innerHTML =
@@ -392,14 +404,6 @@
       }
     }
 
-    document.getElementById('notionKey').addEventListener('input', (e) => {
-      const key = e.target.value.trim();
-      clearTimeout(dbFetchTimer);
-      if (key.startsWith('secret_') && key.length > 20) {
-        dbFetchTimer = setTimeout(() => fetchDatabases(key), 600);
-      }
-    });
-
     // Step 1: signup
     document.getElementById('signupForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -428,6 +432,32 @@
       }
     });
 
+    // Step 2: API 키 입력 → DB 목록 불러오기 후 Step 3 이동
+    document.getElementById('apiForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('apiBtn');
+      const result = document.getElementById('apiResult');
+      const key = document.getElementById('notionKey').value.trim();
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner">⟳</span>확인 중';
+      result.className = 'message hidden';
+
+      try {
+        if (!key.startsWith('secret_') || key.length < 20) {
+          throw new Error('올바른 노션 API 키를 입력해주세요. (secret_... 형식)');
+        }
+        goToStep(3);
+        fetchDatabases(key);
+      } catch (err) {
+        result.className = 'message error';
+        result.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '다음 →';
+      }
+    });
+
     // URL에 user_id가 있으면 verify-user로 상태 확인 후 적절한 단계로 이동
     const presetUserId = new URLSearchParams(location.search).get('user_id');
     if (presetUserId) {
@@ -437,11 +467,9 @@
           const res = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(presetUserId)}`);
           const data = await res.json();
           if (data.valid && data.notion_configured) {
-            // 이미 완전 설정 완료 → Step 3 (완료 화면)
             document.getElementById('displayUserId').textContent = userId;
-            goToStep(3);
+            goToStep(4);
           } else {
-            // 계정은 있지만 Notion 미연동 → Step 2
             goToStep(2);
             const notice = document.getElementById('adminNotice');
             notice.className = 'message success';
@@ -455,7 +483,7 @@
       })();
     }
 
-    // Step 2: setup-notion
+    // Step 3: 데이터베이스 선택 → setup-notion 호출
     document.getElementById('setupForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('setupBtn');
@@ -481,13 +509,13 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || '연동에 실패했습니다.');
         document.getElementById('displayUserId').textContent = userId;
-        goToStep(3);
+        goToStep(4);
       } catch (err) {
         result.className = 'message error';
         result.textContent = err.message;
       } finally {
         btn.disabled = false;
-        btn.textContent = '다음 →';
+        btn.textContent = '연동하기';
       }
     });
   </script>
