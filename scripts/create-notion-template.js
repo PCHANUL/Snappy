@@ -124,6 +124,18 @@ const b = {
     type: 'callout',
     callout: { rich_text: rich(t), icon: { type: 'emoji', emoji }, color: 'gray_background' },
   }),
+  // 링크가 포함된 눈에 띄는 callout (embed 대체)
+  link: (label, url, emoji = '🔗') => ({
+    type: 'callout',
+    callout: {
+      rich_text: [
+        { type: 'text', text: { content: label + '  →  ' }, annotations: { bold: true } },
+        { type: 'text', text: { content: url, link: { url } }, annotations: { bold: false, color: 'blue' } },
+      ],
+      icon: { type: 'emoji', emoji },
+      color: 'blue_background',
+    },
+  }),
   toggle: (title, children = []) => ({
     type: 'toggle',
     toggle: { rich_text: rich(title), children },
@@ -189,8 +201,8 @@ function blocksMain(webhookUrl, loadMoreUrl) {
       b.num('사용할 개인 워크스페이스 선택'),
       b.num('복제된 Snappy 페이지에서 "..." → 연결(Add connections) → 만든 Notion 연결 추가'),
       b.num('아래 셋업 마법사에서 이메일 가입 후 Notion 승인 화면에서 복제한 페이지를 선택'),
-      b.embed(SETUP_URL),
-      b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
+      b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
+      b.link('사용량 확인', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
     ]),
     b.toggle('🔌 DB가 셋업 페이지 목록에 안 보일 때', [
       b.p('Notion API는 개인 페이지의 모든 DB를 자동으로 보여주지 않습니다. 검색 DB 또는 그 상위 페이지를 사용자가 만든 Notion 통합에 연결해야 목록에 표시됩니다.'),
@@ -266,7 +278,7 @@ function blocksSijak() {
     b.num('연결 후 아래 셋업 마법사로 진행'),
     b.divider(),
     b.h2('3. 셋업 마법사'),
-    b.embed(SETUP_URL),
+    b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
     b.divider(),
     b.h2('📌 셋업 완료하셨나요?'),
     b.callout('완료하셨다면 검색 페이지로 이동해 첫 검색을 시작해보세요.', '✅'),
@@ -384,9 +396,9 @@ function blocksSeoljeong() {
     b.callout('사용자 ID (user_id)\n\n셋업 완료 후 여기에 user_id를 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
     b.divider(),
     b.h2('사용량'),
-    b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
+    b.link('사용량 확인하기', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
     b.h2('검색 기록'),
-    b.embed(`${HISTORY_URL}?user_id=${USER_ID}`),
+    b.link('검색 기록 보기', `${HISTORY_URL}?user_id=${USER_ID}`, '📋'),
     ...(USER_ID === 'YOUR_USER_ID' ? [b.p('※ YOUR_USER_ID를 실제 user_id로 교체하거나, 스크립트 실행 시 --user-id <id> 옵션을 사용하세요.')] : []),
     b.divider(),
     b.h2('연동 정보'),
