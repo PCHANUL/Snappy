@@ -33,6 +33,11 @@ export interface SearchResult {
   error?: string;
 }
 
+// 플랫폼 정보가 포함된 평탄화된 결과 (페이지네이션 캐시용)
+export interface FlatResult extends ContentItem {
+  platform: Platform;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -62,3 +67,11 @@ export const DAILY_QUOTAS: Record<SubscriptionTier, number> = {
   standard: 10,
   premium: 30,
 };
+
+// 구독 만료 여부를 반영한 실제 티어 반환 (만료 후 7일 유예)
+export function getEffectiveTier(tier: SubscriptionTier, expiresAt: string | null): SubscriptionTier {
+  if (!expiresAt) return tier;
+  const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+  if (Date.now() > new Date(expiresAt).getTime() + GRACE_MS) return 'free';
+  return tier;
+}

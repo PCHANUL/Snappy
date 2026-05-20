@@ -36,6 +36,9 @@ export const env = {
     environment: optional('ENVIRONMENT', 'development'),
     logLevel: optional('LOG_LEVEL', 'info'),
   },
+  admin: {
+    secret: optional('ADMIN_SECRET', ''),
+  },
 };
 
 export const isDev = env.app.environment === 'development';

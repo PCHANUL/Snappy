@@ -43,6 +43,13 @@ const SUPABASE_ANON  = process.env.SUPABASE_ANON_KEY || '';
 const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '');
 const SETUP_URL      = `${PAGES_BASE}/`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
+const HISTORY_URL    = `${PAGES_BASE}/history.html`;
+
+// --user-id <value> 플래그: 임베드 URL에 user_id 자동 삽입
+const userIdFlagIdx = process.argv.indexOf('--user-id');
+const USER_ID = (userIdFlagIdx !== -1 ? process.argv[userIdFlagIdx + 1] : '')
+  || process.env.TEMPLATE_USER_ID
+  || 'YOUR_USER_ID';
 
 if (!NOTION_API_KEY) {
   console.error('❌  NOTION_API_KEY 가 없습니다. .env.local 에 추가하세요.');
@@ -151,23 +158,67 @@ async function createSearchDB(parentPageId) {
       '상태':         { status: {} },
       '발견 콘텐츠 수': { number: { format: 'number' } },
       '검색일시':     { created_time: {} },
+      'user_id':      { rich_text: {} },
+      '📄 더보기':    { button: {} },
     },
   });
 }
 
 // ── 각 페이지 콘텐츠 ────────────────────────────────────────────────────────
 
-function blocksMain(sijakLink, geomseakLink, faqLink, seoljeongLink) {
+function blocksMain(webhookUrl, loadMoreUrl) {
   return [
-    b.p('키워드 하나로 매체별 인기 콘텐츠를 30초 만에 발견합니다.'),
+    // 재방문 사용자: 이 한 줄만 보고 바로 DB로 진입
+    b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
+    // 신규 사용자: 토글 열어서 처리, 이후 접어두면 방해 없음
+    b.toggle('🆕 처음 설정하기 (완료 후 접어두세요)', [
+      b.embed(SETUP_URL),
+      b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
+    ]),
+    b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
+      b.callout([
+        `URL: ${webhookUrl}`,
+        'Method: POST',
+        `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        'Content-Type: application/json',
+      ].join('\n'), '⚙️'),
+      b.callout([
+        '{',
+        '  "user_id": "{{user_id}}",',
+        '  "notion_page_id": "{{현재 페이지 ID}}"',
+        '}',
+      ].join('\n'), '📋'),
+      b.p('키워드 · 매체 · 기간 · 결과 개수는 이 DB 행의 속성에서 자동으로 읽습니다. Body에 따로 넣지 않아도 됩니다.'),
+    ]),
+    b.toggle('📄 더보기 버튼 자동화 설정 (최초 1회)', [
+      b.callout([
+        `URL: ${loadMoreUrl}`,
+        'Method: POST',
+        `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        'Content-Type: application/json',
+      ].join('\n'), '⚙️'),
+      b.callout([
+        '{',
+        '  "user_id": "{{user_id}}",',
+        '  "notion_page_id": "{{현재 페이지 ID}}"',
+        '}',
+      ].join('\n'), '📋'),
+      b.p('처음 5개 결과 외에 추가 결과가 있을 때 DB 행에서 이 버튼을 클릭하면 5개씩 서브페이지가 추가됩니다.'),
+    ]),
     b.divider(),
-    b.callout('처음이신가요? 시작하기 페이지에서 2분만 셋업하면 바로 사용할 수 있습니다.', '💡'),
+  ];
+}
+
+function blocksMainBottom() {
+  return [
     b.divider(),
-    b.h2('🗂 페이지'),
-    b.p('📖 시작하기 — 처음 사용하는 경우 여기부터'),
-    b.p('🔍 검색 — 키워드로 트렌드 콘텐츠 찾기'),
-    b.p('❓ 자주 묻는 질문 — 궁금한 점이 있다면'),
-    b.p('⚙️ 설정 — 사용량 확인 및 계정 관리'),
+    b.toggle('도움말 및 추가 정보', [
+      b.p('📖 시작하기 — 셋업 문제 해결'),
+      b.p('❓ 자주 묻는 질문 — API 정확도, 요금제, 보안'),
+      b.p('⚙️ 설정 — 사용량 확인, 연동 해제'),
+    ]),
   ];
 }
 
@@ -208,6 +259,14 @@ function blocksSijak() {
 function blocksGeomseok() {
   return [
     b.callout('새 검색을 시작하려면 "+ 새로 만들기" 클릭 → 키워드 입력 → 🚀 검색 실행\n검색 결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
+    b.divider(),
+    b.h2('DB 속성 안내'),
+    b.bullet('키워드: 검색할 단어 (예: 비건 디저트)'),
+    b.bullet('매체: 네이버블로그 / 유튜브 / 티스토리 / 브런치 (복수 선택 가능)'),
+    b.bullet('기간: 1일 / 1주 / 1개월(기본) / 1년'),
+    b.bullet('결과 개수: 5 / 10(기본) / 20'),
+    b.bullet('상태: 대기 → 검색중 → 완료 / 실패 (자동 변경)'),
+    b.bullet('user_id: 셋업 완료 후 받은 ID — 새 행 추가 시 기본값으로 설정해두세요'),
   ];
 }
 
@@ -277,7 +336,6 @@ function blocksFaq() {
 }
 
 function blocksSeoljeong() {
-  const webhookUrl = `${SUPABASE_URL}/functions/v1/trigger-search`;
   return [
     b.h1('설정'),
     b.divider(),
@@ -285,8 +343,10 @@ function blocksSeoljeong() {
     b.callout('사용자 ID (user_id)\n\n셋업 완료 후 여기에 user_id를 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
     b.divider(),
     b.h2('사용량'),
-    b.embed(`${USAGE_URL}?user_id=YOUR_USER_ID`),
-    b.p('※ 위 URL의 YOUR_USER_ID 부분을 실제 user_id로 교체하세요.'),
+    b.embed(`${USAGE_URL}?user_id=${USER_ID}`),
+    b.h2('검색 기록'),
+    b.embed(`${HISTORY_URL}?user_id=${USER_ID}`),
+    ...(USER_ID === 'YOUR_USER_ID' ? [b.p('※ YOUR_USER_ID를 실제 user_id로 교체하거나, 스크립트 실행 시 --user-id <id> 옵션을 사용하세요.')] : []),
     b.divider(),
     b.h2('연동 정보'),
     b.toggle('노션 연동 다시 설정', [
@@ -301,14 +361,7 @@ function blocksSeoljeong() {
       b.p('연동 해제 후에는 검색이 동작하지 않습니다.'),
     ]),
     b.divider(),
-    b.h2('검색 버튼 자동화 설정값'),
-    b.callout([
-      '검색 DB의 🚀 버튼 자동화 → HTTP 요청에 아래 값을 입력하세요.',
-      '',
-      `URL: ${webhookUrl}`,
-      `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-      `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-    ].join('\n'), '⚙️'),
+    b.callout('검색 버튼 자동화 설정값은 메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글을 참고하세요.', '⚙️'),
     b.divider(),
     b.h2('플랜'),
     b.callout('현재 플랜: 베타 무료\n일일 한도: 3회', '📊'),
@@ -323,14 +376,30 @@ function blocksSeoljeong() {
 async function main() {
   console.log('\n🚀 트렌드 콘텐츠 발견기 노션 템플릿 생성 시작\n');
 
-  // 1. 메인 페이지
+  const webhookUrl  = `${SUPABASE_URL}/functions/v1/trigger-search`;
+  const loadMoreUrl = `${SUPABASE_URL}/functions/v1/load-more`;
+
+  // 1. 메인 페이지 상단 블록
   process.stdout.write('📘 메인 페이지 생성 중...');
   const mainPage = await createPage(PARENT_PAGE_ID, '트렌드 콘텐츠 발견기', '📘');
+  await appendBlocks(mainPage.id, blocksMain(webhookUrl, loadMoreUrl));
   console.log(` ✅  ${mainPage.url}`);
 
   await sleep(300);
 
-  // 2. 시작하기 페이지
+  // 2. 검색 DB — 메인 페이지에 인라인으로 생성 (서브페이지 이동 불필요)
+  process.stdout.write('🔍 검색 DB 생성 중...');
+  const db = await createSearchDB(mainPage.id);
+  console.log(` ✅  DB ID: ${db.id}`);
+
+  await sleep(300);
+
+  // 3. DB 아래 매핑 안내 블록 추가
+  await appendBlocks(mainPage.id, [...blocksGeomseok(), ...blocksMainBottom()]);
+
+  await sleep(300);
+
+  // 4. 시작하기 서브페이지 (셋업 + 문제해결)
   process.stdout.write('📖 시작하기 페이지 생성 중...');
   const sijakPage = await createPage(mainPage.id, '시작하기', '📖');
   await appendBlocks(sijakPage.id, blocksSijak());
@@ -338,19 +407,7 @@ async function main() {
 
   await sleep(300);
 
-  // 3. 검색 페이지 + DB
-  process.stdout.write('🔍 검색 페이지 생성 중...');
-  const geomseokPage = await createPage(mainPage.id, '검색', '🔍');
-  await appendBlocks(geomseokPage.id, blocksGeomseok());
-  console.log(` ✅`);
-
-  process.stdout.write('   검색 DB 생성 중...');
-  const db = await createSearchDB(geomseokPage.id);
-  console.log(` ✅  DB ID: ${db.id}`);
-
-  await sleep(300);
-
-  // 4. FAQ 페이지
+  // 5. FAQ 페이지
   process.stdout.write('❓ FAQ 페이지 생성 중...');
   const faqPage = await createPage(mainPage.id, '자주 묻는 질문', '❓');
   await appendBlocks(faqPage.id, blocksFaq());
@@ -358,7 +415,7 @@ async function main() {
 
   await sleep(300);
 
-  // 5. 설정 페이지
+  // 6. 설정 페이지
   process.stdout.write('⚙️  설정 페이지 생성 중...');
   const seoljeongPage = await createPage(mainPage.id, '설정', '⚙️');
   await appendBlocks(seoljeongPage.id, blocksSeoljeong());
@@ -375,19 +432,31 @@ ${mainPage.url}
 
 1. 검색 DB에 "🚀 검색 실행" 버튼 속성 추가
    - 속성 추가 → 버튼
-   - 자동화 → 액션 1: 상태를 "검색중"으로 변경
-   - 자동화 → 액션 2: HTTP 요청 (설정 페이지의 값 참고)
+   - 자동화 → 액션 1: 상태를 "대기"로 변경
+   - 자동화 → 액션 2: HTTP 요청 (메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글 참고)
+   - Body는 user_id + notion_page_id 2개만 입력 — 나머지는 자동으로 읽힘
 
-2. 검색 DB 뷰 3개 추가
+1-2. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
+   - "📄 더보기" 속성 클릭 → 자동화 편집
+   - 액션: HTTP 요청 (메인 페이지 "📄 더보기 버튼 자동화 설정" 토글 참고)
+   - Body: user_id + notion_page_id (검색 버튼과 동일한 형식)
+
+2. 검색 DB의 user_id 속성에 기본값 설정
+   - 셋업 완료 후 받은 user_id 값을 기본값으로 지정
+   - 새 검색 행 추가 시 자동으로 채워짐
+
+3. 검색 DB 뷰 3개 추가
    - 전체 (테이블, 검색일시 내림차순)
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-3. 설정 페이지 usage 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체
+4. ${USER_ID === 'YOUR_USER_ID'
+    ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
+    : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
-4. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
+5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
-5. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 `);
 }
 

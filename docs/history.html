@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snappy — 검색 기록</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: transparent;
+      color: #1a1a1a;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .title { font-size: 0.85rem; font-weight: 700; color: #333; }
+    .count { font-size: 0.75rem; color: #999; }
+
+    .list { display: flex; flex-direction: column; gap: 8px; }
+
+    .item {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      border-left: 3px solid #6366f1;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .item.failed { border-left-color: #ef4444; }
+
+    .item-main { flex: 1; min-width: 0; }
+    .keyword {
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meta { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .tag {
+      font-size: 0.7rem;
+      background: #eef2ff;
+      color: #4f46e5;
+      border-radius: 99px;
+      padding: 2px 7px;
+    }
+    .tag.period { background: #f0fdf4; color: #166534; }
+    .tag.failed { background: #fef2f2; color: #991b1b; }
+
+    .item-right { text-align: right; flex-shrink: 0; }
+    .result-count { font-size: 1.1rem; font-weight: 800; color: #6366f1; }
+    .result-label { font-size: 0.68rem; color: #aaa; }
+    .date { font-size: 0.7rem; color: #bbb; margin-top: 6px; }
+
+    .no-user, .error, .loading, .empty {
+      font-size: 0.88rem;
+      color: #666;
+      padding: 8px 2px;
+      line-height: 1.6;
+    }
+    .no-user a { color: #6366f1; text-decoration: none; }
+    .error { color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div id="root"><p class="loading">불러오는 중...</p></div>
+
+  <script>
+    const SUPABASE_URL = 'https://mmnwbkbipjnmsvtyohjg.supabase.co';
+    const params = new URLSearchParams(location.search);
+    const userId = params.get('user_id');
+    const limit = params.get('limit') || '20';
+
+    const PLATFORM_LABELS = {
+      naver_blog: '📝 네이버',
+      youtube: '🎥 유튜브',
+      tistory: '📚 티스토리',
+      brunch: '✍️ 브런치',
+    };
+    const PERIOD_LABELS = { day: '1일', week: '1주', month: '1개월', year: '1년' };
+
+    function relativeTime(iso) {
+      const diff = Date.now() - new Date(iso).getTime();
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return '방금 전';
+      if (m < 60) return `${m}분 전`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}시간 전`;
+      const d = Math.floor(h / 24);
+      if (d < 30) return `${d}일 전`;
+      return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+    }
+
+    async function load() {
+      const root = document.getElementById('root');
+      if (!userId) {
+        root.innerHTML = `<p class="no-user">검색 기록을 보려면 <code>?user_id=</code> 파라미터를 추가하세요.<br><a href="https://pchanul.github.io/Snappy/" target="_blank">→ Snappy 설정 페이지로 이동</a></p>`;
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${SUPABASE_URL}/functions/v1/manage-user?action=history&user_id=${encodeURIComponent(userId)}&limit=${limit}`
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '조회 실패');
+
+        const searches = data.searches;
+        if (searches.length === 0) {
+          root.innerHTML = '<p class="empty">아직 검색 기록이 없습니다.</p>';
+          return;
+        }
+
+        root.innerHTML = `
+          <div class="header">
+            <span class="title">최근 검색 기록</span>
+            <a href="./usage.html?user_id=${encodeURIComponent(userId)}" target="_blank"
+               class="count" style="color:#6366f1;text-decoration:none;">사용량 보기 →</a>
+          </div>
+          <div class="list">
+            ${searches.map(s => {
+              const failed = s.status === 'failed';
+              const platforms = (s.platforms || []).map(p => PLATFORM_LABELS[p] || p).join(' · ');
+              const period = PERIOD_LABELS[s.period] || s.period;
+              return `
+                <div class="item ${failed ? 'failed' : ''}">
+                  <div class="item-main">
+                    <div class="keyword">${s.keyword || '(키워드 없음)'}</div>
+                    <div class="meta">
+                      ${s.platforms?.map(p => `<span class="tag">${PLATFORM_LABELS[p] || p}</span>`).join('') || ''}
+                      <span class="tag period">${period}</span>
+                      ${failed ? `<span class="tag failed">실패</span>` : ''}
+                    </div>
+                  </div>
+                  <div class="item-right">
+                    ${failed
+                      ? `<div class="result-count" style="color:#ef4444">✗</div>`
+                      : `<div class="result-count">${s.result_count}</div><div class="result-label">개 발견</div>`
+                    }
+                    <div class="date">${relativeTime(s.created_at)}</div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>`;
+      } catch (err) {
+        root.innerHTML = `<p class="error">${err.message}</p>`;
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

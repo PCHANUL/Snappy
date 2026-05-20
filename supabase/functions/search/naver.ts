@@ -27,11 +27,14 @@ export async function searchNaverBlog(
   count: number = 10,
   period?: Period,
 ): Promise<ContentItem[]> {
-  const display = Math.min(count * 2, 30); // 기간 필터 고려해서 여유있게
+  // 기간 필터는 클라이언트에서 수행하므로 여유 있게 요청
+  // 최신 기간(day/week)은 date 정렬로 최신 글 우선, 그 외는 sim(관련도) 정렬
+  const display = Math.min(count * 3, 100);
+  const sort = (period === 'day' || period === 'week') ? 'date' : 'sim';
   const url = `https://openapi.naver.com/v1/search/blog.json` +
     `?query=${encodeURIComponent(keyword)}` +
     `&display=${display}` +
-    `&sort=sim`;
+    `&sort=${sort}`;
 
   logger.info('Naver search started', { keyword, count, period });
 

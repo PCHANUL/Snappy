@@ -17,6 +17,16 @@ const searchers: Record<Platform, SearcherFn> = {
   brunch: searchBrunch,
 };
 
+const PLATFORM_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // 플랫폼별 비용 (USD)
 const COST_PER_SEARCH: Record<Platform, number> = {
   naver_blog: 0,
@@ -42,7 +52,11 @@ export async function searchAllPlatforms(
 
   const tasks = platforms.map(async (platform): Promise<SearchResult> => {
     try {
-      const items = await searchers[platform](keyword, count, period);
+      const items = await withTimeout(
+        searchers[platform](keyword, count, period),
+        PLATFORM_TIMEOUT_MS,
+        platform,
+      );
       return {
         platform,
         items,
@@ -59,7 +73,7 @@ export async function searchAllPlatforms(
     }
   });
 
-  const results = await Promise.all(tasks);
+  const results = deduplicateResults(await Promise.all(tasks));
 
   const total_cost_usd = platforms.reduce(
     (sum, p) => sum + COST_PER_SEARCH[p],
@@ -80,4 +94,17 @@ export async function searchAllPlatforms(
     total_cost_usd,
     duration_ms,
   };
+}
+
+// 플랫폼 간 동일 URL 중복 제거 (naver_blog ↔ tistory 등)
+function deduplicateResults(results: SearchResult[]): SearchResult[] {
+  const seen = new Set<string>();
+  return results.map(result => {
+    const unique = result.items.filter(item => {
+      if (seen.has(item.url)) return false;
+      seen.add(item.url);
+      return true;
+    });
+    return { ...result, items: unique, count: unique.length };
+  });
 }
