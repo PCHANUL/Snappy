@@ -33,6 +33,11 @@ export interface SearchResult {
   error?: string;
 }
 
+// 플랫폼 정보가 포함된 평탄화된 결과 (페이지네이션 캐시용)
+export interface FlatResult extends ContentItem {
+  platform: Platform;
+}
+
 export interface User {
   id: string;
   email: string;

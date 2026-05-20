@@ -3,8 +3,9 @@
 
 import { NotionApiError } from '../_shared/errors.ts';
 import { logger } from '../_shared/logger.ts';
-import { buildResultBlocks } from './blocks.ts';
-import type { Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
+import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks } from './blocks.ts';
+import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
+import { PLATFORM_INFO } from '../_shared/types.ts';
 
 // Notion DB 옵션값 → 내부 ID 매핑
 const PLATFORM_MAP: Record<string, Platform> = {
@@ -109,6 +110,81 @@ export class NotionClient {
       totalCount,
       blockCount: blocks.length,
     });
+  }
+
+  // 서브페이지 방식으로 검색 결과를 페이지에 저장 (첫 배치)
+  async updatePageWithSubPages(
+    pageId: string,
+    keyword: string,
+    firstBatch: FlatResult[],
+    results: SearchResult[],
+    metadata: SearchMetadata,
+    hasMore: boolean,
+    totalCount: number,
+  ): Promise<void> {
+    // 1. 속성 업데이트
+    await this.fetchApi(`pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        properties: {
+          '상태': { status: { name: '완료' } },
+          '발견 콘텐츠 수': { number: totalCount },
+        },
+      }),
+    });
+
+    // 2. 요약 블록 추가 (callout + 플랫폼별 요약 + divider)
+    const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
+    await this.appendBlocks(pageId, summaryBlocks);
+
+    // 3. 첫 배치 서브페이지 생성
+    await this.createResultSubPages(pageId, firstBatch);
+
+    // 4. 더보기 안내 (남은 항목 있을 때)
+    if (hasMore) {
+      const remaining = totalCount - firstBatch.length;
+      await this.appendBlocks(pageId, [buildLoadMoreCallout(remaining)]);
+    }
+
+    logger.info('Notion page updated with sub-pages', { pageId, totalCount, shown: firstBatch.length });
+  }
+
+  // 배치 서브페이지 생성 (더보기용)
+  async createResultSubPages(parentPageId: string, items: FlatResult[]): Promise<void> {
+    for (const item of items) {
+      await this.createResultSubPage(parentPageId, item);
+      await sleep(350);
+    }
+  }
+
+  // 더보기 후 안내 callout 교체: 기존 "더보기" callout 삭제 → 새 callout 추가
+  async appendLoadMoreCallout(pageId: string, remaining: number): Promise<void> {
+    // 마지막 블록이 더보기 callout이면 삭제 후 재추가
+    const data = await this.fetchApi(`blocks/${pageId}/children?page_size=100`, { method: 'GET' });
+    const blocks = data.results || [];
+    const last = blocks[blocks.length - 1];
+    if (last?.type === 'callout' && last.callout?.rich_text?.[0]?.text?.content?.startsWith('📄')) {
+      await this.fetchApi(`blocks/${last.id}`, { method: 'DELETE' });
+    }
+    if (remaining > 0) {
+      await this.appendBlocks(pageId, [buildLoadMoreCallout(remaining)]);
+    }
+  }
+
+  private async createResultSubPage(parentPageId: string, item: FlatResult): Promise<void> {
+    const info = PLATFORM_INFO[item.platform];
+    const body: Record<string, any> = {
+      parent: { page_id: parentPageId },
+      icon: { type: 'emoji', emoji: info.emoji },
+      properties: {
+        title: { title: [{ type: 'text', text: { content: item.title } }] },
+      },
+      children: buildSubPageBlocks(item),
+    };
+    if (item.thumbnail) {
+      body.cover = { type: 'external', external: { url: item.thumbnail } };
+    }
+    await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
   }
 
   // Notion DB 행의 속성에서 검색 파라미터를 읽어온다

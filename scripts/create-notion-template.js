@@ -159,13 +159,14 @@ async function createSearchDB(parentPageId) {
       '발견 콘텐츠 수': { number: { format: 'number' } },
       '검색일시':     { created_time: {} },
       'user_id':      { rich_text: {} },
+      '📄 더보기':    { button: {} },
     },
   });
 }
 
 // ── 각 페이지 콘텐츠 ────────────────────────────────────────────────────────
 
-function blocksMain(webhookUrl) {
+function blocksMain(webhookUrl, loadMoreUrl) {
   return [
     // 재방문 사용자: 이 한 줄만 보고 바로 DB로 진입
     b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
@@ -189,6 +190,22 @@ function blocksMain(webhookUrl) {
         '}',
       ].join('\n'), '📋'),
       b.p('키워드 · 매체 · 기간 · 결과 개수는 이 DB 행의 속성에서 자동으로 읽습니다. Body에 따로 넣지 않아도 됩니다.'),
+    ]),
+    b.toggle('📄 더보기 버튼 자동화 설정 (최초 1회)', [
+      b.callout([
+        `URL: ${loadMoreUrl}`,
+        'Method: POST',
+        `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
+        'Content-Type: application/json',
+      ].join('\n'), '⚙️'),
+      b.callout([
+        '{',
+        '  "user_id": "{{user_id}}",',
+        '  "notion_page_id": "{{현재 페이지 ID}}"',
+        '}',
+      ].join('\n'), '📋'),
+      b.p('처음 5개 결과 외에 추가 결과가 있을 때 DB 행에서 이 버튼을 클릭하면 5개씩 서브페이지가 추가됩니다.'),
     ]),
     b.divider(),
   ];
@@ -359,12 +376,13 @@ function blocksSeoljeong() {
 async function main() {
   console.log('\n🚀 트렌드 콘텐츠 발견기 노션 템플릿 생성 시작\n');
 
-  const webhookUrl = `${SUPABASE_URL}/functions/v1/trigger-search`;
+  const webhookUrl  = `${SUPABASE_URL}/functions/v1/trigger-search`;
+  const loadMoreUrl = `${SUPABASE_URL}/functions/v1/load-more`;
 
   // 1. 메인 페이지 상단 블록
   process.stdout.write('📘 메인 페이지 생성 중...');
   const mainPage = await createPage(PARENT_PAGE_ID, '트렌드 콘텐츠 발견기', '📘');
-  await appendBlocks(mainPage.id, blocksMain(webhookUrl));
+  await appendBlocks(mainPage.id, blocksMain(webhookUrl, loadMoreUrl));
   console.log(` ✅  ${mainPage.url}`);
 
   await sleep(300);
@@ -417,6 +435,11 @@ ${mainPage.url}
    - 자동화 → 액션 1: 상태를 "대기"로 변경
    - 자동화 → 액션 2: HTTP 요청 (메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글 참고)
    - Body는 user_id + notion_page_id 2개만 입력 — 나머지는 자동으로 읽힘
+
+1-2. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
+   - "📄 더보기" 속성 클릭 → 자동화 편집
+   - 액션: HTTP 요청 (메인 페이지 "📄 더보기 버튼 자동화 설정" 토글 참고)
+   - Body: user_id + notion_page_id (검색 버튼과 동일한 형식)
 
 2. 검색 DB의 user_id 속성에 기본값 설정
    - 셋업 완료 후 받은 user_id 값을 기본값으로 지정

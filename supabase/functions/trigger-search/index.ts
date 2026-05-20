@@ -8,6 +8,8 @@ import { logger } from '../_shared/logger.ts';
 import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
 import { validateMinimalRequest, validateSearchRequest } from '../_shared/validator.ts';
 import {
+  cacheSearchResults,
+  getNextBatch,
   getUserAndCheckQuota,
   incrementUsage,
   logSearch,
@@ -94,16 +96,31 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       request.period,
     );
 
-    await notion.updatePageWithResults(
+    const metadata = { duration_ms: Date.now() - startTime, cost_usd: orchestratorResult.total_cost_usd };
+    const totalFound = orchestratorResult.results.reduce((s, r) => s + r.count, 0);
+
+    // 전체 결과를 캐시에 저장 (더보기 페이지네이션용)
+    await cacheSearchResults(
       request.notion_page_id,
+      request.user_id,
       request.keyword,
       orchestratorResult.results,
-      { duration_ms: Date.now() - startTime, cost_usd: orchestratorResult.total_cost_usd },
+      metadata,
+    );
+
+    // 첫 5개 배치 가져와서 서브페이지로 생성
+    const firstBatch = await getNextBatch(request.notion_page_id, request.user_id, 5);
+    await notion.updatePageWithSubPages(
+      request.notion_page_id,
+      request.keyword,
+      firstBatch?.items ?? [],
+      orchestratorResult.results,
+      metadata,
+      firstBatch?.hasMore ?? false,
+      totalFound,
     );
 
     await incrementUsage(request.user_id);
-
-    const totalFound = orchestratorResult.results.reduce((s, r) => s + r.count, 0);
     await logSearch({
       user_id: request.user_id,
       keyword: request.keyword,

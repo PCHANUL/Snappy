@@ -2,7 +2,7 @@
 // 매체별 결과를 toggle 블록으로 묶어 페이지를 깔끔하게 유지
 
 import { PLATFORM_INFO } from '../_shared/types.ts';
-import type { ContentItem, SearchResult, SearchMetadata } from '../_shared/types.ts';
+import type { ContentItem, FlatResult, SearchResult, SearchMetadata } from '../_shared/types.ts';
 
 type NotionBlock = Record<string, any>;
 
@@ -84,6 +84,62 @@ function buildContentItemBlocks(idx: number, item: ContentItem): NotionBlock[] {
   if (desc) {
     const truncated = desc.length > 200 ? desc.slice(0, 200) + '…' : desc;
     blocks.push(paragraphIndent(truncated));
+  }
+
+  return blocks;
+}
+
+// === 서브페이지 방식 ===
+
+// 페이지 상단 요약 블록 (서브페이지 방식에서 페이지 본문 상단에 추가)
+export function buildSummaryBlocks(
+  keyword: string,
+  results: SearchResult[],
+  metadata: SearchMetadata,
+): NotionBlock[] {
+  const totalCount = results.reduce((sum, r) => sum + r.count, 0);
+
+  const summaryParts = results.map(r => {
+    const info = PLATFORM_INFO[r.platform];
+    if (r.error) return `${info.emoji} ${info.name} ⚠️`;
+    return `${info.emoji} ${info.name} ${r.count}개`;
+  });
+
+  return [
+    callout(
+      `🔍 "${keyword}" — ${totalCount}개 발견 | ${(metadata.duration_ms / 1000).toFixed(1)}초`,
+      '🔍',
+    ),
+    paragraph(summaryParts.join('  ·  '), 'gray'),
+    divider(),
+  ];
+}
+
+// 더보기 안내 callout (남은 개수 포함)
+export function buildLoadMoreCallout(remaining: number): NotionBlock {
+  return callout(
+    `📄 ${remaining}개 결과가 더 있습니다 — DB에서 '📄 더보기' 버튼을 클릭하세요`,
+    '📄',
+  );
+}
+
+// 서브페이지 내부 콘텐츠 블록
+export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
+  const info = PLATFORM_INFO[item.platform];
+  const blocks: NotionBlock[] = [];
+
+  const metaParts = [`${info.emoji} ${info.name}`];
+  if (item.author) metaParts.push(`👤 ${item.author}`);
+  if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
+  blocks.push(paragraph(metaParts.join('  •  '), 'gray'));
+
+  // 링크를 bookmark 블록으로 — Notion이 OG 데이터를 자동 로드
+  blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: item.url } });
+
+  const desc = item.snippet || item.description;
+  if (desc) {
+    const truncated = desc.length > 500 ? desc.slice(0, 500) + '…' : desc;
+    blocks.push(paragraph(truncated));
   }
 
   return blocks;

@@ -6,7 +6,7 @@ import { decryptNotionKey } from './crypto.ts';
 import { env } from '../_shared/env.ts';
 import { AuthError, QuotaExceededError, ValidationError } from '../_shared/errors.ts';
 import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
-import type { Platform, SubscriptionTier, User } from '../_shared/types.ts';
+import type { FlatResult, Platform, SearchMetadata, SearchResult, SubscriptionTier, User } from '../_shared/types.ts';
 
 let _client: SupabaseClient | null = null;
 
@@ -145,6 +145,76 @@ export interface SearchLogEntry {
   cost_usd: number;
   status: 'success' | 'failed';
   error_message?: string;
+}
+
+// 검색 결과 캐시 저장 (더보기 페이지네이션용)
+export async function cacheSearchResults(
+  notionPageId: string,
+  userId: string,
+  keyword: string,
+  results: SearchResult[],
+  metadata: SearchMetadata,
+): Promise<void> {
+  const flatResults: FlatResult[] = [];
+  for (const result of results) {
+    for (const item of result.items) {
+      flatResults.push({ ...item, platform: result.platform });
+    }
+  }
+
+  const { error } = await getSupabase()
+    .from('search_result_cache')
+    .upsert({
+      notion_page_id: notionPageId,
+      user_id: userId,
+      keyword,
+      flat_results: flatResults,
+      metadata: { ...metadata, total: flatResults.length },
+      shown_count: 0,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+  if (error) console.error('Failed to cache search results', error);
+}
+
+export interface NextBatch {
+  items: FlatResult[];
+  keyword: string;
+  metadata: { duration_ms: number; cost_usd: number; total: number };
+  shownCount: number;
+  hasMore: boolean;
+}
+
+// 다음 배치 가져오기 + shown_count 업데이트
+export async function getNextBatch(
+  notionPageId: string,
+  userId: string,
+  batchSize = 5,
+): Promise<NextBatch | null> {
+  const { data } = await getSupabase()
+    .from('search_result_cache')
+    .select('*')
+    .eq('notion_page_id', notionPageId)
+    .eq('user_id', userId)
+    .gt('expires_at', new Date().toISOString())
+    .single();
+
+  if (!data) return null;
+
+  const flatResults = data.flat_results as FlatResult[];
+  const from = data.shown_count;
+  const items = flatResults.slice(from, from + batchSize);
+  if (items.length === 0) return null;
+
+  const newShownCount = from + items.length;
+  const hasMore = newShownCount < flatResults.length;
+
+  await getSupabase()
+    .from('search_result_cache')
+    .update({ shown_count: newShownCount })
+    .eq('notion_page_id', notionPageId);
+
+  return { items, keyword: data.keyword, metadata: data.metadata, shownCount: newShownCount, hasMore };
 }
 
 export async function logSearch(entry: SearchLogEntry): Promise<void> {
