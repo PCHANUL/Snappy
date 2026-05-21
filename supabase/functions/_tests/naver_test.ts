@@ -163,3 +163,141 @@ Deno.test('searchNaverBlog: API 오류 시 ExternalApiError 발생', async () =>
     globalThis.fetch = originalFetch;
   }
 });
+
+// ── 요청 파라미터 검증 ────────────────────────────────────────────────────────
+
+Deno.test('searchNaverBlog: sort=date when period=day', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 10, 'day');
+    assert(capturedUrl.includes('sort=date'), `day period → date 정렬이어야 함: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: sort=date when period=week', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 10, 'week');
+    assert(capturedUrl.includes('sort=date'), `week period → date 정렬이어야 함: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: sort=sim when period=month', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 10, 'month');
+    assert(capturedUrl.includes('sort=sim'), `month period → sim 정렬이어야 함: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: sort=sim when period=year', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 10, 'year');
+    assert(capturedUrl.includes('sort=sim'), `year period → sim 정렬이어야 함: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: display=30 when count=10', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 10, 'month');
+    assert(capturedUrl.includes('display=30'), `count=10이면 display=30: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: display=100 cap when count=40', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 40, 'month');
+    // 40*3=120 → 100으로 상한
+    assert(capturedUrl.includes('display=100'), `display 상한=100: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: results sliced to count', async () => {
+  const originalFetch = globalThis.fetch;
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const mockItems = Array.from({ length: 5 }, (_, i) => ({
+    title: `Title ${i}`,
+    link: `https://blog.naver.com/${i}`,
+    description: '',
+    bloggername: `blogger${i}`,
+    bloggerlink: '',
+    postdate: today,
+  }));
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ items: mockItems, total: 5, start: 1, display: 5 }), { status: 200 });
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    const results = await searchNaverBlog('test', 2, 'month');
+    assertEquals(results.length, 2, `count=2이면 2개만 반환: 실제 ${results.length}개`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchNaverBlog: X-Naver-Client-Id 헤더 전송', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedHeaders: Record<string, string> = {};
+  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+    capturedHeaders = Object.fromEntries(new Headers(init?.headers as HeadersInit).entries());
+    return new Response(JSON.stringify({ items: [], total: 0, start: 1, display: 0 }), { status: 200 });
+  };
+  try {
+    const { searchNaverBlog } = await import('../search/naver.ts');
+    await searchNaverBlog('test', 5, 'month');
+    assert('x-naver-client-id' in capturedHeaders, 'X-Naver-Client-Id 헤더 필요');
+    assert('x-naver-client-secret' in capturedHeaders, 'X-Naver-Client-Secret 헤더 필요');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

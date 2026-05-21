@@ -94,6 +94,74 @@ Deno.test('searchYouTube: 빈 결과 처리', async () => {
   }
 });
 
+Deno.test('searchYouTube: API 오류 시 ExternalApiError 발생', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ error: { code: 403, message: 'quotaExceeded' } }), { status: 403 });
+  try {
+    const { searchYouTube } = await import('../search/youtube.ts');
+    let threw = false;
+    try {
+      await searchYouTube('test', 5, 'month');
+    } catch (e) {
+      threw = true;
+      assert((e as Error).message.includes('YouTube'), `에러 메시지에 YouTube 포함 필요: ${(e as Error).message}`);
+    }
+    assert(threw, 'API 오류 시 예외를 던져야 합니다');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchYouTube: items 필드 없으면 빈 배열 반환 (방어 처리)', async () => {
+  // 할당량 초과 등으로 200이지만 items 없는 경우
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ pageInfo: { totalResults: 0 } }), { status: 200 });
+  try {
+    const { searchYouTube } = await import('../search/youtube.ts');
+    const results = await searchYouTube('test', 5, 'month');
+    assertEquals(results.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchYouTube: publishedAfter, regionCode, type=video 파라미터 포함', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], pageInfo: {} }), { status: 200 });
+  };
+  try {
+    const { searchYouTube } = await import('../search/youtube.ts');
+    await searchYouTube('test', 5, 'month');
+    assert(capturedUrl.includes('publishedAfter='), `publishedAfter 파라미터 필요: ${capturedUrl}`);
+    assert(capturedUrl.includes('regionCode=KR'), `regionCode=KR 필요: ${capturedUrl}`);
+    assert(capturedUrl.includes('type=video'), `type=video 필요: ${capturedUrl}`);
+    assert(capturedUrl.includes('part=snippet'), `part=snippet 필요: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchYouTube: maxResults 파라미터 반영', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ items: [], pageInfo: {} }), { status: 200 });
+  };
+  try {
+    const { searchYouTube } = await import('../search/youtube.ts');
+    await searchYouTube('test', 7, 'month');
+    assert(capturedUrl.includes('maxResults=7'), `maxResults=7 필요: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test('searchYouTube: 썸네일 우선순위 (high > medium > default)', async () => {
   const mockResponse = {
     items: [{

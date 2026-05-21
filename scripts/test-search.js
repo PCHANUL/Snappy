@@ -170,13 +170,135 @@ await test('중복 없으면 변경 없음', () => {
   assertEquals(d[1].count, 1);
 });
 
-// ── youcom 도메인 필터링 (수정된 로직 검증) ──────────────────────────────────
+// ── Naver: 요청 파라미터 검증 ────────────────────────────────────────────────
+
+section('Naver 요청 파라미터');
+
+function buildNaverUrl(keyword, count, period) {
+  const display = Math.min(count * 3, 100);
+  const sort = (period === 'day' || period === 'week') ? 'date' : 'sim';
+  return `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(keyword)}&display=${display}&sort=${sort}`;
+}
+
+await test('sort=date when period=day', () => {
+  assertContains(buildNaverUrl('test', 10, 'day'), 'sort=date');
+});
+await test('sort=date when period=week', () => {
+  assertContains(buildNaverUrl('test', 10, 'week'), 'sort=date');
+});
+await test('sort=sim when period=month', () => {
+  assertContains(buildNaverUrl('test', 10, 'month'), 'sort=sim');
+});
+await test('sort=sim when period=year', () => {
+  assertContains(buildNaverUrl('test', 10, 'year'), 'sort=sim');
+});
+await test('display=30 when count=10', () => {
+  assertContains(buildNaverUrl('test', 10, 'month'), 'display=30');
+});
+await test('display=100 cap when count=40', () => {
+  assertContains(buildNaverUrl('test', 40, 'month'), 'display=100');
+});
+await test('display=15 when count=5', () => {
+  assertContains(buildNaverUrl('test', 5, 'month'), 'display=15');
+});
+
+function naverSearchMock(items, count, period) {
+  return items
+    .map(i => ({ platform: 'naver_blog', title: i.title, url: i.link, description: '', author: i.bloggername, published_at: parseNaverDate(i.postdate) }))
+    .filter(item => filterByPeriod(item, period))
+    .slice(0, count);
+}
+
+await test('results sliced to count', () => {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const items = Array.from({ length: 5 }, (_, i) => ({
+    title: `T${i}`, link: `https://blog.naver.com/${i}`, bloggername: 'b', postdate: today,
+  }));
+  assertEquals(naverSearchMock(items, 2, 'month').length, 2);
+});
+
+await test('period 필터 후 count 제한', () => {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const old = '20200101';
+  const items = [
+    { title: 'new1', link: 'https://a.com/1', bloggername: 'b', postdate: today },
+    { title: 'new2', link: 'https://a.com/2', bloggername: 'b', postdate: today },
+    { title: 'old',  link: 'https://a.com/3', bloggername: 'b', postdate: old },
+  ];
+  const results = naverSearchMock(items, 10, 'month');
+  assertEquals(results.length, 2); // old 제거
+  assert(results.every(r => r.title.startsWith('new')), '오래된 글이 제거되어야 함');
+});
+
+// ── YouTube: 파라미터 및 방어 처리 ───────────────────────────────────────────
+
+section('YouTube 파라미터 및 방어 처리');
+
+function buildYouTubeUrl(keyword, count, period) {
+  const publishedAfter = getPublishedAfter(period);
+  return `https://www.googleapis.com/youtube/v3/search` +
+    `?part=snippet&q=${encodeURIComponent(keyword)}&type=video` +
+    `&maxResults=${count}&regionCode=KR&relevanceLanguage=ko` +
+    `&publishedAfter=${publishedAfter}&order=relevance&key=TEST_KEY`;
+}
+
+await test('URL에 publishedAfter 포함', () => {
+  assertContains(buildYouTubeUrl('test', 5, 'month'), 'publishedAfter=');
+});
+await test('URL에 regionCode=KR 포함', () => {
+  assertContains(buildYouTubeUrl('test', 5, 'month'), 'regionCode=KR');
+});
+await test('URL에 type=video 포함', () => {
+  assertContains(buildYouTubeUrl('test', 5, 'month'), 'type=video');
+});
+await test('URL에 maxResults 반영', () => {
+  assertContains(buildYouTubeUrl('test', 7, 'month'), 'maxResults=7');
+});
+
+function youtubeNormalizeResponse(data) {
+  // Bug fix: (data.items ?? []) — items가 undefined여도 빈 배열 반환
+  return (data.items ?? []).map(item => ({
+    platform: 'youtube',
+    title: item.snippet.title,
+    url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+    description: item.snippet.description,
+    author: item.snippet.channelTitle,
+    thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+    published_at: item.snippet.publishedAt,
+  }));
+}
+
+await test('items 필드 없으면 빈 배열 반환 (버그 수정 검증)', () => {
+  const result = youtubeNormalizeResponse({ pageInfo: { totalResults: 0 } });
+  assertEquals(result.length, 0);
+});
+await test('items=[] → 빈 배열', () => {
+  assertEquals(youtubeNormalizeResponse({ items: [], pageInfo: {} }).length, 0);
+});
+await test('썸네일 우선순위: high > medium > default', () => {
+  const item = {
+    id: { videoId: 'v1' },
+    snippet: { title: 'T', description: '', channelTitle: 'ch', publishedAt: '2024-01-01T00:00:00Z',
+      thumbnails: { medium: { url: 'https://img/medium.jpg' }, default: { url: 'https://img/default.jpg' } } },
+  };
+  assertEquals(youtubeNormalizeResponse({ items: [item] })[0].thumbnail, 'https://img/medium.jpg');
+});
+await test('URL 형식: watch?v=videoId', () => {
+  const item = {
+    id: { videoId: 'abc123' },
+    snippet: { title: 'T', description: '', channelTitle: 'ch', publishedAt: '2024-01-01T00:00:00Z', thumbnails: {} },
+  };
+  assertEquals(youtubeNormalizeResponse({ items: [item] })[0].url, 'https://www.youtube.com/watch?v=abc123');
+});
+
+// ── You.com 도메인 필터링 + count 제한 ───────────────────────────────────────
 
 section('You.com 도메인 필터링 (수정 후)');
 
-function searchYouComMock(webResults, domains, platform) {
+function searchYouComMock(webResults, domains, platform, count) {
   const filtered = webResults.filter(item => domains.some(domain => item.url.includes(domain)));
-  return filtered.map(item => ({
+  // Bug fix: .slice(0, count) 추가
+  return filtered.slice(0, count).map(item => ({
     platform,
     title: item.title,
     url: item.url,
@@ -192,7 +314,7 @@ await test('tistory: 비도메인 URL 제거', () => {
     { url: 'https://good.tistory.com/1', title: 'A', snippets: [] },
     { url: 'https://bad.naver.com/2',    title: 'B', snippets: [] },
   ];
-  const results = searchYouComMock(webResults, ['tistory.com'], 'tistory');
+  const results = searchYouComMock(webResults, ['tistory.com'], 'tistory', 10);
   assertEquals(results.length, 1);
   assertEquals(results[0].url, 'https://good.tistory.com/1');
 });
@@ -203,15 +325,103 @@ await test('brunch: 비도메인 URL 제거', () => {
     { url: 'https://tistory.com/2',     title: 'B', snippets: [] },
     { url: 'https://brunch.co.kr/@u/3', title: 'C', snippets: [] },
   ];
-  const results = searchYouComMock(webResults, ['brunch.co.kr'], 'brunch');
+  const results = searchYouComMock(webResults, ['brunch.co.kr'], 'brunch', 10);
   assertEquals(results.length, 2);
 });
 
 await test('null thumbnail/page_age → undefined로 변환', () => {
   const webResults = [{ url: 'https://x.tistory.com/1', title: 'T', snippets: [], thumbnail_url: null, page_age: null }];
-  const results = searchYouComMock(webResults, ['tistory.com'], 'tistory');
+  const results = searchYouComMock(webResults, ['tistory.com'], 'tistory', 10);
   assertEquals(results[0].thumbnail, undefined);
   assertEquals(results[0].published_at, undefined);
+});
+
+await test('count보다 많은 결과 → count로 제한 (버그 수정 검증)', () => {
+  const webResults = Array.from({ length: 10 }, (_, i) => ({
+    url: `https://blog${i}.tistory.com/${i}`, title: `T${i}`, snippets: [],
+  }));
+  assertEquals(searchYouComMock(webResults, ['tistory.com'], 'tistory', 5).length, 5);
+});
+
+await test('count=3 → brunch 3개 제한', () => {
+  const webResults = Array.from({ length: 8 }, (_, i) => ({
+    url: `https://brunch.co.kr/@u/${i}`, title: `B${i}`, snippets: [],
+  }));
+  assertEquals(searchYouComMock(webResults, ['brunch.co.kr'], 'brunch', 3).length, 3);
+});
+
+// ── Orchestrator: searchAllPlatforms 검증 ────────────────────────────────────
+
+section('Orchestrator: searchAllPlatforms');
+
+const COST_PER_SEARCH = { naver_blog: 0, youtube: 0, tistory: 0.005, brunch: 0.005 };
+
+function mockSearchAllPlatforms(platforms, mockSearchers) {
+  const results = platforms.map(platform => {
+    try {
+      const items = mockSearchers[platform]?.() ?? [];
+      return { platform, items, count: items.length };
+    } catch (e) {
+      return { platform, items: [], count: 0, error: e.message };
+    }
+  });
+  const seen = new Set();
+  const deduplicated = results.map(result => {
+    const unique = result.items.filter(item => {
+      if (seen.has(item.url)) return false;
+      seen.add(item.url);
+      return true;
+    });
+    return { ...result, items: unique, count: unique.length };
+  });
+  const total_cost_usd = platforms.reduce((sum, p) => sum + (COST_PER_SEARCH[p] ?? 0), 0);
+  return { results: deduplicated, total_cost_usd };
+}
+
+await test('모든 플랫폼 성공 → 4개 결과', () => {
+  const searchers = {
+    naver_blog: () => [{ url: 'https://blog.naver.com/1' }],
+    youtube:    () => [{ url: 'https://youtube.com/v=1' }],
+    tistory:    () => [{ url: 'https://post.tistory.com/1' }],
+    brunch:     () => [{ url: 'https://brunch.co.kr/@u/1' }],
+  };
+  const r = mockSearchAllPlatforms(['naver_blog', 'youtube', 'tistory', 'brunch'], searchers);
+  assertEquals(r.results.length, 4);
+  assertEquals(r.results.find(x => x.platform === 'naver_blog')?.count, 1);
+});
+
+await test('한 플랫폼 실패 → error 설정, 나머지 정상', () => {
+  const searchers = {
+    naver_blog: () => { throw new Error('API timeout'); },
+    youtube:    () => [{ url: 'https://youtube.com/v=1' }],
+  };
+  const r = mockSearchAllPlatforms(['naver_blog', 'youtube'], searchers);
+  const naver = r.results.find(x => x.platform === 'naver_blog');
+  const yt = r.results.find(x => x.platform === 'youtube');
+  assertEquals(naver?.count, 0);
+  assert(naver?.error !== undefined, 'error가 설정되어야 함');
+  assertEquals(yt?.count, 1);
+  assertEquals(yt?.error, undefined);
+});
+
+await test('비용 계산: tistory+brunch = $0.010', () => {
+  const r = mockSearchAllPlatforms(['tistory', 'brunch'], { tistory: () => [], brunch: () => [] });
+  assertEquals(r.total_cost_usd, 0.010);
+});
+
+await test('비용 계산: naver+youtube = $0', () => {
+  const r = mockSearchAllPlatforms(['naver_blog', 'youtube'], { naver_blog: () => [], youtube: () => [] });
+  assertEquals(r.total_cost_usd, 0);
+});
+
+await test('크로스 플랫폼 URL 중복 제거', () => {
+  const searchers = {
+    naver_blog: () => [{ url: 'https://shared.com/1' }, { url: 'https://naver.com/2' }],
+    tistory:    () => [{ url: 'https://shared.com/1' }, { url: 'https://tistory.com/3' }],
+  };
+  const r = mockSearchAllPlatforms(['naver_blog', 'tistory'], searchers);
+  assertEquals(r.results.find(x => x.platform === 'naver_blog')?.count, 2); // 둘 다 새것
+  assertEquals(r.results.find(x => x.platform === 'tistory')?.count, 1);    // shared.com/1 중복 제거
 });
 
 // ── 통합 테스트 (실제 API 호출) ──────────────────────────────────────────────
