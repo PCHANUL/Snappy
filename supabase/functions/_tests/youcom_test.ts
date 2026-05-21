@@ -136,6 +136,98 @@ Deno.test('searchTistory: 도메인 필터링 — tistory.com이 아닌 URL 제�
   }
 });
 
+Deno.test('searchTistory: API 오류 시 ExternalApiError 발생', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response('{"error":"unauthorized"}', { status: 401 });
+  try {
+    const { searchTistory } = await import('../search/youcom.ts');
+    let threw = false;
+    try {
+      await searchTistory('test', 5, 'month');
+    } catch (e) {
+      threw = true;
+      assert((e as Error).message.includes('You.com'), `에러 메시지에 You.com 포함 필요: ${(e as Error).message}`);
+    }
+    assert(threw, 'API 오류 시 예외를 던져야 합니다');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchTistory: X-API-KEY 헤더 전송', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedHeaders: Record<string, string> = {};
+  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+    capturedHeaders = Object.fromEntries(new Headers(init?.headers as HeadersInit).entries());
+    return new Response(JSON.stringify({ results: { web: [] }, metadata: {} }), { status: 200 });
+  };
+  try {
+    const { searchTistory } = await import('../search/youcom.ts');
+    await searchTistory('test', 5, 'month');
+    assert('x-api-key' in capturedHeaders, 'X-API-KEY 헤더 필요');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchTistory: count, freshness, country 파라미터 포함', async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify({ results: { web: [] }, metadata: {} }), { status: 200 });
+  };
+  try {
+    const { searchTistory } = await import('../search/youcom.ts');
+    await searchTistory('test', 7, 'week');
+    assert(capturedUrl.includes('count=7'), `count=7 필요: ${capturedUrl}`);
+    assert(capturedUrl.includes('freshness=week'), `freshness=week 필요: ${capturedUrl}`);
+    assert(capturedUrl.includes('country=KR'), `country=KR 필요: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchTistory: count보다 많은 결과 → count로 제한 (도메인 필터 후)', async () => {
+  // API가 count param을 무시하고 10개를 반환해도 count=5로 제한되어야 함
+  const mockResults = Array.from({ length: 10 }, (_, i) => ({
+    url: `https://blog${i}.tistory.com/${i}`,
+    title: `Title ${i}`,
+    description: '',
+    snippets: [],
+  }));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ results: { web: mockResults }, metadata: {} }), { status: 200 });
+  try {
+    const { searchTistory } = await import('../search/youcom.ts');
+    const results = await searchTistory('test', 5, 'month');
+    assertEquals(results.length, 5, `count=5이면 5개로 제한: 실제 ${results.length}개`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchBrunch: count보다 많은 결과 → count로 제한', async () => {
+  const mockResults = Array.from({ length: 8 }, (_, i) => ({
+    url: `https://brunch.co.kr/@user/${i}`,
+    title: `Brunch ${i}`,
+    description: '',
+    snippets: [],
+  }));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ results: { web: mockResults }, metadata: {} }), { status: 200 });
+  try {
+    const { searchBrunch } = await import('../search/youcom.ts');
+    const results = await searchBrunch('test', 3, 'month');
+    assertEquals(results.length, 3, `count=3이면 3개로 제한: 실제 ${results.length}개`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test('searchBrunch: 도메인 필터링 — brunch.co.kr이 아닌 URL 제거', async () => {
   const mockResponse = {
     results: {

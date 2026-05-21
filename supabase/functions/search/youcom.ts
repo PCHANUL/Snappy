@@ -66,7 +66,7 @@ async function searchYouCom(
     domains.some((domain) => item.url.includes(domain))
   );
 
-  const items = filtered.map((item) => normalizeItem(item, platform));
+  const items = filtered.slice(0, count).map((item) => normalizeItem(item, platform));
 
   logger.info('You.com search completed', {
     keyword,

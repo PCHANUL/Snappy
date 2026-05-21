@@ -55,7 +55,7 @@ export async function searchYouTube(
 
   const data: YouTubeSearchResponse = await response.json();
 
-  const items = data.items.map(normalizeItem);
+  const items = (data.items ?? []).map(normalizeItem);
 
   logger.info('YouTube search completed', { keyword, found: items.length });
   return items;
