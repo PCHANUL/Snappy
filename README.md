@@ -61,7 +61,7 @@ supabase/
 Notion OAuth redirect URI:
 
 ```text
-https://[ref].supabase.co/functions/v1/notion-oauth/callback
+https://[ref].supabase.co/functions/v1/notion-oauth?action=callback
 ```
 
 ### 2. 초기 셋업

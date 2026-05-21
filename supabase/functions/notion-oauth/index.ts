@@ -35,6 +35,10 @@ function resolveAction(url: URL): string | null {
   const queryAction = url.searchParams.get('action');
   if (queryAction) return queryAction;
 
+  if (url.searchParams.has('code') || url.searchParams.has('error')) {
+    return 'callback';
+  }
+
   const path = url.pathname.replace(/\/+$/, '');
   if (path.endsWith('/authorize')) return 'authorize';
   if (path.endsWith('/callback')) return 'callback';
@@ -52,9 +56,9 @@ function handleAuthorize(url: URL): Response {
 
   const authUrl = new URL('https://api.notion.com/v1/oauth/authorize');
   authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('owner', 'user');
+  authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('state', userId);
 
   return new Response(JSON.stringify({ url: authUrl.toString() }), {
