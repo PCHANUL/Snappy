@@ -147,11 +147,13 @@ export interface SearchLogEntry {
   error_message?: string;
 }
 
-// 검색 결과 캐시 저장 (더보기 페이지네이션용)
-export async function cacheSearchResults(
+// 검색 결과 영구 저장 — 이력 누적 (INSERT, 덮어쓰지 않음)
+export async function saveSearchResults(
   notionPageId: string,
   userId: string,
   keyword: string,
+  platforms: Platform[],
+  period: string,
   results: SearchResult[],
   metadata: SearchMetadata,
 ): Promise<void> {
@@ -163,18 +165,19 @@ export async function cacheSearchResults(
   }
 
   const { error } = await getSupabase()
-    .from('search_result_cache')
-    .upsert({
+    .from('search_results')
+    .insert({
       notion_page_id: notionPageId,
       user_id: userId,
       keyword,
+      platforms,
+      period,
       flat_results: flatResults,
       metadata: { ...metadata, total: flatResults.length },
       shown_count: 0,
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     });
 
-  if (error) console.error('Failed to cache search results', error);
+  if (error) console.error('Failed to save search results', error);
 }
 
 export interface NextBatch {
@@ -186,17 +189,19 @@ export interface NextBatch {
 }
 
 // 다음 배치 가져오기 + shown_count 업데이트
+// 해당 노션 페이지의 가장 최근 검색 결과를 기준으로 페이지네이션
 export async function getNextBatch(
   notionPageId: string,
   userId: string,
   batchSize = 5,
 ): Promise<NextBatch | null> {
   const { data } = await getSupabase()
-    .from('search_result_cache')
+    .from('search_results')
     .select('*')
     .eq('notion_page_id', notionPageId)
     .eq('user_id', userId)
-    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single();
 
   if (!data) return null;
@@ -210,11 +215,73 @@ export async function getNextBatch(
   const hasMore = newShownCount < flatResults.length;
 
   await getSupabase()
-    .from('search_result_cache')
+    .from('search_results')
     .update({ shown_count: newShownCount })
-    .eq('notion_page_id', notionPageId);
+    .eq('id', data.id);
 
   return { items, keyword: data.keyword, metadata: data.metadata, shownCount: newShownCount, hasMore };
+}
+
+// 사용자 검색 이력 조회 — 키워드 추출, 컨텐츠 생성 기능에 활용
+export interface SearchHistoryEntry {
+  id: string;
+  notion_page_id: string;
+  keyword: string;
+  platforms: Platform[];
+  period: string;
+  flat_results: FlatResult[];
+  metadata: { duration_ms: number; cost_usd: number; total: number };
+  shown_count: number;
+  created_at: string;
+}
+
+export async function getSearchHistory(
+  userId: string,
+  limit = 50,
+): Promise<SearchHistoryEntry[]> {
+  const { data, error } = await getSupabase()
+    .from('search_results')
+    .select('id, notion_page_id, keyword, platforms, period, flat_results, metadata, shown_count, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Failed to fetch search history', error);
+    return [];
+  }
+  return (data ?? []) as SearchHistoryEntry[];
+}
+
+// 사용자의 키워드 빈도 집계 — 트렌드 분석, 키워드 추천에 활용
+export async function getKeywordFrequency(
+  userId: string,
+  since?: string,
+): Promise<Array<{ keyword: string; count: number; last_searched: string }>> {
+  let query = getSupabase()
+    .from('search_results')
+    .select('keyword, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (since) query = query.gte('created_at', since);
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  const freq = new Map<string, { count: number; last_searched: string }>();
+  for (const row of data) {
+    const existing = freq.get(row.keyword);
+    if (!existing) {
+      freq.set(row.keyword, { count: 1, last_searched: row.created_at });
+    } else {
+      existing.count += 1;
+    }
+  }
+
+  return Array.from(freq.entries())
+    .map(([keyword, { count, last_searched }]) => ({ keyword, count, last_searched }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export async function logSearch(entry: SearchLogEntry): Promise<void> {
