@@ -424,6 +424,251 @@ await test('크로스 플랫폼 URL 중복 제거', () => {
   assertEquals(r.results.find(x => x.platform === 'tistory')?.count, 1);    // shared.com/1 중복 제거
 });
 
+// ── errors: 에러 클래스 + errorToResponse ────────────────────────────────────
+
+section('에러 클래스');
+
+class AppError extends Error {
+  constructor(message, code, statusCode = 500, userMessage) {
+    super(message);
+    this.code = code;
+    this.statusCode = statusCode;
+    this.userMessage = userMessage;
+  }
+}
+class ValidationError extends AppError {
+  constructor(message, userMessage) {
+    super(message, 'VALIDATION_ERROR', 400, userMessage ?? message);
+  }
+}
+class AuthError extends AppError {
+  constructor(msg = 'Authentication failed') {
+    super(msg, 'AUTH_ERROR', 401, '인증에 실패했습니다.');
+  }
+}
+class QuotaExceededError extends AppError {
+  constructor(limit) {
+    super(`Daily quota exceeded: ${limit}`, 'QUOTA_EXCEEDED', 429, `일일 검색 한도(${limit}회)를 초과했습니다.`);
+  }
+}
+class ExternalApiError extends AppError {
+  constructor(api, message) {
+    super(`${api} API error: ${message}`, 'EXTERNAL_API_ERROR', 502);
+  }
+}
+
+function errorToResponse(error) {
+  if (error instanceof AppError) {
+    return { status: error.statusCode, body: { error: error.code, message: error.userMessage ?? error.message } };
+  }
+  return { status: 500, body: { error: 'INTERNAL_ERROR', message: '서버 오류가 발생했습니다.' } };
+}
+
+await test('ValidationError: statusCode=400', () => assertEquals(new ValidationError('bad').statusCode, 400));
+await test('AuthError: statusCode=401', () => assertEquals(new AuthError().statusCode, 401));
+await test('QuotaExceededError: statusCode=429', () => assertEquals(new QuotaExceededError(5).statusCode, 429));
+await test('ExternalApiError: statusCode=502', () => assertEquals(new ExternalApiError('Naver', 'err').statusCode, 502));
+await test('ValidationError: userMessage 분리', () => {
+  const e = new ValidationError('internal', '사용자 안내');
+  assertEquals(e.userMessage, '사용자 안내');
+});
+await test('QuotaExceededError: 한도 수 포함', () => {
+  assert(new QuotaExceededError(3).userMessage?.includes('3'), '한도 3 포함');
+});
+await test('errorToResponse: ValidationError → 400 + VALIDATION_ERROR', () => {
+  const r = errorToResponse(new ValidationError('bad', '잘못된 요청'));
+  assertEquals(r.status, 400);
+  assertEquals(r.body.error, 'VALIDATION_ERROR');
+  assertEquals(r.body.message, '잘못된 요청');
+});
+await test('errorToResponse: 알 수 없는 Error → 500 + INTERNAL_ERROR', () => {
+  const r = errorToResponse(new Error('unexpected'));
+  assertEquals(r.status, 500);
+  assertEquals(r.body.error, 'INTERNAL_ERROR');
+});
+
+// ── types: getEffectiveTier ───────────────────────────────────────────────────
+
+section('getEffectiveTier');
+
+function getEffectiveTier(tier, expiresAt) {
+  if (!expiresAt) return tier;
+  const GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+  if (Date.now() > new Date(expiresAt).getTime() + GRACE_MS) return 'free';
+  return tier;
+}
+function daysFromNow(n) {
+  const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString();
+}
+
+await test('만료일 없으면 원래 티어', () => assertEquals(getEffectiveTier('premium', null), 'premium'));
+await test('유효한 구독 → 원래 티어', () => assertEquals(getEffectiveTier('standard', daysFromNow(30)), 'standard'));
+await test('만료 직후 (1일) → 유예 기간 내 → 원래 티어', () => assertEquals(getEffectiveTier('standard', daysAgo(1)), 'standard'));
+await test('만료 후 6일 → 유예 기간 내 → 원래 티어', () => assertEquals(getEffectiveTier('premium', daysAgo(6)), 'premium'));
+await test('만료 후 8일 → 유예 기간 초과 → free', () => assertEquals(getEffectiveTier('standard', daysAgo(8)), 'free'));
+await test('만료 후 365일 → free', () => assertEquals(getEffectiveTier('premium', daysAgo(365)), 'free'));
+
+// ── crypto: encrypt/decrypt (WebCrypto) ──────────────────────────────────────
+
+section('crypto: encryptNotionKey / decryptNotionKey');
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+async function getTestKey() {
+  const secret = 'test-secret-32-chars-long-abcdefg';
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(secret));
+  return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function encryptKey(value) {
+  const key = await getTestKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(value));
+  const toB64 = (bytes) => btoa(String.fromCharCode(...bytes));
+  return `v1:${toB64(iv)}:${toB64(new Uint8Array(encrypted))}`;
+}
+
+async function decryptKey(value) {
+  const parts = value.split(':');
+  if (parts.length !== 3 || parts[0] !== 'v1') throw new Error('Unsupported encrypted Notion key format');
+  const key = await getTestKey();
+  const fromB64 = (s) => { const b = atob(s); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(parts[1]) }, key, fromB64(parts[2]));
+  return decoder.decode(decrypted);
+}
+
+await test('encryptKey: v1:iv:ciphertext 형식 반환', async () => {
+  const result = await encryptKey('test-api-key');
+  const parts = result.split(':');
+  assertEquals(parts.length, 3);
+  assertEquals(parts[0], 'v1');
+  assert(parts[1].length > 0);
+  assert(parts[2].length > 0);
+});
+await test('encryptKey: 동일 입력도 매번 다른 결과 (랜덤 IV)', async () => {
+  const r1 = await encryptKey('key');
+  const r2 = await encryptKey('key');
+  assert(r1 !== r2, '랜덤 IV로 인해 다른 결과여야 함');
+});
+await test('라운드트립: 암호화 → 복호화 = 원본', async () => {
+  const original = 'secret:notion:api:key';
+  assertEquals(await decryptKey(await encryptKey(original)), original);
+});
+await test('라운드트립: 한국어 문자열', async () => {
+  const original = '비건디저트secret키';
+  assertEquals(await decryptKey(await encryptKey(original)), original);
+});
+await test('잘못된 형식 → 에러', async () => {
+  let threw = false;
+  try { await decryptKey('invalid'); } catch { threw = true; }
+  assert(threw, '잘못된 형식은 에러 필요');
+});
+await test('v2 접두어 → 에러', async () => {
+  let threw = false;
+  try { await decryptKey('v2:abc:def'); } catch { threw = true; }
+  assert(threw, '지원 안 하는 버전은 에러 필요');
+});
+
+// ── notion/blocks: buildResultBlocks 구조 검증 ───────────────────────────────
+
+section('notion/blocks: 블록 생성');
+
+function makeBlock(platform, items, error) {
+  return { platform, items: items || [], count: (items || []).length, error };
+}
+function makeItem(platform, overrides = {}) {
+  return { platform, title: `${platform} 제목`, url: `https://ex.com/${platform}`, description: '설명', ...overrides };
+}
+
+function buildCallout(text, emoji) {
+  return { object: 'block', type: 'callout', callout: { rich_text: [{ type: 'text', text: { content: text } }], icon: { type: 'emoji', emoji }, color: 'gray_background' } };
+}
+function buildHeading2(text) {
+  return { object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: text } }] } };
+}
+function buildDivider() { return { object: 'block', type: 'divider', divider: {} }; }
+function buildParagraph(text, color) {
+  return { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: text } }], ...(color && { color }) } };
+}
+function buildToggle(title, children) {
+  return { object: 'block', type: 'toggle', toggle: { rich_text: [{ type: 'text', text: { content: title }, annotations: { bold: true } }], children } };
+}
+
+const PLATFORM_INFO = {
+  naver_blog: { name: '네이버 블로그', emoji: '📝' },
+  youtube:    { name: '유튜브', emoji: '🎥' },
+  tistory:    { name: '티스토리', emoji: '📚' },
+  brunch:     { name: '브런치', emoji: '✍️' },
+};
+
+function buildResultBlocksMock(keyword, results, meta) {
+  const totalCount = results.reduce((s, r) => s + r.count, 0);
+  const summaryParts = results.map(r => {
+    const info = PLATFORM_INFO[r.platform];
+    return r.error ? `${info.emoji} ${info.name} ⚠️` : `${info.emoji} ${info.name} ${r.count}개`;
+  });
+  const blocks = [
+    buildCallout(`🔍 "${keyword}" — ${totalCount}개 발견 | ${(meta.duration_ms / 1000).toFixed(1)}초`, '🔍'),
+    buildParagraph(summaryParts.join('  ·  '), 'gray'),
+    buildDivider(),
+  ];
+  for (const result of results) {
+    const info = PLATFORM_INFO[result.platform];
+    if (result.items.length === 0) {
+      const msg = result.error ? `⚠️ 검색 실패: ${result.error}` : '결과를 찾지 못했습니다.';
+      blocks.push(buildToggle(`${info.emoji} ${info.name}`, [buildParagraph(msg, 'gray')]));
+    } else {
+      blocks.push(buildHeading2(`${info.emoji} ${info.name} (${result.count}개)`));
+      for (const item of result.items) {
+        blocks.push({ type: 'bulleted_list_item', title: item.title });
+        if (item.thumbnail) blocks.push({ type: 'image', image: { type: 'external', external: { url: item.thumbnail } } });
+      }
+      blocks.push(buildDivider());
+    }
+  }
+  return blocks;
+}
+
+await test('buildResultBlocks: 배열 반환', () => {
+  const r = buildResultBlocksMock('키워드', [makeBlock('naver_blog', [makeItem('naver_blog')])], { duration_ms: 1500, cost_usd: 0 });
+  assert(Array.isArray(r) && r.length > 0);
+});
+await test('buildResultBlocks: 첫 블록 callout에 키워드 포함', () => {
+  const r = buildResultBlocksMock('비건 디저트', [makeBlock('youtube', [makeItem('youtube')])], { duration_ms: 1000, cost_usd: 0 });
+  assertEquals(r[0].type, 'callout');
+  assert(r[0].callout.rich_text[0].text.content.includes('비건 디저트'));
+});
+await test('buildResultBlocks: 빈 플랫폼 → toggle 블록', () => {
+  const r = buildResultBlocksMock('test', [makeBlock('naver_blog', [])], { duration_ms: 500, cost_usd: 0 });
+  assert(r.some(b => b.type === 'toggle'), 'toggle 블록 존재');
+});
+await test('buildResultBlocks: 오류 플랫폼 → ⚠️ 메시지', () => {
+  const r = buildResultBlocksMock('test', [makeBlock('naver_blog', [], '서버 오류')], { duration_ms: 500, cost_usd: 0 });
+  const toggles = r.filter(b => b.type === 'toggle');
+  assert(toggles[0].toggle.children[0].paragraph.rich_text[0].text.content.includes('검색 실패'));
+});
+await test('buildResultBlocks: 결과 있는 플랫폼 → heading_2 블록', () => {
+  const r = buildResultBlocksMock('test', [makeBlock('tistory', [makeItem('tistory')])], { duration_ms: 500, cost_usd: 0 });
+  assert(r.some(b => b.type === 'heading_2'), 'heading_2 존재');
+});
+await test('buildResultBlocks: 썸네일 있으면 image 블록', () => {
+  const item = makeItem('youtube', { thumbnail: 'https://img.yt/th.jpg' });
+  const r = buildResultBlocksMock('test', [makeBlock('youtube', [item])], { duration_ms: 500, cost_usd: 0 });
+  assert(r.some(b => b.type === 'image'), 'image 블록 존재');
+});
+
+function buildLoadMoreCalloutMock(remaining) {
+  return buildCallout(`📄 ${remaining}개 결과가 더 있습니다 — DB에서 '📄 더보기' 버튼을 클릭하세요`, '📄');
+}
+
+await test('buildLoadMoreCallout: callout 블록 반환', () => {
+  assertEquals(buildLoadMoreCalloutMock(10).type, 'callout');
+});
+await test('buildLoadMoreCallout: 남은 개수 포함', () => {
+  assert(buildLoadMoreCalloutMock(7).callout.rich_text[0].text.content.includes('7'));
+});
+
 // ── 통합 테스트 (실제 API 호출) ──────────────────────────────────────────────
 
 const hasNaverKey = !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET);
