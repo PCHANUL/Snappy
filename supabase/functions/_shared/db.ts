@@ -6,6 +6,7 @@ import { env } from '../_shared/env.ts';
 import { AuthError, QuotaExceededError, ValidationError } from '../_shared/errors.ts';
 import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
 import type { FlatResult, Platform, SearchMetadata, SearchResult, SubscriptionTier, User } from '../_shared/types.ts';
+import { crawlUrl } from './crawler.ts';
 
 let _client: SupabaseClient | null = null;
 
@@ -341,4 +342,30 @@ export async function logSearch(entry: SearchLogEntry): Promise<void> {
     error_message: entry.error_message,
   });
   if (error) console.error('Failed to log search', error);
+}
+
+// ── 크롤링 ────────────────────────────────────────────────────────────────────
+
+// 검색 결과에서 방금 저장된 URL들을 백그라운드에서 크롤링
+// trigger-search에서 EdgeRuntime.waitUntil()로 호출
+export async function crawlSearchResults(items: Array<{ url: string; platform: string }>): Promise<void> {
+  const CONCURRENCY = 5; // 동시 크롤 제한
+
+  for (let i = 0; i < items.length; i += CONCURRENCY) {
+    const batch = items.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(batch.map(async ({ url, platform }) => {
+      const result = await crawlUrl(url, platform);
+      const { error } = await getSupabase()
+        .from('content_items')
+        .update({
+          full_text:    result.full_text ?? null,
+          word_count:   result.word_count ?? 0,
+          crawl_status: result.status,
+          crawled_at:   new Date().toISOString(),
+        })
+        .eq('url', url)
+        .eq('crawl_status', 'pending'); // 이미 크롤된 항목은 덮어쓰지 않음
+      if (error) console.error('Failed to update crawl result', url, error);
+    }));
+  }
 }

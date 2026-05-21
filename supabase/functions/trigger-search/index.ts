@@ -13,6 +13,7 @@ import {
   getUserAndCheckQuota,
   incrementUsage,
   logSearch,
+  crawlSearchResults,
 } from '../_shared/db.ts';
 import type { Platform, User } from '../_shared/types.ts';
 
@@ -109,6 +110,12 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       orchestratorResult.results,
       metadata,
     );
+
+    // 저장된 항목 본문 크롤링 — Notion 응답과 무관하게 백그라운드에서 실행
+    const crawlTargets = orchestratorResult.results.flatMap(r =>
+      r.items.map(item => ({ url: item.url, platform: r.platform }))
+    );
+    EdgeRuntime.waitUntil(crawlSearchResults(crawlTargets));
 
     // 첫 5개 배치 가져와서 서브페이지로 생성
     const firstBatch = await getNextBatch(request.notion_page_id, request.user_id, 5);
