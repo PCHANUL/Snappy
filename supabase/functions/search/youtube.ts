@@ -75,7 +75,7 @@ function normalizeItem(item: YouTubeSearchItem): ContentItem {
 }
 
 // 기간을 ISO 8601 datetime으로 변환
-function getPublishedAfter(period: Period): string {
+export function getPublishedAfter(period: Period): string {
   const offsets: Record<Period, number> = {
     day: 1,
     week: 7,

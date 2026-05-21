@@ -97,7 +97,7 @@ export async function searchAllPlatforms(
 }
 
 // 플랫폼 간 동일 URL 중복 제거 (naver_blog ↔ tistory 등)
-function deduplicateResults(results: SearchResult[]): SearchResult[] {
+export function deduplicateResults(results: SearchResult[]): SearchResult[] {
   const seen = new Set<string>();
   return results.map(result => {
     const unique = result.items.filter(item => {
