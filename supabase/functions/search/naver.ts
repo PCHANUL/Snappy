@@ -73,7 +73,7 @@ function normalizeItem(item: NaverBlogItem): ContentItem {
 }
 
 // 네이버 응답에 포함된 <b> 등 HTML 태그 제거
-function stripHtml(text: string): string {
+export function stripHtml(text: string): string {
   return text
     .replace(/<[^>]*>/g, '')
     .replace(/&quot;/g, '"')
@@ -86,13 +86,13 @@ function stripHtml(text: string): string {
 }
 
 // "20240315" → "2024-03-15"
-function parseNaverDate(yyyymmdd: string): string {
+export function parseNaverDate(yyyymmdd: string): string {
   if (!yyyymmdd || yyyymmdd.length !== 8) return '';
   return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
 
 // 네이버 API는 기간 필터가 없어서 클라이언트에서 필터링
-function filterByPeriod(item: ContentItem, period?: Period): boolean {
+export function filterByPeriod(item: ContentItem, period?: Period): boolean {
   if (!period || !item.published_at) return true;
 
   const itemDate = new Date(item.published_at);

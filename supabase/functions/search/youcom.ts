@@ -61,13 +61,18 @@ async function searchYouCom(
   const data: YouComSearchResponse = await response.json();
   const webResults = data.results?.web || [];
 
-  const items = webResults.map((item) => normalizeItem(item, platform));
+  // include_domains 파라미터가 API에서 무시될 수 있으므로 클라이언트 측에서도 필터링
+  const filtered = webResults.filter((item) =>
+    domains.some((domain) => item.url.includes(domain))
+  );
+
+  const items = filtered.map((item) => normalizeItem(item, platform));
 
   logger.info('You.com search completed', {
     keyword,
     platform,
     found: items.length,
-    latency: data.metadata.latency,
+    latency: data.metadata?.latency,
   });
 
   return items;
@@ -79,9 +84,9 @@ function normalizeItem(item: YouComWebResult, platform: Platform): ContentItem {
     title: item.title,
     url: item.url,
     description: item.description || '',
-    snippet: item.snippets?.[0],
-    thumbnail: item.thumbnail_url,
-    published_at: item.page_age,
+    snippet: item.snippets?.[0] || undefined,
+    thumbnail: item.thumbnail_url || undefined,
+    published_at: item.page_age || undefined,
   };
 }
 
