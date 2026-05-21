@@ -192,28 +192,18 @@ async function createSearchDB(parentPageId) {
 
 function blocksMain(webhookUrl, loadMoreUrl) {
   return [
-    // 재방문 사용자: 이 한 줄만 보고 바로 DB로 진입
     b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
-    // 신규 사용자: 토글 열어서 처리, 이후 접어두면 방해 없음
-    b.toggle('🆕 처음 설정하기 (완료 후 접어두세요)', [
-      b.callout('먼저 이 템플릿을 개인 워크스페이스로 복제한 뒤 셋업 마법사를 진행하세요. 원본 템플릿에서 바로 셋업하면 개인 DB가 연결되지 않습니다.', '📌'),
-      b.num('우측 상단 "복제" 또는 Duplicate 클릭'),
-      b.num('사용할 개인 워크스페이스 선택'),
-      b.num('복제된 Snappy 페이지에서 "..." → 연결(Add connections) → 만든 Notion 연결 추가'),
-      b.num('아래 셋업 마법사에서 이메일 가입 후 Notion 승인 화면에서 복제한 페이지를 선택'),
+    b.toggle('🆕 처음이신가요?', [
+      b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
+      b.num('우측 상단 "복제" 또는 Duplicate 클릭 → 개인 워크스페이스 선택'),
+      b.num('셋업 마법사에서 이메일 가입 → Notion 승인 화면에서 복제한 페이지 선택 → DB 선택'),
+      b.num('"⚙️ 자동화 설정" 토글 참고해 검색 버튼 설정'),
       b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
-      b.link('사용량 확인', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
+      b.p('자세한 안내는 📖 시작하기 페이지를 참고하세요.'),
     ]),
-    b.toggle('🔌 DB가 셋업 페이지 목록에 안 보일 때', [
-      b.p('Notion API는 개인 페이지의 모든 DB를 자동으로 보여주지 않습니다. 검색 DB 또는 그 상위 페이지를 사용자가 만든 Notion 통합에 연결해야 목록에 표시됩니다.'),
-      b.num('이 템플릿을 복제한 개인 페이지를 엽니다.'),
-      b.num('검색 DB가 들어있는 메인 페이지 우측 상단 "..." 메뉴를 엽니다.'),
-      b.num('"연결" 또는 "Add connections"에서 사용자가 만든 통합을 추가합니다.'),
-      b.num('셋업 페이지로 돌아가 "Notion으로 연결하기"를 다시 진행하면 DB 목록과 DB ID가 표시됩니다.'),
-      b.p('그래도 보이지 않으면 DB를 전체 페이지로 열고 URL의 32자리 ID를 직접 입력하세요. 복제된 템플릿은 원본과 DB ID가 다릅니다.'),
-    ]),
-    b.toggle('⚙️ 검색 버튼 자동화 설정 (최초 1회)', [
+    b.toggle('⚙️ 자동화 설정 (최초 1회)', [
       b.callout([
+        '[ 🚀 검색 버튼 ]',
         `URL: ${webhookUrl}`,
         'Method: POST',
         `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
@@ -226,10 +216,10 @@ function blocksMain(webhookUrl, loadMoreUrl) {
         '  "notion_page_id": "{{현재 페이지 ID}}"',
         '}',
       ].join('\n'), '📋'),
-      b.p('키워드 · 매체 · 기간 · 결과 개수는 이 DB 행의 속성에서 자동으로 읽습니다. Body에 따로 넣지 않아도 됩니다.'),
-    ]),
-    b.toggle('📄 더보기 버튼 자동화 설정 (최초 1회)', [
+      b.p('키워드·매체·기간·결과 개수는 DB 행의 속성에서 자동으로 읽습니다.'),
+      b.divider(),
       b.callout([
+        '[ 📄 더보기 버튼 ]',
         `URL: ${loadMoreUrl}`,
         'Method: POST',
         `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
@@ -242,7 +232,7 @@ function blocksMain(webhookUrl, loadMoreUrl) {
         '  "notion_page_id": "{{현재 페이지 ID}}"',
         '}',
       ].join('\n'), '📋'),
-      b.p('처음 5개 결과 외에 추가 결과가 있을 때 DB 행에서 이 버튼을 클릭하면 5개씩 서브페이지가 추가됩니다.'),
+      b.p('처음 5개 결과 외 추가 결과가 있을 때 클릭하면 5개씩 서브페이지가 추가됩니다.'),
     ]),
     b.divider(),
   ];
@@ -251,56 +241,46 @@ function blocksMain(webhookUrl, loadMoreUrl) {
 function blocksMainBottom() {
   return [
     b.divider(),
-    b.toggle('도움말 및 추가 정보', [
-      b.p('📖 시작하기 — 셋업 문제 해결'),
-      b.p('❓ 자주 묻는 질문 — API 정확도, 요금제, 보안'),
-      b.p('⚙️ 설정 — 사용량 확인, 연동 해제'),
-    ]),
+    b.p('📖 시작하기   ·   ❓ 자주 묻는 질문   ·   ⚙️ 설정'),
   ];
 }
 
 function blocksSijak() {
   return [
     b.h1('2분이면 시작할 수 있어요'),
-    b.p('템플릿 복제 → Notion 연결 추가 → 셋업 마법사 → 검색 시작, 이 순서로 진행됩니다.\n복제한 개인 페이지의 DB를 연결해야 셋업 페이지에서 DB ID 목록이 보입니다.'),
+    b.p('템플릿 복제 → 셋업 마법사 → 자동화 설정 → 검색 시작'),
     b.divider(),
     b.h2('1. 템플릿 복제'),
     b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
-    b.num('이 템플릿 페이지 우측 상단의 "복제" 또는 Duplicate 버튼 클릭'),
+    b.num('이 템플릿 페이지 우측 상단 "복제" 또는 Duplicate 클릭'),
     b.num('사용할 개인 워크스페이스 선택'),
-    b.num('복제된 Snappy 메인 페이지 열기'),
     b.divider(),
-    b.h2('2. Notion 연결 추가'),
-    b.p('복제된 개인 페이지의 DB는 사용자가 만든 Notion 연결에 공유되어야 API에서 조회됩니다.'),
-    b.num('복제된 Snappy 메인 페이지 우측 상단 "..." 메뉴 열기'),
-    b.num('"연결" 또는 "Add connections" 선택'),
-    b.num('방금 만든 Notion 연결 선택'),
-    b.num('연결 후 아래 셋업 마법사로 진행'),
-    b.divider(),
-    b.h2('3. 셋업 마법사'),
+    b.h2('2. 셋업 마법사'),
     b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
+    b.num('이메일 입력 후 가입'),
+    b.num('"Notion으로 연결하기" 클릭 → Notion 승인 화면에서 복제한 Snappy 페이지 선택'),
+    b.num('목록에서 검색 DB 선택 후 완료'),
     b.divider(),
-    b.h2('📌 셋업 완료하셨나요?'),
-    b.callout('완료하셨다면 검색 페이지로 이동해 첫 검색을 시작해보세요.', '✅'),
+    b.h2('3. 자동화 설정'),
+    b.p('메인 페이지 "⚙️ 자동화 설정" 토글을 참고해 검색 버튼과 더보기 버튼을 설정하세요.'),
     b.divider(),
-    b.h2('🤔 셋업 중 막히는 부분이 있나요?'),
-    b.toggle('API 키를 어디서 받나요?', [
-      b.num('notion.so/my-integrations 접속'),
-      b.num('셋업 마법사에서 "Notion으로 연결하기" 클릭'),
-      b.num('Notion 승인 화면에서 복제한 Snappy 페이지 또는 검색 DB 선택'),
-      b.num('허용 후 셋업 페이지로 돌아오면 DB 목록이 자동으로 표시됩니다'),
+    b.callout('설정 완료! 메인 페이지로 돌아가 첫 검색을 시작해보세요.', '✅'),
+    b.divider(),
+    b.h2('🤔 막히는 부분이 있나요?'),
+    b.toggle('Notion 승인 화면에서 어떤 페이지를 선택해야 하나요?', [
+      b.p('복제한 Snappy 메인 페이지를 선택하면 하위 DB에 대한 접근 권한이 함께 부여됩니다.'),
+      b.p('개별 DB를 선택해도 되지만, 메인 페이지를 선택하는 것이 더 편리합니다.'),
     ]),
     b.toggle('데이터베이스 목록에 검색 DB가 안 보여요', [
-      b.p('방금 만든 통합이 검색 DB 또는 DB가 들어있는 개인 페이지에 연결되지 않았습니다.'),
-      b.num('이 템플릿을 복제한 메인 페이지 열기'),
-      b.num('오른쪽 상단 "..." → 연결 또는 Add connections'),
-      b.num('방금 만든 통합 선택'),
-      b.num('셋업 마법사로 돌아가 API 키를 다시 입력'),
-      b.p('복제된 템플릿은 원본과 DB ID가 다릅니다. 셋업 페이지의 DB 목록에 표시되는 ID를 사용하세요.'),
+      b.p('Notion 승인 화면에서 복제한 Snappy 메인 페이지 또는 검색 DB를 선택했는지 확인하세요.'),
+      b.num('"Notion으로 연결하기"를 다시 클릭해 연결을 재시도하세요.'),
+      b.num('Notion 승인 화면에서 복제한 페이지를 선택하세요.'),
+      b.p('그래도 보이지 않으면 검색 DB를 전체 페이지로 열고 URL의 32자리 ID를 직접 입력하세요.'),
     ]),
     b.toggle('검색 버튼을 눌렀는데 반응이 없어요', [
-      b.bullet('설정 페이지에서 user_id가 입력되어 있는지 확인'),
+      b.bullet('설정 페이지에서 user_id가 올바르게 입력되어 있는지 확인'),
       b.bullet('키워드와 매체가 선택되어 있는지 확인'),
+      b.bullet('자동화 설정의 URL과 헤더가 올바른지 확인'),
       b.bullet('그래도 안 된다면 ❓ 자주 묻는 질문 참고'),
     ]),
   ];
@@ -308,10 +288,7 @@ function blocksSijak() {
 
 function blocksGeomseok() {
   return [
-    b.callout('새 검색을 시작하려면 "+ 새로 만들기" 클릭 → 키워드 입력 → 🚀 검색 실행\n검색 결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
-    b.divider(),
-    b.h2('노션 통합 연결'),
-    b.callout('개인 페이지 또는 복제된 템플릿의 DB는 통합에 연결해야 셋업 페이지에서 조회됩니다.\n메인 페이지 우측 상단 "..." → 연결(Add connections) → 사용자가 만든 통합을 추가하세요.', '🔌'),
+    b.callout('새 검색: "+ 새로 만들기" → 키워드 입력 → 🚀 검색 실행\n결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
     b.divider(),
     b.h2('DB 속성 안내'),
     b.bullet('키워드: 검색할 단어 (예: 비건 디저트)'),
