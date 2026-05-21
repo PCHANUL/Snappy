@@ -8,7 +8,7 @@ import { logger } from '../_shared/logger.ts';
 import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
 import { validateMinimalRequest, validateSearchRequest } from '../_shared/validator.ts';
 import {
-  cacheSearchResults,
+  saveSearchResults,
   getNextBatch,
   getUserAndCheckQuota,
   incrementUsage,
@@ -99,11 +99,13 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     const metadata = { duration_ms: Date.now() - startTime, cost_usd: orchestratorResult.total_cost_usd };
     const totalFound = orchestratorResult.results.reduce((s, r) => s + r.count, 0);
 
-    // 전체 결과를 캐시에 저장 (더보기 페이지네이션용)
-    await cacheSearchResults(
+    // 전체 결과를 영구 저장 (이력 누적 + 더보기 페이지네이션)
+    await saveSearchResults(
       request.notion_page_id,
       request.user_id,
       request.keyword,
+      request.platforms,
+      request.period,
       orchestratorResult.results,
       metadata,
     );
