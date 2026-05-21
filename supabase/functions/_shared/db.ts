@@ -1,5 +1,4 @@
 // Supabase DB 접근 유틸리티
-// 사용자 정보 조회, 사용량 관리, 검색 로그 저장
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { decryptNotionKey } from './crypto.ts';
@@ -19,6 +18,8 @@ export function getSupabase(): SupabaseClient {
   return _client;
 }
 
+// ── 유저 ──────────────────────────────────────────────────────────────────────
+
 export async function getUser(userId: string): Promise<User> {
   const { data, error } = await getSupabase()
     .from('users')
@@ -26,15 +27,10 @@ export async function getUser(userId: string): Promise<User> {
     .eq('id', userId)
     .single();
 
-  if (error || !data) {
-    throw new AuthError('User not found');
-  }
+  if (error || !data) throw new AuthError('User not found');
 
   if (!data.notion_api_key_encrypted || !data.notion_database_id) {
-    throw new ValidationError(
-      'Notion integration not configured',
-      '노션 연동을 먼저 완료해주세요.',
-    );
+    throw new ValidationError('Notion integration not configured', '노션 연동을 먼저 완료해주세요.');
   }
 
   return {
@@ -47,26 +43,7 @@ export async function getUser(userId: string): Promise<User> {
   };
 }
 
-// 사용량 한도 체크
-export async function checkQuota(user: User): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const effectiveTier = getEffectiveTier(user.subscription_tier, user.subscription_expires_at);
-  const limit = DAILY_QUOTAS[effectiveTier] || DAILY_QUOTAS.free;
-
-  const { data } = await getSupabase()
-    .from('usage_quotas')
-    .select('search_count')
-    .eq('user_id', user.id)
-    .eq('date', today)
-    .maybeSingle();
-
-  const currentCount = data?.search_count || 0;
-  if (currentCount >= limit) {
-    throw new QuotaExceededError(limit);
-  }
-}
-
-// 사용자 조회 + 사용량 체크를 병렬 실행 — 202 응답 전 DB 왕복 1회 절감
+// 사용자 조회 + 사용량 체크 병렬 실행 — DB 왕복 1회 절감
 export async function getUserAndCheckQuota(userId: string): Promise<User> {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -84,9 +61,7 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
       .maybeSingle(),
   ]);
 
-  if (userResult.error || !userResult.data) {
-    throw new AuthError('User not found');
-  }
+  if (userResult.error || !userResult.data) throw new AuthError('User not found');
 
   const data = userResult.data;
   if (!data.notion_api_key_encrypted || !data.notion_database_id) {
@@ -95,7 +70,6 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
 
   const effectiveTier = getEffectiveTier(data.subscription_tier as SubscriptionTier, data.subscription_expires_at);
 
-  // 구독 만료 시 DB 자동 다운그레이드 (fire-and-forget)
   if (effectiveTier !== data.subscription_tier) {
     getSupabase()
       .from('users')
@@ -105,49 +79,37 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
   }
 
   const limit = DAILY_QUOTAS[effectiveTier] ?? DAILY_QUOTAS.free;
-  if ((quotaResult.data?.search_count ?? 0) >= limit) {
-    throw new QuotaExceededError(limit);
-  }
+  if ((quotaResult.data?.search_count ?? 0) >= limit) throw new QuotaExceededError(limit);
 
   return {
     id: data.id,
     email: data.email,
     subscription_tier: effectiveTier,
-    subscription_expires_at: effectiveTier === 'free' && effectiveTier !== data.subscription_tier ? null : data.subscription_expires_at,
+    subscription_expires_at: effectiveTier === 'free' && effectiveTier !== data.subscription_tier
+      ? null
+      : data.subscription_expires_at,
     notion_api_key: await decryptNotionKey(data.notion_api_key_encrypted),
     notion_database_id: data.notion_database_id,
   };
 }
 
-// 사용량 증가 (RPC 호출)
+// ── 사용량 ────────────────────────────────────────────────────────────────────
+
 export async function incrementUsage(userId: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-
   const { error } = await getSupabase().rpc('increment_search_count', {
     p_user_id: userId,
     p_date: today,
   });
-
-  if (error) {
-    // 사용량 증가 실패는 치명적이지 않으므로 로깅만
-    console.error('Failed to increment usage', error);
-  }
+  if (error) console.error('Failed to increment usage', error);
 }
 
-// 검색 로그 저장
-export interface SearchLogEntry {
-  user_id: string;
-  keyword: string;
-  platforms: Platform[];
-  period: string;
-  result_count: number;
-  duration_ms: number;
-  cost_usd: number;
-  status: 'success' | 'failed';
-  error_message?: string;
-}
+// ── 검색 결과 저장 (정규화 3-테이블 구조) ─────────────────────────────────────
+//
+// search_results      → 검색 이벤트 메타데이터 (유저 로그)
+// content_items       → URL 기준 중복 제거 컨텐츠 (자체 데이터)
+// search_result_items → junction (어느 검색에서 어떤 순서로 나왔는지)
 
-// 검색 결과 영구 저장 — 이력 누적 (INSERT, 덮어쓰지 않음)
 export async function saveSearchResults(
   notionPageId: string,
   userId: string,
@@ -157,14 +119,14 @@ export async function saveSearchResults(
   results: SearchResult[],
   metadata: SearchMetadata,
 ): Promise<void> {
-  const flatResults: FlatResult[] = [];
-  for (const result of results) {
-    for (const item of result.items) {
-      flatResults.push({ ...item, platform: result.platform });
-    }
-  }
+  const flatResults: FlatResult[] = results.flatMap(r =>
+    r.items.map(item => ({ ...item, platform: r.platform }))
+  );
 
-  const { error } = await getSupabase()
+  if (flatResults.length === 0) return;
+
+  // 1. 검색 이벤트 INSERT
+  const { data: sr, error: srErr } = await getSupabase()
     .from('search_results')
     .insert({
       notion_page_id: notionPageId,
@@ -172,13 +134,51 @@ export async function saveSearchResults(
       keyword,
       platforms,
       period,
-      flat_results: flatResults,
-      metadata: { ...metadata, total: flatResults.length },
+      total_count: flatResults.length,
       shown_count: 0,
+      metadata,
+    })
+    .select('id')
+    .single();
+
+  if (srErr || !sr) {
+    console.error('Failed to insert search_result', srErr);
+    return;
+  }
+
+  // 2. content_items 배치 upsert (RPC — search_count 증가 + keywords 누적)
+  const { data: contentItems, error: ciErr } = await getSupabase()
+    .rpc('upsert_content_items', {
+      p_keyword: keyword,
+      p_items: JSON.stringify(flatResults),
     });
 
-  if (error) console.error('Failed to save search results', error);
+  if (ciErr || !contentItems) {
+    console.error('Failed to upsert content_items', ciErr);
+    return;
+  }
+
+  // 3. junction INSERT (search_result_id + content_item_id + rank)
+  const urlToId = new Map<string, string>(
+    (contentItems as Array<{ id: string; url: string }>).map(c => [c.url, c.id])
+  );
+
+  const junctionRows = flatResults
+    .map((item, idx) => ({
+      search_result_id: sr.id,
+      content_item_id:  urlToId.get(item.url),
+      rank: idx + 1,
+    }))
+    .filter(r => r.content_item_id != null);
+
+  const { error: jiErr } = await getSupabase()
+    .from('search_result_items')
+    .insert(junctionRows);
+
+  if (jiErr) console.error('Failed to insert search_result_items', jiErr);
 }
+
+// ── 더보기 페이지네이션 ───────────────────────────────────────────────────────
 
 export interface NextBatch {
   items: FlatResult[];
@@ -188,50 +188,63 @@ export interface NextBatch {
   hasMore: boolean;
 }
 
-// 다음 배치 가져오기 + shown_count 업데이트
-// 해당 노션 페이지의 가장 최근 검색 결과를 기준으로 페이지네이션
 export async function getNextBatch(
   notionPageId: string,
   userId: string,
   batchSize = 5,
 ): Promise<NextBatch | null> {
-  const { data } = await getSupabase()
+  // 해당 페이지의 가장 최근 검색 결과
+  const { data: sr } = await getSupabase()
     .from('search_results')
-    .select('*')
+    .select('id, keyword, metadata, shown_count, total_count')
     .eq('notion_page_id', notionPageId)
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
 
-  if (!data) return null;
+  if (!sr || sr.shown_count >= sr.total_count) return null;
 
-  const flatResults = data.flat_results as FlatResult[];
-  const from = data.shown_count;
-  const items = flatResults.slice(from, from + batchSize);
-  if (items.length === 0) return null;
+  // junction → content_items 조인으로 다음 배치
+  const { data: rows } = await getSupabase()
+    .from('search_result_items')
+    .select('rank, content_items(*)')
+    .eq('search_result_id', sr.id)
+    .gt('rank', sr.shown_count)
+    .lte('rank', sr.shown_count + batchSize)
+    .order('rank');
 
-  const newShownCount = from + items.length;
-  const hasMore = newShownCount < flatResults.length;
+  if (!rows || rows.length === 0) return null;
+
+  const items = rows.map(r => r.content_items as unknown as FlatResult);
+  const newShownCount = sr.shown_count + items.length;
+  const hasMore = newShownCount < sr.total_count;
 
   await getSupabase()
     .from('search_results')
     .update({ shown_count: newShownCount })
-    .eq('id', data.id);
+    .eq('id', sr.id);
 
-  return { items, keyword: data.keyword, metadata: data.metadata, shownCount: newShownCount, hasMore };
+  return {
+    items,
+    keyword: sr.keyword,
+    metadata: sr.metadata,
+    shownCount: newShownCount,
+    hasMore,
+  };
 }
 
-// 사용자 검색 이력 조회 — 키워드 추출, 컨텐츠 생성 기능에 활용
+// ── 이력 조회 (유저 개인 + 자체 데이터 활용) ─────────────────────────────────
+
 export interface SearchHistoryEntry {
   id: string;
   notion_page_id: string;
   keyword: string;
   platforms: Platform[];
   period: string;
-  flat_results: FlatResult[];
-  metadata: { duration_ms: number; cost_usd: number; total: number };
+  total_count: number;
   shown_count: number;
+  metadata: { duration_ms: number; cost_usd: number };
   created_at: string;
 }
 
@@ -241,7 +254,7 @@ export async function getSearchHistory(
 ): Promise<SearchHistoryEntry[]> {
   const { data, error } = await getSupabase()
     .from('search_results')
-    .select('id, notion_page_id, keyword, platforms, period, flat_results, metadata, shown_count, created_at')
+    .select('id, notion_page_id, keyword, platforms, period, total_count, shown_count, metadata, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -253,18 +266,17 @@ export async function getSearchHistory(
   return (data ?? []) as SearchHistoryEntry[];
 }
 
-// 사용자의 키워드 빈도 집계 — 트렌드 분석, 키워드 추천에 활용
+// 키워드 빈도 집계 — 개인 또는 전체 집계 (userId 없으면 전체)
 export async function getKeywordFrequency(
-  userId: string,
-  since?: string,
+  opts: { userId?: string; since?: string; limit?: number } = {},
 ): Promise<Array<{ keyword: string; count: number; last_searched: string }>> {
   let query = getSupabase()
     .from('search_results')
     .select('keyword, created_at')
-    .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
-  if (since) query = query.gte('created_at', since);
+  if (opts.userId) query = query.eq('user_id', opts.userId);
+  if (opts.since)  query = query.gte('created_at', opts.since);
 
   const { data, error } = await query;
   if (error || !data) return [];
@@ -279,9 +291,41 @@ export async function getKeywordFrequency(
     }
   }
 
-  return Array.from(freq.entries())
+  const result = Array.from(freq.entries())
     .map(([keyword, { count, last_searched }]) => ({ keyword, count, last_searched }))
     .sort((a, b) => b.count - a.count);
+
+  return opts.limit ? result.slice(0, opts.limit) : result;
+}
+
+// 자체 컨텐츠 DB 조회 — 특정 키워드에서 많이 발견된 컨텐츠
+export async function getTopContentByKeyword(
+  keyword: string,
+  limit = 20,
+): Promise<Array<{ url: string; title: string; platform: string; search_count: number }>> {
+  const { data, error } = await getSupabase()
+    .from('content_items')
+    .select('url, title, platform, search_count')
+    .contains('keywords', [keyword])
+    .order('search_count', { ascending: false })
+    .limit(limit);
+
+  if (error) return [];
+  return data ?? [];
+}
+
+// ── 검색 로그 ─────────────────────────────────────────────────────────────────
+
+export interface SearchLogEntry {
+  user_id: string;
+  keyword: string;
+  platforms: Platform[];
+  period: string;
+  result_count: number;
+  duration_ms: number;
+  cost_usd: number;
+  status: 'success' | 'failed';
+  error_message?: string;
 }
 
 export async function logSearch(entry: SearchLogEntry): Promise<void> {
@@ -296,8 +340,5 @@ export async function logSearch(entry: SearchLogEntry): Promise<void> {
     status: entry.status,
     error_message: entry.error_message,
   });
-
-  if (error) {
-    console.error('Failed to log search', error);
-  }
+  if (error) console.error('Failed to log search', error);
 }
