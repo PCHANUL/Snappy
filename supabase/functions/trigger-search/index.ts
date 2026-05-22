@@ -14,6 +14,8 @@ import {
   incrementUsage,
   logSearch,
   crawlSearchResults,
+  markSearchingStart,
+  markSearchingEnd,
 } from '../_shared/db.ts';
 import type { Platform, User } from '../_shared/types.ts';
 
@@ -51,6 +53,8 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
   // 로그용 fallback 값 (readSearchParams 실패 전에도 기록 가능하도록)
   let keyword = (rawBody.keyword as string | undefined)?.trim() || '';
   let platforms: Platform[] = Array.isArray(rawBody.platforms) ? rawBody.platforms : [];
+
+  await markSearchingStart(user.id);
 
   try {
     await notion.updatePageStatus(rawBody.notion_page_id, '검색중');
@@ -163,5 +167,11 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       status: 'failed',
       error_message: errorMessage,
     });
+  } finally {
+    // 검색 완료(성공/실패 무관) → DB 상태 해제 + 임베드 URL 복원
+    await markSearchingEnd(user.id);
+    try {
+      await notion.setSearchEmbedStatus(user.notion_database_id, false);
+    } catch { /* non-fatal */ }
   }
 }

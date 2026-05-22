@@ -264,30 +264,62 @@ export class NotionClient {
 
   // 노션 DB 부모 페이지의 search.html 임베드 블록 URL을 user_id + page_id 포함 URL로 교체
   async updateSearchEmbed(databaseId: string, userId: string): Promise<string> {
-    const uuid = toUuid(databaseId);
+    const embed = await this.findSearchEmbed(databaseId);
+    if (!embed) throw new NotionApiError('search.html embed block not found in parent page');
 
-    // 1. DB 정보 조회 → 부모 페이지 ID 확인
-    const dbInfo = await this.fetchApi(`databases/${uuid}`, { method: 'GET' });
-    const rawParentId: string | undefined = dbInfo.parent?.page_id;
-    if (!rawParentId) throw new NotionApiError('Database has no parent page');
-    const parentPageId = rawParentId.replace(/-/g, '');
-
-    // 2. 부모 페이지 블록 목록에서 search.html 임베드 블록 탐색
-    const data = await this.fetchApi(`blocks/${rawParentId}/children?page_size=100`, { method: 'GET' });
-    const embedBlock = (data.results as any[]).find(
-      (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes('search.html'),
-    );
-    if (!embedBlock) throw new NotionApiError('search.html embed block not found in parent page');
-
-    // 3. 임베드 URL 업데이트
-    const newUrl = `https://pchanul.github.io/Snappy/search.html?user_id=${userId}&page_id=${parentPageId}`;
-    await this.fetchApi(`blocks/${embedBlock.id}`, {
+    const newUrl = `https://pchanul.github.io/Snappy/search.html?user_id=${userId}&page_id=${embed.parentPageId}`;
+    await this.fetchApi(`blocks/${embed.blockId}`, {
       method: 'PATCH',
       body: JSON.stringify({ embed: { url: newUrl } }),
     });
 
-    logger.info('Search embed updated', { userId, parentPageId });
+    logger.info('Search embed updated', { userId, parentPageId: embed.parentPageId });
     return newUrl;
+  }
+
+  // 검색 진행 중 상태를 임베드 URL 파라미터로 표현
+  // searching=true  → URL에 &searching=1 추가
+  // searching=false → &searching=1 제거 (완료/실패 후 복원)
+  async setSearchEmbedStatus(databaseId: string, searching: boolean): Promise<void> {
+    const embed = await this.findSearchEmbed(databaseId);
+    if (!embed) return; // 임베드 블록 없으면 무시 (non-fatal)
+
+    const url = new URL(embed.currentUrl);
+    if (searching) {
+      url.searchParams.set('searching', '1');
+    } else {
+      url.searchParams.delete('searching');
+    }
+    const newUrl = url.toString();
+    if (newUrl === embed.currentUrl) return; // 변경 불필요
+
+    await this.fetchApi(`blocks/${embed.blockId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ embed: { url: newUrl } }),
+    });
+
+    logger.info('Search embed status updated', { searching, newUrl });
+  }
+
+  // DB 부모 페이지에서 search.html 임베드 블록 탐색 (공통 헬퍼)
+  private async findSearchEmbed(
+    databaseId: string,
+  ): Promise<{ blockId: string; currentUrl: string; parentPageId: string } | null> {
+    const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
+    const rawParentId: string | undefined = dbInfo.parent?.page_id;
+    if (!rawParentId) return null;
+
+    const data = await this.fetchApi(`blocks/${rawParentId}/children?page_size=100`, { method: 'GET' });
+    const block = (data.results as any[]).find(
+      (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes('search.html'),
+    );
+    if (!block) return null;
+
+    return {
+      blockId: block.id,
+      currentUrl: block.embed.url as string,
+      parentPageId: rawParentId.replace(/-/g, ''),
+    };
   }
 }
 

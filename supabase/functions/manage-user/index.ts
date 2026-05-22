@@ -51,6 +51,8 @@ serve(async (req) => {
         return await handleAdminUpgradeUser(req);
       case 'setup-search-button':
         return await handleSetupSearchButton(req);
+      case 'set-search-status':
+        return await handleSetSearchStatus(req);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -425,6 +427,29 @@ async function handleAdminUpgradeUser(req: Request): Promise<Response> {
   logger.info('Admin upgraded user', { user_id, subscription_tier, subscription_expires_at });
 
   return jsonResponse({ success: true, user_id, subscription_tier, subscription_expires_at });
+}
+
+// === 검색 중 상태 임베드 URL 반영 ===
+async function handleSetSearchStatus(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+  const { user_id, searching } = await req.json();
+  if (!user_id || typeof user_id !== 'string') throw new ValidationError('user_id required');
+
+  const { data: user, error } = await getSupabase()
+    .from('users')
+    .select('notion_api_key_encrypted, notion_database_id')
+    .eq('id', user_id)
+    .single();
+
+  if (error || !user?.notion_api_key_encrypted || !user?.notion_database_id) {
+    return jsonResponse({ success: false }, 200); // non-fatal
+  }
+
+  const apiKey = await decryptNotionKey(user.notion_api_key_encrypted);
+  const notion = new NotionClient(apiKey);
+  await notion.setSearchEmbedStatus(user.notion_database_id, !!searching);
+
+  return jsonResponse({ success: true });
 }
 
 // === 검색 버튼 임베드 URL 업데이트 ===

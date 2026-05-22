@@ -113,87 +113,51 @@
 
   <script>
     const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
-    const SEARCH_TIMEOUT = 120_000; // 2분 — 대부분의 검색이 이 안에 완료됨
 
-    const params  = new URLSearchParams(location.search);
-    const userId  = params.get('user_id');
-    const pageId  = params.get('page_id');
+    const params    = new URLSearchParams(location.search);
+    const userId    = params.get('user_id');
+    const pageId    = params.get('page_id');
+    const searching = params.get('searching') === '1';
 
     const btn         = document.getElementById('searchBtn');
     const status      = document.getElementById('status');
     const configGuide = document.getElementById('configGuide');
 
-    const storageKey = pageId ? `snappy_search_${pageId}` : null;
+    const configured = !!(userId && pageId);
 
-    // Safari/Firefox ITP 등 서드파티 iframe에서 storage가 차단될 수 있으므로 폴백
-    // localStorage → sessionStorage → 메모리 변수 순서로 사용
-    const store = (() => {
-      for (const s of [localStorage, sessionStorage]) {
-        try { s.setItem('__t', '1'); s.removeItem('__t'); return s; } catch {}
-      }
-      // 메모리 폴백 (리로드 시 복원 불가 — 그래도 탭 내 중복 클릭은 막음)
-      const mem = {};
-      return { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; }, removeItem: k => { delete mem[k]; } };
-    })();
+    // ── 초기 상태 렌더링 ─────────────────────────────────────────────────────
+    if (!configured) {
+      btn.classList.add('unconfigured');
+    } else if (searching) {
+      // URL에 ?searching=1 → 다른 기기/새 탭에서 진행 중인 검색 표시
+      btn.disabled = true;
+      btn.classList.add('searching');
+      btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      status.className = 'searching';
+      status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+    }
 
-    // ── 검색 중 상태 관리 ───────────────────────────────────────────────────
-    function startSearching() {
-      if (storageKey) store.setItem(storageKey, String(Date.now()));
+    // ── 버튼 클릭 ────────────────────────────────────────────────────────────
+    btn.addEventListener('click', async () => {
+      if (!configured) { configGuide.style.display = 'block'; return; }
+      if (btn.disabled) return;
+
+      // 1. 즉시 UI 비활성
       btn.disabled = true;
       btn.classList.add('searching');
       btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
       status.className = 'searching';
       status.textContent = '노션 페이지에서 키워드를 읽어오고 있어요...';
-    }
-
-    function stopSearching() {
-      if (storageKey) store.removeItem(storageKey);
-      btn.disabled = false;
-      btn.classList.remove('searching');
-      btn.innerHTML = '🚀 검색하기';
-    }
-
-    let autoResetTimer = null;
-
-    function scheduleAutoReset(remaining) {
-      clearTimeout(autoResetTimer);
-      autoResetTimer = setTimeout(() => {
-        stopSearching();
-        status.className = '';
-        status.textContent = '';
-      }, remaining);
-    }
-
-    // ── 페이지 로드 시 진행 중이던 검색 복원 ────────────────────────────────
-    const configured = !!(userId && pageId);
-    if (!configured) {
-      btn.classList.add('unconfigured');
-    } else if (storageKey) {
-      const saved = store.getItem(storageKey);
-      if (saved) {
-        const elapsed = Date.now() - Number(saved);
-        if (elapsed < SEARCH_TIMEOUT) {
-          startSearching();
-          status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
-          scheduleAutoReset(SEARCH_TIMEOUT - elapsed);
-        } else {
-          store.removeItem(storageKey);
-        }
-      }
-    }
-
-    // ── 버튼 클릭 ────────────────────────────────────────────────────────────
-    btn.addEventListener('click', async () => {
-      if (!configured) {
-        configGuide.style.display = 'block';
-        return;
-      }
-      if (btn.disabled) return;
-
-      startSearching();
-      scheduleAutoReset(SEARCH_TIMEOUT);
 
       try {
+        // 2. 임베드 URL에 ?searching=1 추가 (다른 기기/새 탭 차단용)
+        await fetch(FUNCTION_BASE + '/manage-user?action=set-search-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, searching: true }),
+        });
+
+        // 3. 검색 트리거
         const res = await fetch(FUNCTION_BASE + '/trigger-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -201,17 +165,21 @@
         });
 
         const data = await res.json();
+        if (!res.ok) throw new Error(data.userMessage || data.message || '검색 요청에 실패했습니다.');
 
-        if (!res.ok) {
-          throw new Error(data.userMessage || data.message || '검색 요청에 실패했습니다.');
-        }
-
-        // 202 수신 — 백그라운드 검색 진행 중, 버튼은 계속 비활성
+        // 202 수신 — 버튼 계속 비활성, 서버가 완료 후 URL 복원
         status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
 
       } catch (err) {
-        clearTimeout(autoResetTimer);
-        stopSearching();
+        // 에러 시 임베드 URL 즉시 복원
+        fetch(FUNCTION_BASE + '/manage-user?action=set-search-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, searching: false }),
+        }).catch(() => {});
+        btn.disabled = false;
+        btn.classList.remove('searching');
+        btn.innerHTML = '🚀 검색하기';
         status.className = 'error';
         status.textContent = err.message;
       }

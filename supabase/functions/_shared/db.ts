@@ -47,11 +47,12 @@ export async function getUser(userId: string): Promise<User> {
 // 사용자 조회 + 사용량 체크 병렬 실행 — DB 왕복 1회 절감
 export async function getUserAndCheckQuota(userId: string): Promise<User> {
   const today = new Date().toISOString().slice(0, 10);
+  const STALE_MS = 3 * 60 * 1000; // 3분 초과 시 stale 처리
 
   const [userResult, quotaResult] = await Promise.all([
     getSupabase()
       .from('users')
-      .select('id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id')
+      .select('id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id, searching_since')
       .eq('id', userId)
       .single(),
     getSupabase()
@@ -82,6 +83,17 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
   const limit = DAILY_QUOTAS[effectiveTier] ?? DAILY_QUOTAS.free;
   if ((quotaResult.data?.search_count ?? 0) >= limit) throw new QuotaExceededError(limit);
 
+  // 검색 중 상태 확인 — stale(3분 초과)이 아니면 중복 요청 차단
+  if (data.searching_since) {
+    const elapsed = Date.now() - new Date(data.searching_since).getTime();
+    if (elapsed < STALE_MS) {
+      throw new ValidationError('Search already in progress', '이미 검색이 진행 중입니다. 잠시 후 다시 시도해주세요.');
+    }
+    // stale → 자동 해제 후 계속 진행
+    getSupabase().from('users').update({ searching_since: null }).eq('id', data.id)
+      .then(({ error }) => { if (error) console.error('Failed to clear stale searching_since', error); });
+  }
+
   return {
     id: data.id,
     email: data.email,
@@ -92,6 +104,24 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
     notion_api_key: await decryptNotionKey(data.notion_api_key_encrypted),
     notion_database_id: data.notion_database_id,
   };
+}
+
+// ── 검색 진행 상태 ────────────────────────────────────────────────────────────
+
+export async function markSearchingStart(userId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('users')
+    .update({ searching_since: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) console.error('Failed to mark searching start', error);
+}
+
+export async function markSearchingEnd(userId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('users')
+    .update({ searching_since: null })
+    .eq('id', userId);
+  if (error) console.error('Failed to mark searching end', error);
 }
 
 // ── 사용량 ────────────────────────────────────────────────────────────────────
