@@ -19,6 +19,7 @@ import {
 } from '../_shared/errors.ts';
 import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
 import type { SubscriptionTier } from '../_shared/types.ts';
+import { NotionClient } from '../notion/client.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -48,6 +49,8 @@ serve(async (req) => {
         return await handleAdminListUsers(req, url);
       case 'admin-upgrade-user':
         return await handleAdminUpgradeUser(req);
+      case 'setup-search-button':
+        return await handleSetupSearchButton(req);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -422,6 +425,33 @@ async function handleAdminUpgradeUser(req: Request): Promise<Response> {
   logger.info('Admin upgraded user', { user_id, subscription_tier, subscription_expires_at });
 
   return jsonResponse({ success: true, user_id, subscription_tier, subscription_expires_at });
+}
+
+// === 검색 버튼 임베드 URL 업데이트 ===
+async function handleSetupSearchButton(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+
+  const body = await req.json();
+  const { user_id } = body;
+  if (!user_id || typeof user_id !== 'string') throw new ValidationError('user_id required');
+
+  const { data: user, error } = await getSupabase()
+    .from('users')
+    .select('notion_api_key_encrypted, notion_database_id')
+    .eq('id', user_id)
+    .single();
+
+  if (error || !user) throw new ValidationError('User not found', '유저를 찾을 수 없습니다.');
+  if (!user.notion_api_key_encrypted || !user.notion_database_id) {
+    throw new ValidationError('Notion not configured', '노션 연동을 먼저 완료해주세요.');
+  }
+
+  const apiKey = await decryptNotionKey(user.notion_api_key_encrypted);
+  const notion = new NotionClient(apiKey);
+  const embedUrl = await notion.updateSearchEmbed(user.notion_database_id, user_id);
+
+  logger.info('Search button embed updated', { user_id, embedUrl });
+  return jsonResponse({ success: true, embed_url: embedUrl });
 }
 
 // === 헬퍼 함수 ===

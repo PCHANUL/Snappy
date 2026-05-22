@@ -376,12 +376,24 @@
               <h2>시작하기</h2>
             </div>
             <div class="sec-body hidden" id="sec4-body">
-              <div style="margin-top:14px;" class="next-steps">
-                <ol>
-                  <li>노션 검색 DB의 <strong>user_id</strong> 속성 기본값에 복사한 ID를 입력하세요</li>
-                  <li>🚀 검색 실행 버튼 자동화를 설정하세요 (노션 템플릿 안내 참고)</li>
-                  <li>새 행을 추가하고 키워드를 입력한 후 🚀를 눌러 첫 검색을 시작하세요</li>
-                </ol>
+              <div style="margin-top:14px;">
+                <p style="font-size:0.9rem;color:#555;margin-bottom:16px;line-height:1.6;">
+                  확인을 누르면 노션 템플릿의 검색 버튼이 내 계정으로 자동 연결됩니다.
+                </p>
+                <button class="btn-primary" id="confirmBtn">확인</button>
+                <div id="confirmResult" class="message hidden"></div>
+                <div class="next-steps hidden" id="nextSteps" style="margin-top:20px;">
+                  <ol>
+                    <li>노션 검색 DB에서 새 행을 추가하고 키워드를 입력하세요</li>
+                    <li>검색 버튼을 눌러 첫 검색을 시작하세요 🚀</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+            <div class="sec-summary hidden" id="sec4-summary">
+              <div class="sec-summary-text">
+                <span style="color:#10b981;font-weight:600;">✓ 설정 완료</span>
+                <span style="font-size:0.8rem;color:#6b7280;">노션에서 검색을 시작할 수 있습니다.</span>
               </div>
             </div>
           </div>
@@ -627,6 +639,34 @@
     document.getElementById('reconnectBtn').addEventListener('click', () => {
       reopenSection(3);
       lockSection(4);
+    });
+
+    // ── 섹션 4: 검색 버튼 확인 ───────────────
+    document.getElementById('confirmBtn').addEventListener('click', async () => {
+      const btn    = document.getElementById('confirmBtn');
+      const result = document.getElementById('confirmResult');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner">⟳</span>연결 중...';
+      result.className = 'message hidden';
+      try {
+        const res = await fetch(FUNCTION_BASE + '/manage-user?action=setup-search-button', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || '연결에 실패했습니다.');
+        document.getElementById('nextSteps').classList.remove('hidden');
+        btn.style.display = 'none';
+        result.className = 'message success';
+        result.textContent = '✓ 노션 검색 버튼이 내 계정으로 연결되었습니다.';
+        setTimeout(() => completeSection(4), 1800);
+      } catch (err) {
+        result.className = 'message error';
+        result.textContent = err.message;
+        btn.disabled = false;
+        btn.textContent = '확인';
+      }
     });
 
     // ── URL 파라미터 복원 ────────────────────
