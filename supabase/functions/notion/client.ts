@@ -187,6 +187,44 @@ export class NotionClient {
     await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
   }
 
+  // 사용자의 검색 DB에 새 행을 생성하고 페이지 ID를 반환
+  async createSearchPage(
+    databaseId: string,
+    params: {
+      keyword: string;
+      platforms: Platform[];
+      period: Period;
+      result_count: number;
+      user_id: string;
+    },
+  ): Promise<string> {
+    const PLATFORM_NAMES: Record<Platform, string> = {
+      naver_blog: '네이버블로그',
+      youtube: '유튜브',
+      tistory: '티스토리',
+      brunch: '브런치',
+    };
+    const PERIOD_NAMES: Record<Period, string> = {
+      day: '1일', week: '1주', month: '1개월', year: '1년',
+    };
+
+    const page = await this.fetchApi('pages', {
+      method: 'POST',
+      body: JSON.stringify({
+        parent: { database_id: databaseId },
+        properties: {
+          '키워드':     { title: [{ type: 'text', text: { content: params.keyword } }] },
+          '매체':       { multi_select: params.platforms.map(p => ({ name: PLATFORM_NAMES[p] })) },
+          '기간':       { select: { name: PERIOD_NAMES[params.period] } },
+          '결과 개수':  { select: { name: String(params.result_count) } },
+          '상태':       { status: { name: '대기' } },
+          'user_id':    { rich_text: [{ type: 'text', text: { content: params.user_id } }] },
+        },
+      }),
+    });
+    return page.id as string;
+  }
+
   // Notion DB 행의 속성에서 검색 파라미터를 읽어온다
   async readSearchParams(pageId: string): Promise<{
     keyword: string;

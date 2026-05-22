@@ -44,6 +44,7 @@ const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.
 const SETUP_URL      = `${PAGES_BASE}/`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
+const SEARCH_URL     = `${PAGES_BASE}/search.html`;
 
 // --user-id <value> 플래그: 임베드 URL에 user_id 자동 삽입
 const userIdFlagIdx = process.argv.indexOf('--user-id');
@@ -193,6 +194,7 @@ async function createSearchDB(parentPageId) {
 function blocksMain(webhookUrl, loadMoreUrl) {
   return [
     b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
+    b.embed(`${SEARCH_URL}?user_id=${USER_ID}`),
     b.toggle('🆕 처음이신가요?', [
       b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
       b.num('우측 상단 "복제" 또는 Duplicate 클릭 → 개인 워크스페이스 선택'),
@@ -372,6 +374,8 @@ function blocksSeoljeong() {
     b.h2('계정 정보'),
     b.callout('사용자 ID (user_id)\n\n관리자에게 받은 user_id를 여기에 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
     b.divider(),
+    b.h2('빠른 검색'),
+    b.embed(`${SEARCH_URL}?user_id=${USER_ID}`),
     b.h2('사용량'),
     b.link('사용량 확인하기', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
     b.h2('검색 기록'),
@@ -486,8 +490,8 @@ ${mainPage.url}
    - 셋업 페이지에서 API 키 입력 후 DB 목록과 DB ID 확인
 
 5. ${USER_ID === 'YOUR_USER_ID'
-    ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
-    : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
+    ? '메인·설정 페이지 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
+    : `✅ 검색·사용량·기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
 6. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
