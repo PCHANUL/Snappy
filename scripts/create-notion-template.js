@@ -42,6 +42,7 @@ const SUPABASE_URL   = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON  = process.env.SUPABASE_ANON_KEY || '';
 const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '');
 const SETUP_URL      = `${PAGES_BASE}/`;
+const SEARCH_URL     = `${PAGES_BASE}/search.html`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
 
@@ -192,6 +193,7 @@ async function createSearchDB(parentPageId) {
 
 function blocksMain(webhookUrl, loadMoreUrl) {
   return [
+    b.embed(SEARCH_URL),
     b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
     b.toggle('🆕 처음이신가요?', [
       b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
