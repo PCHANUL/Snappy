@@ -1,8 +1,7 @@
 // 사용자 관리 Edge Function
-// 가입, 노션 키 등록, 사용량 조회
+// 노션 키 등록, 사용량 조회, 검색 버튼 설정
 //
 // 엔드포인트:
-//   POST /functions/v1/manage-user?action=signup
 //   POST /functions/v1/manage-user?action=setup-notion
 //   GET  /functions/v1/manage-user?action=usage&user_id=...
 //
@@ -31,8 +30,6 @@ serve(async (req) => {
     const action = url.searchParams.get('action');
 
     switch (action) {
-      case 'signup':
-        return await handleSignup(req);
       case 'setup-notion':
         return await handleSetupNotion(req);
       case 'usage':
@@ -61,57 +58,6 @@ serve(async (req) => {
     return errorToResponse(error);
   }
 });
-
-// === 가입 ===
-async function handleSignup(req: Request): Promise<Response> {
-  if (req.method !== 'POST') {
-    throw new ValidationError('POST required');
-  }
-
-  const body = await req.json();
-  const email = body.email?.trim();
-
-  if (!email || !isValidEmail(email)) {
-    throw new ValidationError('Invalid email', '유효한 이메일을 입력해주세요.');
-  }
-
-  // 중복 체크
-  const { data: existing } = await getSupabase()
-    .from('users')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (existing) {
-    throw new ValidationError(
-      'Email already registered',
-      '이미 가입된 이메일입니다.',
-    );
-  }
-
-  // 가입 (free 플랜으로 시작)
-  const { data, error } = await getSupabase()
-    .from('users')
-    .insert({
-      email,
-      subscription_tier: 'free',
-    })
-    .select('id, email, subscription_tier')
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Signup failed: ${error?.message}`);
-  }
-
-  logger.info('User signed up', { user_id: data.id, email });
-
-  return jsonResponse({
-    user_id: data.id,
-    email: data.email,
-    subscription_tier: data.subscription_tier,
-    message: '가입이 완료되었습니다. 노션 API 키를 등록해주세요.',
-  });
-}
 
 // === 노션 키 등록 ===
 async function handleSetupNotion(req: Request): Promise<Response> {

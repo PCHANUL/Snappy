@@ -9,9 +9,10 @@
 //   NOTION_TEMPLATE_PARENT_PAGE_ID 로도 지정 가능
 //
 // 수동 작업 (스크립트 완료 후):
-//   1. 검색 DB에 "🚀 검색 실행" 버튼 속성 추가 + 자동화 설정
-//   2. DB 뷰 3개 생성 (전체/최근/진행중)
-//   3. 메인 페이지 커버 이미지 추가
+//   1. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
+//   2. 검색 DB user_id 속성 기본값 설정
+//   3. DB 뷰 3개 생성 (전체/최근/진행중)
+//   4. 메인 페이지 커버 이미지 추가
 
 import fs from 'fs';
 import path from 'path';
@@ -199,27 +200,11 @@ function blocksMain(webhookUrl, loadMoreUrl) {
       b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
       b.num('우측 상단 "복제" 또는 Duplicate 클릭 → 개인 워크스페이스 선택'),
       b.num('셋업 마법사에서 관리자에게 받은 user_id 입력 → Notion 승인 화면에서 복제한 페이지 선택 → DB 선택'),
-      b.num('"⚙️ 자동화 설정" 토글 참고해 검색 버튼 설정'),
+      b.num('셋업 마법사 마지막 단계에서 확인 버튼 클릭 → 검색 버튼 자동 연결'),
       b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
       b.p('자세한 안내는 📖 시작하기 페이지를 참고하세요.'),
     ]),
-    b.toggle('⚙️ 자동화 설정 (최초 1회)', [
-      b.callout([
-        '[ 🚀 검색 버튼 ]',
-        `URL: ${webhookUrl}`,
-        'Method: POST',
-        `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-        `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-        'Content-Type: application/json',
-      ].join('\n'), '⚙️'),
-      b.callout([
-        '{',
-        '  "user_id": "{{user_id}}",',
-        '  "notion_page_id": "{{현재 페이지 ID}}"',
-        '}',
-      ].join('\n'), '📋'),
-      b.p('키워드·매체·기간·결과 개수는 DB 행의 속성에서 자동으로 읽습니다.'),
-      b.divider(),
+    b.toggle('📄 더보기 버튼 설정 (최초 1회)', [
       b.callout([
         '[ 📄 더보기 버튼 ]',
         `URL: ${loadMoreUrl}`,
@@ -250,7 +235,7 @@ function blocksMainBottom() {
 function blocksSijak() {
   return [
     b.h1('2분이면 시작할 수 있어요'),
-    b.p('템플릿 복제 → 셋업 마법사 → 자동화 설정 → 검색 시작'),
+    b.p('템플릿 복제 → 셋업 마법사 → 검색 시작'),
     b.divider(),
     b.h2('1. 템플릿 복제'),
     b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
@@ -261,10 +246,7 @@ function blocksSijak() {
     b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
     b.num('관리자에게 받은 user_id 입력 후 계정 확인'),
     b.num('"Notion으로 연결하기" 클릭 → Notion 승인 화면에서 복제한 Snappy 페이지 선택'),
-    b.num('목록에서 검색 DB 선택 후 완료'),
-    b.divider(),
-    b.h2('3. 자동화 설정'),
-    b.p('메인 페이지 "⚙️ 자동화 설정" 토글을 참고해 검색 버튼과 더보기 버튼을 설정하세요.'),
+    b.num('목록에서 검색 DB 선택 후 완료 → 검색 버튼이 자동으로 연결됩니다'),
     b.divider(),
     b.callout('설정 완료! 메인 페이지로 돌아가 첫 검색을 시작해보세요.', '✅'),
     b.divider(),
@@ -280,9 +262,8 @@ function blocksSijak() {
       b.p('그래도 보이지 않으면 검색 DB를 전체 페이지로 열고 URL의 32자리 ID를 직접 입력하세요.'),
     ]),
     b.toggle('검색 버튼을 눌렀는데 반응이 없어요', [
-      b.bullet('설정 페이지에서 user_id가 올바르게 입력되어 있는지 확인'),
+      b.bullet('셋업 마법사 마지막 단계(시작하기)에서 "확인" 버튼을 클릭했는지 확인'),
       b.bullet('키워드와 매체가 선택되어 있는지 확인'),
-      b.bullet('자동화 설정의 URL과 헤더가 올바른지 확인'),
       b.bullet('그래도 안 된다면 ❓ 자주 묻는 질문 참고'),
     ]),
   ];
@@ -290,7 +271,7 @@ function blocksSijak() {
 
 function blocksGeomseok() {
   return [
-    b.callout('새 검색: "+ 새로 만들기" → 키워드 입력 → 🚀 검색 실행\n결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
+    b.callout('새 검색: "+ 새로 만들기" → 키워드·매체 입력 → 위 검색 버튼 클릭\n결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
     b.divider(),
     b.h2('DB 속성 안내'),
     b.bullet('키워드: 검색할 단어 (예: 비건 디저트)'),
@@ -372,7 +353,7 @@ function blocksSeoljeong() {
     b.h1('설정'),
     b.divider(),
     b.h2('계정 정보'),
-    b.callout('사용자 ID (user_id)\n\n관리자에게 받은 user_id를 여기에 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
+    b.callout('사용자 ID (user_id)\n\n관리자에게 받은 user_id입니다. 셋업 마법사에서 확인할 수 있습니다.', '🔑'),
     b.divider(),
     b.h2('사용량'),
     b.link('사용량 확인하기', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
@@ -392,8 +373,6 @@ function blocksSeoljeong() {
       b.num('만든 통합 선택 → 삭제'),
       b.p('연동 해제 후에는 검색이 동작하지 않습니다.'),
     ]),
-    b.divider(),
-    b.callout('검색 버튼 자동화 설정값은 메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글을 참고하세요.', '⚙️'),
     b.divider(),
     b.h2('플랜'),
     b.callout('현재 플랜: 베타 무료\n일일 한도: 3회', '📊'),
@@ -462,16 +441,10 @@ ${mainPage.url}
 
 📋 남은 수동 작업 (노션에서 직접):
 
-1. 검색 DB에 "🚀 검색 실행" 버튼 속성 추가
-   - 속성 추가 → 버튼
-   - 자동화 → 액션 1: 상태를 "대기"로 변경
-   - 자동화 → 액션 2: HTTP 요청 (메인 페이지 "⚙️ 검색 버튼 자동화 설정" 토글 참고)
-   - Body는 user_id + notion_page_id 2개만 입력 — 나머지는 자동으로 읽힘
-
-1-2. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
+1. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
    - "📄 더보기" 속성 클릭 → 자동화 편집
-   - 액션: HTTP 요청 (메인 페이지 "📄 더보기 버튼 자동화 설정" 토글 참고)
-   - Body: user_id + notion_page_id (검색 버튼과 동일한 형식)
+   - 액션: HTTP 요청 (메인 페이지 "📄 더보기 버튼 설정" 토글 참고)
+   - Body: user_id + notion_page_id
 
 2. 검색 DB의 user_id 속성에 기본값 설정
    - 관리자에게 받은 user_id 값을 기본값으로 지정
@@ -482,18 +455,13 @@ ${mainPage.url}
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-4. 개인 페이지/복제 템플릿 DB를 Notion 통합에 연결
-   - 메인 페이지 우측 상단 "..." → 연결(Add connections)
-   - 사용자가 만든 통합 선택
-   - 셋업 페이지에서 API 키 입력 후 DB 목록과 DB ID 확인
-
-5. ${USER_ID === 'YOUR_USER_ID'
+4. ${USER_ID === 'YOUR_USER_ID'
     ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
     : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
-6. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
+5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
-7. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 `);
 }
 

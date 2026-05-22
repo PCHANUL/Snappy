@@ -117,18 +117,6 @@
       align-items: stretch;
       flex-direction: column;
     }
-    .account-summary-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      min-width: 0;
-    }
-    .account-summary-row #summary-email {
-      flex: 1;
-      min-width: 0;
-      overflow-wrap: anywhere;
-    }
     .btn-change {
       flex-shrink: 0;
       font-size: 0.75rem;
@@ -316,14 +304,11 @@
             </div>
             <div class="sec-summary hidden" id="sec2-summary">
               <div class="sec-summary-text">
-                <div class="account-summary-row">
-                  <span id="summary-email" style="font-weight:600;"></span>
-                  <button class="btn-change" id="step2NextBtn" disabled>재설정</button>
-                </div>
                 <div class="uid-row">
                   <span class="uid-text" id="displayUserId"></span>
                   <button class="btn-copy" id="copyBtn">복사</button>
                 </div>
+                <button class="btn-change" id="step2NextBtn" disabled>재설정</button>
               </div>
             </div>
           </div>
@@ -471,10 +456,9 @@
       return d.innerHTML;
     }
 
-    function setAccountSummary(email = '') {
+    function setAccountSummary() {
       const copyKey = userId || '';
       const copyBtn = document.getElementById('copyBtn');
-      document.getElementById('summary-email').textContent = email || '계정 확인 완료';
       document.getElementById('displayUserId').textContent = copyKey;
       copyBtn.disabled = !copyKey;
       copyBtn.onclick = () => {
