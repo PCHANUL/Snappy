@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snappy 검색</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    /* ── 버튼 ── */
+    #searchBtn {
+      width: 100%;
+      padding: 14px 20px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: -0.2px;
+    }
+    #searchBtn:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
+    #searchBtn:active:not(:disabled) { transform: translateY(0); }
+    #searchBtn:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* ── 상태 메시지 ── */
+    #status {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      text-align: center;
+      display: none;
+    }
+    #status.searching {
+      display: block;
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid #c7d2fe;
+    }
+    #status.accepted {
+      display: block;
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    #status.error {
+      display: block;
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+
+    /* ── 설정 오류 (파라미터 없을 때) ── */
+    .config-error {
+      width: 100%;
+      padding: 14px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      color: #9a3412;
+      line-height: 1.6;
+      text-align: center;
+      display: none;
+    }
+    .config-error code {
+      font-family: monospace;
+      background: #ffedd5;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      animation: spin 0.7s linear infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <button id="searchBtn">🚀 검색하기</button>
+    <div id="status"></div>
+    <div class="config-error" id="configError">
+      URL에 <code>user_id</code>와 <code>page_id</code>가 필요합니다.<br>
+      셋업 페이지에서 임베드 링크를 복사해주세요.
+    </div>
+  </div>
+
+  <script>
+    const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
+
+    const params  = new URLSearchParams(location.search);
+    const userId  = params.get('user_id');
+    const pageId  = params.get('page_id');
+
+    const btn         = document.getElementById('searchBtn');
+    const status      = document.getElementById('status');
+    const configError = document.getElementById('configError');
+
+    // 파라미터 누락 시 버튼 숨기고 안내 표시
+    if (!userId || !pageId) {
+      btn.style.display = 'none';
+      configError.style.display = 'block';
+    }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      status.className = 'searching';
+      status.textContent = '노션 페이지에서 키워드를 읽어오고 있어요...';
+
+      try {
+        const res = await fetch(FUNCTION_BASE + '/trigger-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, notion_page_id: pageId }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.userMessage || data.message || '검색 요청에 실패했습니다.');
+        }
+
+        status.className = 'accepted';
+        status.textContent = '✓ 검색을 시작했습니다. 노션 페이지에서 결과를 확인하세요.';
+        btn.innerHTML = '🚀 검색하기';
+        btn.disabled = false;
+
+        // 30초 후 상태 메시지 숨기기
+        setTimeout(() => {
+          status.className = '';
+          status.textContent = '';
+        }, 30_000);
+
+      } catch (err) {
+        status.className = 'error';
+        status.textContent = err.message;
+        btn.innerHTML = '🚀 검색하기';
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
