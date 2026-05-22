@@ -9,6 +9,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { decryptNotionKey, encryptNotionKey } from '../_shared/crypto.ts';
 import { getSupabase } from '../_shared/db.ts';
+import { NotionClient } from '../notion/client.ts';
 import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
 import {
@@ -48,6 +49,8 @@ serve(async (req) => {
         return await handleAdminListUsers(req, url);
       case 'admin-upgrade-user':
         return await handleAdminUpgradeUser(req);
+      case 'setup-embeds':
+        return await handleSetupEmbeds(req);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -422,6 +425,41 @@ async function handleAdminUpgradeUser(req: Request): Promise<Response> {
   logger.info('Admin upgraded user', { user_id, subscription_tier, subscription_expires_at });
 
   return jsonResponse({ success: true, user_id, subscription_tier, subscription_expires_at });
+}
+
+// === 노션 검색 버튼 embed URL 자동 연결 ===
+async function handleSetupEmbeds(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+
+  const body = await req.json();
+  const user_id = String(body.user_id || '').trim();
+  if (!user_id) throw new ValidationError('user_id required', '사용자 정보가 누락되었습니다.');
+
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('notion_api_key_encrypted, notion_database_id')
+    .eq('id', user_id)
+    .single();
+
+  if (error || !data) throw new AuthError('User not found');
+  if (!data.notion_api_key_encrypted || !data.notion_database_id) {
+    throw new ValidationError('Notion not configured', '노션 연동을 먼저 완료해주세요.');
+  }
+
+  const notion_api_key = await decryptNotionKey(data.notion_api_key_encrypted);
+  const notion = new NotionClient(notion_api_key);
+
+  const updated = await notion.updateSearchEmbeds(data.notion_database_id, user_id);
+
+  logger.info('Search embeds updated', { user_id, updated });
+
+  return jsonResponse({
+    success: true,
+    updated,
+    message: updated > 0
+      ? `검색 버튼 ${updated}개가 연결되었습니다.`
+      : '연결할 검색 버튼을 찾지 못했습니다. 노션 템플릿을 확인해주세요.',
+  });
 }
 
 // === 헬퍼 함수 ===

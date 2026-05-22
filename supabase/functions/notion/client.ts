@@ -187,6 +187,58 @@ export class NotionClient {
     await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
   }
 
+  // 검색 DB의 부모 페이지와 그 하위 페이지에서 search.html embed URL에 user_id를 삽입
+  // 노션 템플릿 셋업 완료 시 1회 호출됨
+  async updateSearchEmbeds(databaseId: string, userId: string): Promise<number> {
+    const db = await this.fetchApi(`databases/${databaseId}`, { method: 'GET' });
+    const rawParentId: string = db.parent?.page_id || '';
+    if (!rawParentId) return 0;
+
+    let count = 0;
+
+    // 메인 페이지의 embed 업데이트
+    count += await this.updateEmbedsOnPage(rawParentId, userId);
+
+    // 직계 child_page (설정 페이지 등)의 embed도 업데이트
+    const blocksData = await this.fetchApi(`blocks/${rawParentId}/children?page_size=100`, { method: 'GET' });
+    for (const block of (blocksData.results as any[])) {
+      if (block.type === 'child_page') {
+        count += await this.updateEmbedsOnPage(block.id as string, userId);
+        await sleep(200);
+      }
+    }
+
+    return count;
+  }
+
+  private async updateEmbedsOnPage(pageId: string, userId: string): Promise<number> {
+    let count = 0;
+    let cursor: string | undefined;
+
+    do {
+      const qs = cursor ? `?start_cursor=${cursor}&page_size=100` : '?page_size=100';
+      const data = await this.fetchApi(`blocks/${pageId}/children${qs}`, { method: 'GET' });
+
+      for (const block of (data.results as any[])) {
+        if (block.type !== 'embed') continue;
+        const url: string = block.embed?.url || '';
+        if (!url.includes('search.html') || url.includes('user_id=')) continue;
+
+        const base = url.split('?')[0];
+        await this.fetchApi(`blocks/${block.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ embed: { url: `${base}?user_id=${encodeURIComponent(userId)}` } }),
+        });
+        count++;
+        await sleep(300);
+      }
+
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    return count;
+  }
+
   // 사용자의 검색 DB에 새 행을 생성하고 페이지 ID를 반환
   async createSearchPage(
     databaseId: string,

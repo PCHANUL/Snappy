@@ -194,7 +194,7 @@ async function createSearchDB(parentPageId) {
 function blocksMain(webhookUrl, loadMoreUrl) {
   return [
     b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
-    b.embed(`${SEARCH_URL}?user_id=${USER_ID}`),
+    b.embed(SEARCH_URL),
     b.toggle('🆕 처음이신가요?', [
       b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
       b.num('우측 상단 "복제" 또는 Duplicate 클릭 → 개인 워크스페이스 선택'),
@@ -375,7 +375,7 @@ function blocksSeoljeong() {
     b.callout('사용자 ID (user_id)\n\n관리자에게 받은 user_id를 여기에 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
     b.divider(),
     b.h2('빠른 검색'),
-    b.embed(`${SEARCH_URL}?user_id=${USER_ID}`),
+    b.embed(SEARCH_URL),
     b.h2('사용량'),
     b.link('사용량 확인하기', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
     b.h2('검색 기록'),
