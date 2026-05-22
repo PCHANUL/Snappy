@@ -140,12 +140,12 @@ bash scripts/deploy.sh --help
 
 ## API 사용 예시
 
-### 사용자 가입
+### 사용자 ID 확인
+
+관리자가 발급한 `user_id`가 DB에 등록되어 있는지 확인합니다.
 
 ```bash
-curl -X POST 'https://[ref].supabase.co/functions/v1/manage-user?action=signup' \
-  -H 'Content-Type: application/json' \
-  -d '{"email": "user@example.com"}'
+curl 'https://[ref].supabase.co/functions/v1/manage-user?action=verify-user&user_id=...'
 ```
 
 ### 노션 연동

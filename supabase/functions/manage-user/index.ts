@@ -298,6 +298,7 @@ async function handleVerifyUser(url: URL): Promise<Response> {
 
   return jsonResponse({
     valid: true,
+    user_id: data.id,
     subscription_tier: data.subscription_tier,
     notion_configured: !!data.notion_database_id,
   });

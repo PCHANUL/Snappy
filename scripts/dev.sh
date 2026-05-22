@@ -25,9 +25,7 @@ log_info "로컬 URL: http://localhost:54321/functions/v1/"
 echo ""
 
 log_detail "함수 호출 예시:"
-echo "  curl -X POST http://localhost:54321/functions/v1/manage-user?action=signup \\"
-echo "    -H 'Content-Type: application/json' \\"
-echo "    -d '{\"email\": \"test@example.com\"}'"
+echo "  curl 'http://localhost:54321/functions/v1/manage-user?action=verify-user&user_id=<USER_ID>'"
 echo ""
 
 log_warn "종료하려면 Ctrl+C"

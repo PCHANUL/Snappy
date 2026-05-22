@@ -113,6 +113,22 @@
     }
     .sec-summary.hidden { display: none; }
     .sec-summary-text { display: flex; flex-direction: column; gap: 4px; }
+    #sec2-summary {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .account-summary-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+    .account-summary-row #summary-email {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
     .btn-change {
       flex-shrink: 0;
       font-size: 0.75rem;
@@ -129,6 +145,13 @@
     /* 폼 요소 */
     .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
     label { font-size: 0.9rem; font-weight: 600; color: #374151; }
+    .field-hint {
+      margin-top: -8px;
+      margin-bottom: 18px;
+      font-size: 0.8rem;
+      color: #6b7280;
+      line-height: 1.5;
+    }
     input {
       padding: 13px 16px;
       border: 1.5px solid #e0e0e0;
@@ -269,7 +292,7 @@
         </div>
       </div>
 
-      <!-- ── 2. 계정 만들기 ── -->
+      <!-- ── 2. 계정 확인 ── -->
       <div class="flow-row">
         <div class="flow-gutter">
           <div class="sec-num" id="num2">2</div>
@@ -278,21 +301,25 @@
         <div class="flow-body">
           <div class="sec-card locked" id="sec2">
             <div class="sec-head">
-              <h2>계정 만들기</h2>
+              <h2>계정 확인</h2>
             </div>
             <div class="sec-body hidden" id="sec2-body">
-              <form id="signupForm" style="margin-top:16px;">
+              <form id="accountForm" style="margin-top:16px;">
                 <div class="field">
-                  <label for="email">이메일</label>
-                  <input type="email" id="email" placeholder="you@example.com" required>
+                  <label for="userIdInput">관리자에게 받은 user_id</label>
+                  <input type="text" id="userIdInput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" required>
                 </div>
-                <button type="submit" class="btn-primary" id="signupBtn">시작하기 →</button>
+                <p class="field-hint">전달받은 user_id가 등록된 계정인지 확인한 뒤 다음 단계로 넘어갑니다.</p>
+                <button type="submit" class="btn-primary" id="accountBtn">확인하고 계속 →</button>
               </form>
-              <div id="signupResult" class="message hidden"></div>
+              <div id="accountResult" class="message hidden"></div>
             </div>
             <div class="sec-summary hidden" id="sec2-summary">
               <div class="sec-summary-text">
-                <span id="summary-email" style="font-weight:600;"></span>
+                <div class="account-summary-row">
+                  <span id="summary-email" style="font-weight:600;"></span>
+                  <button class="btn-change" id="step2NextBtn" disabled>재설정</button>
+                </div>
                 <div class="uid-row">
                   <span class="uid-text" id="displayUserId"></span>
                   <button class="btn-copy" id="copyBtn">복사</button>
@@ -402,28 +429,78 @@
       const num     = document.getElementById('num' + n);
       const body    = document.getElementById('sec' + n + '-body');
       const summary = document.getElementById('sec' + n + '-summary');
+      const line    = document.getElementById('line' + n);
       card.classList.remove('done', 'locked');
       card.classList.add('active');
       num.classList.remove('done');
       num.classList.add('active');
       if (body)    { body.classList.remove('hidden'); body.classList.add('fade-in'); }
       if (summary) summary.classList.add('hidden');
+      if (line)    line.classList.remove('done');
     }
 
     function lockSection(n) {
       const card = document.getElementById('sec' + n);
       const num  = document.getElementById('num' + n);
       const body = document.getElementById('sec' + n + '-body');
+      const summary = document.getElementById('sec' + n + '-summary');
+      const line = document.getElementById('line' + n);
       card.classList.remove('active', 'done');
       card.classList.add('locked');
       num.classList.remove('active', 'done');
       if (body) body.classList.add('hidden');
+      if (summary) summary.classList.add('hidden');
+      if (line) line.classList.remove('done');
     }
 
     function escapeHtml(v) {
       const d = document.createElement('div');
       d.textContent = String(v ?? '');
       return d.innerHTML;
+    }
+
+    function setAccountSummary(email = '') {
+      const copyKey = userId || '';
+      const copyBtn = document.getElementById('copyBtn');
+      document.getElementById('summary-email').textContent = email || '계정 확인 완료';
+      document.getElementById('displayUserId').textContent = copyKey;
+      copyBtn.disabled = !copyKey;
+      copyBtn.onclick = () => {
+        if (!copyKey) return;
+        navigator.clipboard.writeText(copyKey).then(() => {
+          copyBtn.textContent = '✓ 복사됨';
+          setTimeout(() => { copyBtn.textContent = '복사'; }, 2000);
+        });
+      };
+    }
+
+    function setAccountActionMode(mode) {
+      const btn = document.getElementById('step2NextBtn');
+      const hasCopyKey = Boolean(userId);
+      const canReset = mode === 'reset' && hasCopyKey;
+      btn.dataset.mode = canReset ? 'reset' : 'inactive';
+      btn.className = 'btn-change';
+      btn.textContent = '재설정';
+      btn.disabled = !canReset;
+    }
+
+    function normalizeUserId(value) {
+      const trimmed = String(value || '').trim();
+      if (!trimmed) return '';
+      try {
+        const url = new URL(trimmed);
+        return url.searchParams.get('user_id')?.trim() || trimmed;
+      } catch {
+        return trimmed;
+      }
+    }
+
+    async function verifyUser(userIdToVerify) {
+      const res = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(userIdToVerify)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '계정 확인에 실패했습니다.');
+      if (!data.valid) throw new Error('등록되지 않은 user_id입니다. 관리자에게 받은 값을 다시 확인해주세요.');
+      return data;
     }
 
     // ── OAuth ────────────────────────────────
@@ -498,45 +575,51 @@
       lockSection(4);
     });
 
-    // ── 섹션 2: 가입 ─────────────────────────
-    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+    // ── 섹션 2: 계정 확인 ─────────────────────
+    document.getElementById('accountForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn    = document.getElementById('signupBtn');
-      const result = document.getElementById('signupResult');
+      const btn    = document.getElementById('accountBtn');
+      const result = document.getElementById('accountResult');
+      const enteredUserId = normalizeUserId(document.getElementById('userIdInput').value);
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner">⟳</span>처리 중';
       result.className = 'message hidden';
       try {
-        const res = await fetch(FUNCTION_BASE + '/manage-user?action=signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: document.getElementById('email').value.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || '가입에 실패했습니다.');
-        userId = data.user_id;
-        finishSignup(document.getElementById('email').value.trim());
+        if (!enteredUserId) throw new Error('user_id를 입력해주세요.');
+        const data = await verifyUser(enteredUserId);
+        userId = data.user_id || enteredUserId;
+        document.getElementById('userIdInput').value = userId;
+        finishAccountVerification(data);
       } catch (err) {
         result.className = 'message error';
         result.textContent = err.message;
         btn.disabled = false;
-        btn.textContent = '시작하기 →';
+        btn.textContent = '확인하고 계속 →';
       }
     });
 
-    function finishSignup(email) {
-      document.getElementById('summary-email').textContent = email;
-      document.getElementById('displayUserId').textContent = userId;
-      document.getElementById('copyBtn').addEventListener('click', () => {
-        navigator.clipboard.writeText(userId).then(() => {
-          const btn = document.getElementById('copyBtn');
-          btn.textContent = '✓ 복사됨';
-          setTimeout(() => { btn.textContent = '복사'; }, 2000);
-        });
-      });
+    function finishAccountVerification(account) {
+      const accountBtn = document.getElementById('accountBtn');
+      accountBtn.disabled = false;
+      accountBtn.textContent = '확인하고 계속 →';
+      setAccountSummary();
+      setAccountActionMode('reset');
       completeSection(2);
-      activateSection(3);
+      if (account?.notion_configured) {
+        completeSection(3);
+        activateSection(4);
+      } else {
+        activateSection(3);
+      }
     }
+
+    document.getElementById('step2NextBtn').addEventListener('click', () => {
+      if (!userId || document.getElementById('step2NextBtn').dataset.mode !== 'reset') return;
+      setAccountActionMode('inactive');
+      reopenSection(2);
+      lockSection(3);
+      lockSection(4);
+    });
 
     // ── 섹션 3: Notion OAuth ─────────────────
     document.getElementById('oauthBtn').addEventListener('click', startOAuth);
@@ -556,27 +639,29 @@
 
     (async () => {
       const params          = new URLSearchParams(location.search);
-      const presetUserId    = params.get('user_id');
+      const presetUserId    = normalizeUserId(params.get('user_id'));
       const notionConnected = params.get('notion_connected') === '1';
       const oauthError      = params.get('error');
 
       if (!presetUserId) return;
-      userId = presetUserId;
+      document.getElementById('userIdInput').value = presetUserId;
 
       if (notionConnected) {
         // OAuth 완료 후 복귀 — 자동으로 DB 연동 후 시작하기로 진입
-        await restoreAccount();
+        if (!(await restoreAccount(presetUserId))) return;
         completeSection(1);
         completeSection(2);
+        setAccountActionMode('reset');
         activateSection(3);
         await finalizeNotionConnection();
         return;
       }
 
       if (oauthError) {
-        await restoreAccount();
+        if (!(await restoreAccount(presetUserId))) return;
         completeSection(1);
         completeSection(2);
+        setAccountActionMode('reset');
         activateSection(3);
         const result = document.getElementById('oauthResult');
         result.className = 'message error';
@@ -586,38 +671,36 @@
 
       // 일반 user_id 파라미터 — 상태 확인
       try {
-        const res  = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(presetUserId)}`);
-        const data = await res.json();
-        if (data.valid && data.notion_configured) {
-          await restoreAccount();
+        const data = await verifyUser(presetUserId);
+        userId = data.user_id || presetUserId;
+        setAccountSummary();
+        if (data.notion_configured) {
           completeSection(1);
           completeSection(2);
+          setAccountActionMode('reset');
           completeSection(3);
           activateSection(4);
-        } else if (data.valid) {
-          await restoreAccount();
+        } else {
           completeSection(1);
           completeSection(2);
+          setAccountActionMode('reset');
           activateSection(3);
         }
       } catch { /* 복원 실패 시 초기 상태 유지 */ }
     })();
 
-    async function restoreAccount() {
+    async function restoreAccount(userIdToRestore = userId) {
       try {
-        const res  = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(userId)}`);
-        await res.json();
-        // email은 verify 응답에 없으므로 user_id만 표시
-        document.getElementById('summary-email').textContent = '';
-        document.getElementById('displayUserId').textContent = userId;
-        document.getElementById('copyBtn').addEventListener('click', () => {
-          navigator.clipboard.writeText(userId).then(() => {
-            const btn = document.getElementById('copyBtn');
-            btn.textContent = '✓ 복사됨';
-            setTimeout(() => { btn.textContent = '복사'; }, 2000);
-          });
-        });
-      } catch { /* ignore */ }
+        const normalizedUserId = normalizeUserId(userIdToRestore);
+        const data = await verifyUser(normalizedUserId);
+        userId = data.user_id || normalizedUserId;
+        document.getElementById('userIdInput').value = userId;
+        setAccountSummary();
+        return true;
+      } catch {
+        userId = null;
+        return false;
+      }
     }
   </script>
 </body>

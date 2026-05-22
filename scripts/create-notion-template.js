@@ -196,7 +196,7 @@ function blocksMain(webhookUrl, loadMoreUrl) {
     b.toggle('🆕 처음이신가요?', [
       b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
       b.num('우측 상단 "복제" 또는 Duplicate 클릭 → 개인 워크스페이스 선택'),
-      b.num('셋업 마법사에서 이메일 가입 → Notion 승인 화면에서 복제한 페이지 선택 → DB 선택'),
+      b.num('셋업 마법사에서 관리자에게 받은 user_id 입력 → Notion 승인 화면에서 복제한 페이지 선택 → DB 선택'),
       b.num('"⚙️ 자동화 설정" 토글 참고해 검색 버튼 설정'),
       b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
       b.p('자세한 안내는 📖 시작하기 페이지를 참고하세요.'),
@@ -257,7 +257,7 @@ function blocksSijak() {
     b.divider(),
     b.h2('2. 셋업 마법사'),
     b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
-    b.num('이메일 입력 후 가입'),
+    b.num('관리자에게 받은 user_id 입력 후 계정 확인'),
     b.num('"Notion으로 연결하기" 클릭 → Notion 승인 화면에서 복제한 Snappy 페이지 선택'),
     b.num('목록에서 검색 DB 선택 후 완료'),
     b.divider(),
@@ -296,7 +296,7 @@ function blocksGeomseok() {
     b.bullet('기간: 1일 / 1주 / 1개월(기본) / 1년'),
     b.bullet('결과 개수: 5 / 10(기본) / 20'),
     b.bullet('상태: 대기 → 검색중 → 완료 / 실패 (자동 변경)'),
-    b.bullet('user_id: 셋업 완료 후 받은 ID — 새 행 추가 시 기본값으로 설정해두세요'),
+    b.bullet('user_id: 관리자에게 받은 ID — 새 행 추가 시 기본값으로 설정해두세요'),
   ];
 }
 
@@ -370,7 +370,7 @@ function blocksSeoljeong() {
     b.h1('설정'),
     b.divider(),
     b.h2('계정 정보'),
-    b.callout('사용자 ID (user_id)\n\n셋업 완료 후 여기에 user_id를 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
+    b.callout('사용자 ID (user_id)\n\n관리자에게 받은 user_id를 여기에 붙여넣으세요.\n이 값은 검색 버튼 자동화에 사용됩니다.', '🔑'),
     b.divider(),
     b.h2('사용량'),
     b.link('사용량 확인하기', `${USAGE_URL}?user_id=${USER_ID}`, '📊'),
@@ -472,7 +472,7 @@ ${mainPage.url}
    - Body: user_id + notion_page_id (검색 버튼과 동일한 형식)
 
 2. 검색 DB의 user_id 속성에 기본값 설정
-   - 셋업 완료 후 받은 user_id 값을 기본값으로 지정
+   - 관리자에게 받은 user_id 값을 기본값으로 지정
    - 새 검색 행 추가 시 자동으로 채워짐
 
 3. 검색 DB 뷰 3개 추가
