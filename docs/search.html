@@ -47,6 +47,7 @@
     #searchBtn:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
     #searchBtn:active:not(:disabled) { transform: translateY(0); }
     #searchBtn:disabled { background: #a5b4fc; cursor: not-allowed; }
+    #searchBtn.searching { background: #818cf8; cursor: not-allowed; }
     #searchBtn.unconfigured { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; pointer-events: auto; }
 
     /* ── 상태 메시지 ── */
@@ -112,6 +113,7 @@
 
   <script>
     const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
+    const SEARCH_TIMEOUT = 120_000; // 2분 — 대부분의 검색이 이 안에 완료됨
 
     const params  = new URLSearchParams(location.search);
     const userId  = params.get('user_id');
@@ -121,22 +123,67 @@
     const status      = document.getElementById('status');
     const configGuide = document.getElementById('configGuide');
 
-    // 파라미터 누락 시 버튼 비활성화 (disabled 대신 클래스 — click 이벤트 유지)
+    const storageKey = pageId ? `snappy_search_${pageId}` : null;
+
+    // ── 검색 중 상태 관리 ───────────────────────────────────────────────────
+    function startSearching() {
+      if (storageKey) {
+        localStorage.setItem(storageKey, String(Date.now()));
+      }
+      btn.disabled = true;
+      btn.classList.add('searching');
+      btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      status.className = 'searching';
+      status.textContent = '노션 페이지에서 키워드를 읽어오고 있어요...';
+    }
+
+    function stopSearching() {
+      if (storageKey) localStorage.removeItem(storageKey);
+      btn.disabled = false;
+      btn.classList.remove('searching');
+      btn.innerHTML = '🚀 검색하기';
+    }
+
+    let autoResetTimer = null;
+
+    function scheduleAutoReset(remaining) {
+      clearTimeout(autoResetTimer);
+      autoResetTimer = setTimeout(() => {
+        stopSearching();
+        status.className = '';
+        status.textContent = '';
+      }, remaining);
+    }
+
+    // ── 페이지 로드 시 진행 중이던 검색 복원 ────────────────────────────────
     const configured = !!(userId && pageId);
     if (!configured) {
       btn.classList.add('unconfigured');
+    } else if (storageKey) {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const elapsed = Date.now() - Number(saved);
+        if (elapsed < SEARCH_TIMEOUT) {
+          // 아직 검색 중 — 버튼 비활성, 남은 시간 후 자동 해제
+          startSearching();
+          status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+          scheduleAutoReset(SEARCH_TIMEOUT - elapsed);
+        } else {
+          localStorage.removeItem(storageKey);
+        }
+      }
     }
 
+    // ── 버튼 클릭 ────────────────────────────────────────────────────────────
     btn.addEventListener('click', async () => {
-      // 미설정 상태 클릭 시 안내 표시
       if (!configured) {
         configGuide.style.display = 'block';
         return;
       }
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
-      status.className = 'searching';
-      status.textContent = '노션 페이지에서 키워드를 읽어오고 있어요...';
+      if (btn.disabled) return;
+
+      startSearching();
+      scheduleAutoReset(SEARCH_TIMEOUT);
 
       try {
         const res = await fetch(FUNCTION_BASE + '/trigger-search', {
@@ -151,22 +198,14 @@
           throw new Error(data.userMessage || data.message || '검색 요청에 실패했습니다.');
         }
 
-        status.className = 'accepted';
-        status.textContent = '✓ 검색을 시작했습니다. 노션 페이지에서 결과를 확인하세요.';
-        btn.innerHTML = '🚀 검색하기';
-        btn.disabled = false;
-
-        // 30초 후 상태 메시지 숨기기
-        setTimeout(() => {
-          status.className = '';
-          status.textContent = '';
-        }, 30_000);
+        // 202 수신 — 백그라운드 검색 진행 중, 버튼은 계속 비활성
+        status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
 
       } catch (err) {
+        clearTimeout(autoResetTimer);
+        stopSearching();
         status.className = 'error';
         status.textContent = err.message;
-        btn.innerHTML = '🚀 검색하기';
-        btn.disabled = false;
       }
     });
   </script>
