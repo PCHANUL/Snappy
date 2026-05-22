@@ -47,6 +47,7 @@
     #searchBtn:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
     #searchBtn:active:not(:disabled) { transform: translateY(0); }
     #searchBtn:disabled { background: #a5b4fc; cursor: not-allowed; }
+    #searchBtn.unconfigured { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; pointer-events: auto; }
 
     /* ── 상태 메시지 ── */
     #status {
@@ -77,10 +78,10 @@
       border: 1px solid #fecaca;
     }
 
-    /* ── 설정 오류 (파라미터 없을 때) ── */
-    .config-error {
+    /* ── 설정 안내 (파라미터 없을 때) ── */
+    .config-guide {
       width: 100%;
-      padding: 14px;
+      padding: 12px 14px;
       background: #fff7ed;
       border: 1px solid #fed7aa;
       border-radius: 10px;
@@ -89,12 +90,6 @@
       line-height: 1.6;
       text-align: center;
       display: none;
-    }
-    .config-error code {
-      font-family: monospace;
-      background: #ffedd5;
-      padding: 1px 5px;
-      border-radius: 4px;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -108,9 +103,10 @@
   <div class="wrap">
     <button id="searchBtn">🚀 검색하기</button>
     <div id="status"></div>
-    <div class="config-error" id="configError">
-      URL에 <code>user_id</code>와 <code>page_id</code>가 필요합니다.<br>
-      셋업 페이지에서 임베드 링크를 복사해주세요.
+    <div class="config-guide" id="configGuide">
+      셋업을 완료하면 이 버튼이 활성화됩니다.<br>
+      <a href="https://pchanul.github.io/Snappy/" target="_blank"
+         style="color:#c2410c;font-weight:600;">시작하기 →</a>
     </div>
   </div>
 
@@ -123,15 +119,20 @@
 
     const btn         = document.getElementById('searchBtn');
     const status      = document.getElementById('status');
-    const configError = document.getElementById('configError');
+    const configGuide = document.getElementById('configGuide');
 
-    // 파라미터 누락 시 버튼 숨기고 안내 표시
-    if (!userId || !pageId) {
-      btn.style.display = 'none';
-      configError.style.display = 'block';
+    // 파라미터 누락 시 버튼 비활성화 (disabled 대신 클래스 — click 이벤트 유지)
+    const configured = !!(userId && pageId);
+    if (!configured) {
+      btn.classList.add('unconfigured');
     }
 
     btn.addEventListener('click', async () => {
+      // 미설정 상태 클릭 시 안내 표시
+      if (!configured) {
+        configGuide.style.display = 'block';
+        return;
+      }
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
       status.className = 'searching';
