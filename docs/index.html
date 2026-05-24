@@ -358,7 +358,7 @@
         <div class="flow-body">
           <div class="sec-card locked" id="sec4">
             <div class="sec-head">
-              <h2>검색 DB 연결</h2>
+              <h2>노션 DB 페이지 연결</h2>
             </div>
             <div class="sec-body hidden" id="sec4-body">
               <div style="margin-top:14px;">
@@ -635,18 +635,9 @@
           return;
         }
 
-        // Snappy 검색 DB(키워드·매체·상태 속성)를 가진 DB 우선 선택
-        const snappyDbs = databases.filter(db => db.is_snappy);
-
-        if (snappyDbs.length === 1) {
-          await setupWithDatabase(snappyDbs[0].id, snappyDbs[0].title);
-        } else if (snappyDbs.length > 1) {
-          showDbPicker(snappyDbs);
-        } else {
-          result.className = 'message error';
-          result.textContent = '연결된 페이지에 Snappy 검색 DB가 없습니다. 노션 페이지 연결을 다시 진행해 복제한 Snappy 페이지를 선택해주세요.';
-          showDbRetryButton();
-        }
+        // 연결된 DB 목록을 보여주고 사용자가 직접 선택
+        // Snappy 검색 DB(키워드·매체·상태 속성)는 상단에 추천 표시
+        showDbPicker(databases);
       } catch (err) {
         loading.style.display = 'none';
         result.className = 'message error';
@@ -658,12 +649,22 @@
     function showDbPicker(databases) {
       const selector = document.getElementById('dbSelector');
       selector.classList.remove('hidden');
-      selector.innerHTML = '<p style="font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:8px;">연동할 데이터베이스를 선택하세요:</p><div id="dbList"></div>';
+      selector.innerHTML = '<p style="font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:8px;">연동할 노션 DB 페이지를 선택하세요:</p><div id="dbList"></div>';
       const dbList = document.getElementById('dbList');
-      databases.forEach(db => {
+      // Snappy 검색 DB를 먼저 보여줌
+      const sorted = [...databases].sort((a, b) => Number(b.is_snappy) - Number(a.is_snappy));
+      sorted.forEach(db => {
         const item = document.createElement('button');
-        item.style.cssText = 'display:block;width:100%;text-align:left;padding:10px 14px;margin-bottom:6px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:0.875rem;color:#111827;';
-        item.textContent = db.title || '제목 없음';
+        item.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;padding:10px 14px;margin-bottom:6px;border:1px solid ' + (db.is_snappy ? '#6366f1' : '#d1d5db') + ';border-radius:8px;background:' + (db.is_snappy ? '#eef2ff' : '#fff') + ';cursor:pointer;font-size:0.875rem;color:#111827;';
+        const title = document.createElement('span');
+        title.textContent = db.title || '제목 없음';
+        item.appendChild(title);
+        if (db.is_snappy) {
+          const badge = document.createElement('span');
+          badge.textContent = '추천';
+          badge.style.cssText = 'flex-shrink:0;font-size:0.7rem;font-weight:600;color:#6366f1;background:#fff;border:1px solid #c7d2fe;border-radius:20px;padding:2px 8px;';
+          item.appendChild(badge);
+        }
         item.addEventListener('click', () => setupWithDatabase(db.id, db.title));
         dbList.appendChild(item);
       });
