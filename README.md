@@ -94,6 +94,7 @@ bash scripts/deploy.sh
 
 - URL: https://pchanul.github.io/Snappy/
 - 소스: `docs/index.html`
+- 템플릿 링크 설정: `docs/config.json`의 `template_url`
 
 ### 4. 로컬 개발
 

@@ -391,8 +391,33 @@
   <script>
     const SUPABASE_URL = 'https://mmnwbkbipjnmsvtyohjg.supabase.co';
     const FUNCTION_BASE = SUPABASE_URL + '/functions/v1';
+    const CONFIG_URL = './config.json';
+    const DEFAULT_TEMPLATE_URL = 'https://peat-action-5c8.notion.site/36a3e4ca7e8a813ab336eebfd68a2a70?source=copy_link';
 
     let userId = null;
+
+    async function loadSetupConfig() {
+      const templateLink = document.getElementById('templateLink');
+      templateLink.href = DEFAULT_TEMPLATE_URL;
+
+      try {
+        const res = await fetch(`${CONFIG_URL}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`config load failed: ${res.status}`);
+
+        const config = await res.json();
+        const templateUrl = String(config.template_url || '').trim();
+        if (!templateUrl) return;
+
+        const parsed = new URL(templateUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return;
+
+        templateLink.href = parsed.toString();
+      } catch (err) {
+        console.warn('Setup config could not be loaded. Using fallback template URL.', err);
+      }
+    }
+
+    loadSetupConfig();
 
     // ── 섹션 상태 전환 ──────────────────────────
     function activateSection(n) {
