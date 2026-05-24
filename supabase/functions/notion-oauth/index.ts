@@ -136,6 +136,26 @@ async function handleCallback(url: URL): Promise<Response> {
       return Response.redirect(`${redirectBase}&error=store_failed`, 302);
     }
 
+    // 연결 검증: 통합이 어떤 페이지에도 연결되지 않았으면 명확한 에러로 안내
+    // (DB를 이미 확보했으면 = 페이지 접근 확인됨 → 검증 통과)
+    if (!update.notion_database_id) {
+      try {
+        const notion = new NotionClient(access_token);
+        let accessible = await notion.searchAccessible();
+        // search 인덱스 반영 지연 대비 1회 재시도
+        if (accessible.length === 0) {
+          await new Promise((r) => setTimeout(r, 1500));
+          accessible = await notion.searchAccessible();
+        }
+        if (accessible.length === 0) {
+          logger.info('OAuth connected but no page access', { user_id: state });
+          return Response.redirect(`${redirectBase}&error=no_page_access`, 302);
+        }
+      } catch (err) {
+        logger.error('Connection verification failed', err, { user_id: state });
+      }
+    }
+
     logger.info('Notion OAuth completed', {
       user_id: state,
       has_duplicated_template: !!duplicated_template_id,

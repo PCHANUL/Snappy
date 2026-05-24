@@ -323,6 +323,15 @@ export class NotionClient {
     logger.info('Search embed status updated', { searching, newUrl });
   }
 
+  // 통합이 접근 가능한 객체(페이지/DB)가 하나라도 있는지 조회 — 연결 검증용
+  async searchAccessible(): Promise<any[]> {
+    const data = await this.fetchApi('search', {
+      method: 'POST',
+      body: JSON.stringify({ page_size: 5 }),
+    });
+    return (data.results as any[]) || [];
+  }
+
   // 페이지 내 자식 데이터베이스 ID 탐색 (템플릿 복제 후 검색 DB 자동 연동용)
   async findChildDatabaseId(pageId: string): Promise<string | null> {
     let cursor: string | undefined;
