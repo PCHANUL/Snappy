@@ -560,6 +560,19 @@
       selector.innerHTML = '';
 
       try {
+        // 템플릿 복제 연결 시 콜백이 이미 DB를 저장했으면 곧바로 완료 처리
+        try {
+          const verify = await verifyUser(userId);
+          if (verify.notion_configured) {
+            btn.disabled = false;
+            btn.textContent = 'Notion으로 연결하기';
+            document.getElementById('summary-db').textContent = '검색 DB';
+            completeSection(3);
+            activateSection(4);
+            return;
+          }
+        } catch { /* 확인 실패 시 아래 자동 조회로 진행 */ }
+
         // Notion 토큰이 API에 반영되기까지 지연이 있을 수 있어 최대 3회 재시도
         let databases = null;
         for (let attempt = 0; attempt < 3; attempt++) {

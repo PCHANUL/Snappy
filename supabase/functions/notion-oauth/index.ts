@@ -4,6 +4,7 @@ import { getSupabase } from '../_shared/db.ts';
 import { env } from '../_shared/env.ts';
 import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
 import { logger } from '../_shared/logger.ts';
+import { NotionClient } from '../notion/client.ts';
 
 const SETUP_PAGE = (Deno.env.get('SETUP_PAGE_URL') || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '/');
 const NOTION_VERSION = '2022-06-28';
@@ -106,12 +107,28 @@ async function handleCallback(url: URL): Promise<Response> {
       return Response.redirect(`${redirectBase}&error=oauth_failed`, 302);
     }
 
-    const { access_token } = await tokenRes.json();
+    const tokenData = await tokenRes.json();
+    const { access_token, workspace_id, duplicated_template_id } = tokenData;
     const encryptedToken = await encryptNotionKey(access_token);
+
+    const update: Record<string, string> = { notion_api_key_encrypted: encryptedToken };
+    if (workspace_id) update.notion_workspace_id = workspace_id;
+
+    // 템플릿 복제로 연결된 경우: Notion이 복제된 페이지 ID를 돌려주고 통합도 자동 연결해줌
+    // → 사용자가 승인 화면에서 페이지를 직접 선택하지 않아도 검색 DB를 자동 연동
+    if (duplicated_template_id) {
+      try {
+        const dbId = await new NotionClient(access_token).findChildDatabaseId(duplicated_template_id);
+        if (dbId) update.notion_database_id = dbId;
+        else logger.info('No child database in duplicated template', { user_id: state, duplicated_template_id });
+      } catch (err) {
+        logger.error('Failed to resolve DB from duplicated template', err, { user_id: state });
+      }
+    }
 
     const { error: dbError } = await getSupabase()
       .from('users')
-      .update({ notion_api_key_encrypted: encryptedToken })
+      .update(update)
       .eq('id', state);
 
     if (dbError) {
@@ -119,7 +136,11 @@ async function handleCallback(url: URL): Promise<Response> {
       return Response.redirect(`${redirectBase}&error=store_failed`, 302);
     }
 
-    logger.info('Notion OAuth completed', { user_id: state });
+    logger.info('Notion OAuth completed', {
+      user_id: state,
+      has_duplicated_template: !!duplicated_template_id,
+      db_resolved: !!update.notion_database_id,
+    });
     return Response.redirect(`${redirectBase}&notion_connected=1`, 302);
   } catch (err) {
     logger.error('OAuth callback error', err);

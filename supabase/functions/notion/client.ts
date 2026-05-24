@@ -323,6 +323,23 @@ export class NotionClient {
     logger.info('Search embed status updated', { searching, newUrl });
   }
 
+  // 페이지 내 자식 데이터베이스 ID 탐색 (템플릿 복제 후 검색 DB 자동 연동용)
+  async findChildDatabaseId(pageId: string): Promise<string | null> {
+    let cursor: string | undefined;
+    do {
+      const qs = new URLSearchParams({ page_size: '100' });
+      if (cursor) qs.set('start_cursor', cursor);
+
+      const data = await this.fetchApi(`blocks/${pageId.replace(/-/g, '')}/children?${qs.toString()}`, { method: 'GET' });
+      const block = (data.results as any[]).find((b) => b.type === 'child_database');
+      if (block) return (block.id as string).replace(/-/g, '');
+
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    return null;
+  }
+
   private async getDatabaseParentPageId(databaseId: string): Promise<string> {
     const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
     const rawParentId: string | undefined = dbInfo.parent?.page_id;
