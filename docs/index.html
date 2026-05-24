@@ -595,8 +595,7 @@
 
         if (!databases || databases.length === 0) {
           result.className = 'message error';
-          result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 복제한 Snappy 페이지를 선택했는지 확인하거나, 아래에서 DB ID를 직접 입력하세요.';
-          showDbManualInput();
+          result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 다시 연결할 때 복제한 Snappy 페이지를 선택해주세요.';
           return;
         }
 
@@ -624,27 +623,6 @@
         item.textContent = db.title || '제목 없음';
         item.addEventListener('click', () => setupWithDatabase(db.id, db.title));
         dbList.appendChild(item);
-      });
-    }
-
-    function showDbManualInput() {
-      const selector = document.getElementById('dbSelector');
-      selector.classList.remove('hidden');
-      selector.innerHTML =
-        '<p style="font-size:0.82rem;color:#6b7280;margin-bottom:8px;">Notion에서 검색 DB를 열고 URL의 32자리 ID를 직접 입력하세요.</p>' +
-        '<div style="display:flex;gap:8px;">' +
-          '<input type="text" id="manualDbInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="flex:1;min-width:0;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.85rem;">' +
-          '<button id="manualDbBtn" class="btn-primary" style="flex-shrink:0;white-space:nowrap;">연결</button>' +
-        '</div>';
-      document.getElementById('manualDbBtn').addEventListener('click', async () => {
-        const rawId = document.getElementById('manualDbInput').value.trim().replace(/-/g, '');
-        const result = document.getElementById('oauthResult');
-        if (!rawId || rawId.length !== 32) {
-          result.className = 'message error';
-          result.textContent = 'DB ID 형식이 올바르지 않습니다. 32자리 영숫자를 입력해주세요.';
-          return;
-        }
-        await setupWithDatabase(rawId, '');
       });
     }
 
