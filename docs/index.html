@@ -324,7 +324,7 @@
         <div class="flow-body">
           <div class="sec-card locked" id="sec3">
             <div class="sec-head">
-              <h2>Notion 연결</h2>
+              <h2>노션 페이지 연결</h2>
             </div>
             <div class="sec-body hidden" id="sec3-body">
               <div style="margin-top:14px;">
@@ -341,7 +341,7 @@
             </div>
             <div class="sec-summary hidden" id="sec3-summary">
               <div class="sec-summary-text">
-                <span style="color:#10b981;font-weight:600;">✓ Notion 연결 완료</span>
+                <span style="color:#10b981;font-weight:600;">✓ 노션 페이지 연결 완료</span>
               </div>
               <button class="btn-change" id="reconnectBtn">다시 연결</button>
             </div>
@@ -573,9 +573,14 @@
     }
 
     // OAuth 완료 후: 섹션 3 완료 → 섹션 4(DB 연결) 진입
+    // 3초 대기: Notion API가 새 연결을 search 인덱스에 반영할 시간을 줌
     async function completeOAuthStep() {
       completeSection(3);
       activateSection(4);
+      const loading = document.getElementById('dbLoading');
+      loading.innerHTML = '<span class="spinner">⟳</span> 연결 반영 중... (잠시 기다려주세요)';
+      loading.style.display = 'block';
+      await new Promise(r => setTimeout(r, 3000));
       await loadDbSection();
     }
 
@@ -625,8 +630,8 @@
 
         if (!databases || databases.length === 0) {
           result.className = 'message error';
-          result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 복제한 Snappy 페이지를 선택했는지 확인하거나, 아래에서 DB ID를 직접 입력하세요.';
-          showDbManualInput();
+          result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 복제한 Snappy 페이지가 연결되어 있는지 확인 후 다시 시도해주세요.';
+          showDbRetryButton();
           return;
         }
 
@@ -639,13 +644,14 @@
           showDbPicker(snappyDbs);
         } else {
           result.className = 'message error';
-          result.textContent = '연결된 페이지에 Snappy 검색 DB가 없습니다. Notion 연결을 다시 진행해 복제한 Snappy 페이지를 선택해주세요.';
-          showDbManualInput();
+          result.textContent = '연결된 페이지에 Snappy 검색 DB가 없습니다. 노션 페이지 연결을 다시 진행해 복제한 Snappy 페이지를 선택해주세요.';
+          showDbRetryButton();
         }
       } catch (err) {
         loading.style.display = 'none';
         result.className = 'message error';
         result.textContent = err.message;
+        showDbRetryButton();
       }
     }
 
@@ -663,25 +669,11 @@
       });
     }
 
-    function showDbManualInput() {
+    function showDbRetryButton() {
       const selector = document.getElementById('dbSelector');
       selector.classList.remove('hidden');
-      selector.innerHTML =
-        '<p style="font-size:0.82rem;color:#6b7280;margin-bottom:8px;">Notion에서 검색 DB를 열고 URL의 32자리 ID를 직접 입력하세요.</p>' +
-        '<div style="display:flex;gap:8px;">' +
-          '<input type="text" id="manualDbInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="flex:1;min-width:0;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.85rem;">' +
-          '<button id="manualDbBtn" class="btn-primary" style="flex-shrink:0;white-space:nowrap;">연결</button>' +
-        '</div>';
-      document.getElementById('manualDbBtn').addEventListener('click', async () => {
-        const rawId = document.getElementById('manualDbInput').value.trim().replace(/-/g, '');
-        const result = document.getElementById('dbResult');
-        if (!rawId || rawId.length !== 32) {
-          result.className = 'message error';
-          result.textContent = 'DB ID 형식이 올바르지 않습니다. 32자리 영숫자를 입력해주세요.';
-          return;
-        }
-        await setupWithDatabase(rawId, '');
-      });
+      selector.innerHTML = '<button id="dbRetryBtn" class="btn-primary" style="margin-top:8px;">다시 시도</button>';
+      document.getElementById('dbRetryBtn').addEventListener('click', loadDbSection);
     }
 
     async function setupWithDatabase(dbId, dbTitle) {
