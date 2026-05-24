@@ -43,8 +43,8 @@ export class ExternalApiError extends AppError {
 }
 
 export class NotionApiError extends AppError {
-  constructor(message: string) {
-    super(`Notion API error: ${message}`, 'NOTION_ERROR', 502, '노션 API 호출에 실패했습니다.');
+  constructor(message: string, userMessage: string = '노션 API 호출에 실패했습니다.') {
+    super(`Notion API error: ${message}`, 'NOTION_ERROR', 502, userMessage);
   }
 }
 

@@ -264,24 +264,46 @@ export class NotionClient {
 
   // 노션 DB 부모 페이지의 search.html 임베드 블록 URL을 user_id + page_id 포함 URL로 교체
   async updateSearchEmbed(databaseId: string, userId: string): Promise<string> {
-    const embed = await this.findSearchEmbed(databaseId);
-    if (!embed) throw new NotionApiError('search.html embed block not found in parent page');
+    try {
+      const parentPageId = await this.getDatabaseParentPageId(databaseId);
+      const embed = await this.findSearchEmbedInPage(parentPageId);
+      const newUrl = `https://pchanul.github.io/Snappy/search.html?user_id=${userId}&page_id=${parentPageId}`;
 
-    const newUrl = `https://pchanul.github.io/Snappy/search.html?user_id=${userId}&page_id=${embed.parentPageId}`;
-    await this.fetchApi(`blocks/${embed.blockId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ embed: { url: newUrl } }),
-    });
+      if (embed) {
+        await this.fetchApi(`blocks/${embed.blockId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ embed: { url: newUrl } }),
+        });
+      } else {
+        await this.appendBlocks(parentPageId, [
+          {
+            object: 'block',
+            type: 'embed',
+            embed: { url: newUrl },
+          },
+        ]);
+      }
 
-    logger.info('Search embed updated', { userId, parentPageId: embed.parentPageId });
-    return newUrl;
+      logger.info('Search embed updated', { userId, parentPageId, created: !embed });
+      return newUrl;
+    } catch (error) {
+      if (error instanceof NotionApiError) {
+        const message = error.message.replace(/^Notion API error: /, '');
+        throw new NotionApiError(
+          message,
+          '검색 버튼 자동 연결에 실패했습니다. Notion 연결을 다시 진행하면서 복제한 Snappy 메인 페이지를 선택해주세요.',
+        );
+      }
+      throw error;
+    }
   }
 
   // 검색 진행 중 상태를 임베드 URL 파라미터로 표현
   // searching=true  → URL에 &searching=1 추가
   // searching=false → &searching=1 제거 (완료/실패 후 복원)
   async setSearchEmbedStatus(databaseId: string, searching: boolean): Promise<void> {
-    const embed = await this.findSearchEmbed(databaseId);
+    const parentPageId = await this.getDatabaseParentPageId(databaseId);
+    const embed = await this.findSearchEmbedInPage(parentPageId);
     if (!embed) return; // 임베드 블록 없으면 무시 (non-fatal)
 
     const url = new URL(embed.currentUrl);
@@ -301,25 +323,42 @@ export class NotionClient {
     logger.info('Search embed status updated', { searching, newUrl });
   }
 
-  // DB 부모 페이지에서 search.html 임베드 블록 탐색 (공통 헬퍼)
-  private async findSearchEmbed(
-    databaseId: string,
-  ): Promise<{ blockId: string; currentUrl: string; parentPageId: string } | null> {
+  private async getDatabaseParentPageId(databaseId: string): Promise<string> {
     const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
     const rawParentId: string | undefined = dbInfo.parent?.page_id;
-    if (!rawParentId) return null;
+    if (!rawParentId) {
+      throw new NotionApiError(
+        'database parent page not found',
+        '검색 DB의 부모 페이지를 찾을 수 없습니다. 복제한 Snappy 메인 페이지를 선택해 다시 연결해주세요.',
+      );
+    }
+    return rawParentId.replace(/-/g, '');
+  }
 
-    const data = await this.fetchApi(`blocks/${rawParentId}/children?page_size=100`, { method: 'GET' });
-    const block = (data.results as any[]).find(
-      (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes('search.html'),
-    );
-    if (!block) return null;
+  // DB 부모 페이지에서 search.html 임베드 블록 탐색 (공통 헬퍼)
+  private async findSearchEmbedInPage(
+    parentPageId: string,
+  ): Promise<{ blockId: string; currentUrl: string } | null> {
+    let cursor: string | undefined;
+    do {
+      const qs = new URLSearchParams({ page_size: '100' });
+      if (cursor) qs.set('start_cursor', cursor);
 
-    return {
-      blockId: block.id,
-      currentUrl: block.embed.url as string,
-      parentPageId: rawParentId.replace(/-/g, ''),
-    };
+      const data = await this.fetchApi(`blocks/${parentPageId}/children?${qs.toString()}`, { method: 'GET' });
+      const block = (data.results as any[]).find(
+        (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes('search.html'),
+      );
+      if (block) {
+        return {
+          blockId: block.id,
+          currentUrl: block.embed.url as string,
+        };
+      }
+
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    return null;
   }
 }
 
