@@ -224,10 +224,18 @@ async function handleListDatabases(req: Request): Promise<Response> {
   }
 
   const data = await res.json();
-  const databases = data.results.map((db: any) => ({
-    id: db.id.replace(/-/g, ''),
-    title: db.title?.[0]?.plain_text || '제목 없음',
-  }));
+  const databases = data.results.map((db: any) => {
+    const props = db.properties || {};
+    const is_snappy =
+      props['키워드']?.type === 'title' &&
+      '매체' in props &&
+      '상태' in props;
+    return {
+      id: db.id.replace(/-/g, ''),
+      title: db.title?.[0]?.plain_text || '제목 없음',
+      is_snappy,
+    };
+  });
 
   return jsonResponse({ databases });
 }

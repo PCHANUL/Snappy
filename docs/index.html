@@ -595,14 +595,25 @@
 
         if (!databases || databases.length === 0) {
           result.className = 'message error';
-          result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 다시 연결할 때 복제한 Snappy 페이지를 선택해주세요.';
+          result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 복제한 Snappy 페이지를 선택했는지 확인하거나, 아래에서 DB ID를 직접 입력하세요.';
+          showDbManualInput();
           return;
         }
 
-        if (databases.length === 1) {
-          await setupWithDatabase(databases[0].id, databases[0].title);
+        // Snappy 검색 DB 구조(키워드·매체·상태 속성)를 가진 DB만 추출
+        const snappyDbs = databases.filter(db => db.is_snappy);
+
+        if (snappyDbs.length === 1) {
+          // Snappy DB 하나 → 자동 선택
+          await setupWithDatabase(snappyDbs[0].id, snappyDbs[0].title);
+        } else if (snappyDbs.length > 1) {
+          // Snappy DB 여럿 → 선택 UI
+          showDbPicker(snappyDbs);
         } else {
-          showDbPicker(databases);
+          // Snappy DB 없음 = 다른 페이지가 연결됨
+          result.className = 'message error';
+          result.textContent = '연결된 페이지에 Snappy 검색 DB가 없습니다. "Notion으로 연결하기"를 다시 누르고 복제한 Snappy 페이지를 선택해주세요.';
+          showDbManualInput();
         }
       } catch (err) {
         btn.disabled = false;
