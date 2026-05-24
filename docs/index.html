@@ -329,21 +329,19 @@
             <div class="sec-body hidden" id="sec3-body">
               <div style="margin-top:14px;">
                 <p style="font-size:0.85rem;color:#555;margin-bottom:12px;line-height:1.55;">
-                  Notion 계정을 연결하면 복제한 Snappy 페이지의 검색 DB가 자동으로 연동됩니다.
+                  Snappy가 Notion 워크스페이스에 접근할 수 있도록 연결합니다.
                 </p>
                 <div class="info-box">
-                  <strong>승인 화면에서 복제한 Snappy 페이지를 반드시 선택</strong>해주세요.
-                  선택한 페이지의 자식 DB까지 자동으로 접근 가능합니다.
+                  승인 화면에서 <strong>복제한 Snappy 페이지를 선택</strong>하거나,
+                  <strong>개발자가 제공한 템플릿 사용</strong>을 선택하면 자동으로 연결됩니다.
                 </div>
                 <button class="btn-primary" id="oauthBtn">Notion으로 연결하기</button>
                 <div id="oauthResult" class="message hidden"></div>
-                <div id="dbSelector" class="hidden" style="margin-top:12px;"></div>
               </div>
             </div>
             <div class="sec-summary hidden" id="sec3-summary">
               <div class="sec-summary-text">
                 <span style="color:#10b981;font-weight:600;">✓ Notion 연결 완료</span>
-                <span id="summary-db" style="font-size:0.8rem;color:#6b7280;"></span>
               </div>
               <button class="btn-change" id="reconnectBtn">다시 연결</button>
             </div>
@@ -351,17 +349,51 @@
         </div>
       </div>
 
-      <!-- ── 4. 시작하기 ── -->
+      <!-- ── 4. 검색 DB 연결 ── -->
       <div class="flow-row">
         <div class="flow-gutter">
           <div class="sec-num" id="num4">4</div>
+          <div class="flow-line" id="line4"></div>
         </div>
         <div class="flow-body">
           <div class="sec-card locked" id="sec4">
             <div class="sec-head">
-              <h2>시작하기</h2>
+              <h2>검색 DB 연결</h2>
             </div>
             <div class="sec-body hidden" id="sec4-body">
+              <div style="margin-top:14px;">
+                <p style="font-size:0.85rem;color:#555;margin-bottom:12px;line-height:1.55;">
+                  연결된 Notion 워크스페이스에서 Snappy 검색 DB를 찾아 연동합니다.
+                </p>
+                <div id="dbLoading" style="font-size:0.85rem;color:#6b7280;padding:6px 0;">
+                  <span class="spinner">⟳</span> DB 목록을 불러오는 중...
+                </div>
+                <div id="dbSelector" class="hidden" style="margin-top:8px;"></div>
+                <div id="dbResult" class="message hidden"></div>
+              </div>
+            </div>
+            <div class="sec-summary hidden" id="sec4-summary">
+              <div class="sec-summary-text">
+                <span style="color:#10b981;font-weight:600;">✓ 검색 DB 연결 완료</span>
+                <span id="summary-db" style="font-size:0.8rem;color:#6b7280;"></span>
+              </div>
+              <button class="btn-change" id="changeDbBtn">변경</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 5. 시작하기 ── -->
+      <div class="flow-row">
+        <div class="flow-gutter">
+          <div class="sec-num" id="num5">5</div>
+        </div>
+        <div class="flow-body">
+          <div class="sec-card locked" id="sec5">
+            <div class="sec-head">
+              <h2>시작하기</h2>
+            </div>
+            <div class="sec-body hidden" id="sec5-body">
               <div style="margin-top:14px;">
                 <p style="font-size:0.9rem;color:#555;margin-bottom:16px;line-height:1.6;">
                   확인을 누르면 노션 템플릿의 검색 버튼이 내 계정으로 자동 연결됩니다.
@@ -376,7 +408,7 @@
                 </div>
               </div>
             </div>
-            <div class="sec-summary hidden" id="sec4-summary">
+            <div class="sec-summary hidden" id="sec5-summary">
               <div class="sec-summary-text">
                 <span style="color:#10b981;font-weight:600;">✓ 설정 완료</span>
                 <span style="font-size:0.8rem;color:#6b7280;">노션에서 검색을 시작할 수 있습니다.</span>
@@ -476,12 +508,6 @@
       if (line) line.classList.remove('done');
     }
 
-    function escapeHtml(v) {
-      const d = document.createElement('div');
-      d.textContent = String(v ?? '');
-      return d.innerHTML;
-    }
-
     function setAccountSummary() {
       const copyKey = userId || '';
       const copyBtn = document.getElementById('copyBtn');
@@ -498,8 +524,7 @@
 
     function setAccountActionMode(mode) {
       const btn = document.getElementById('step2NextBtn');
-      const hasCopyKey = Boolean(userId);
-      const canReset = mode === 'reset' && hasCopyKey;
+      const canReset = mode === 'reset' && Boolean(userId);
       btn.dataset.mode = canReset ? 'reset' : 'inactive';
       btn.className = 'btn-change';
       btn.textContent = '재설정';
@@ -532,7 +557,6 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner">⟳</span>연결 중...';
       result.className = 'message hidden';
-      document.getElementById('dbSelector').classList.add('hidden');
       try {
         const res = await fetch(
           `${FUNCTION_BASE}/notion-oauth?action=authorize&user_id=${encodeURIComponent(userId)}`
@@ -548,32 +572,39 @@
       }
     }
 
-    // OAuth 완료 후: DB 자동 조회(최대 3회 재시도) → 선택 UI 또는 수동 입력 → setup-notion → 섹션 4
-    async function finalizeNotionConnection() {
-      const btn      = document.getElementById('oauthBtn');
-      const result   = document.getElementById('oauthResult');
+    // OAuth 완료 후: 섹션 3 완료 → 섹션 4(DB 연결) 진입
+    async function completeOAuthStep() {
+      completeSection(3);
+      activateSection(4);
+      await loadDbSection();
+    }
+
+    // 섹션 4: DB 목록 자동 로드 → Snappy DB 자동 선택 또는 선택 UI
+    async function loadDbSection() {
+      const loading  = document.getElementById('dbLoading');
       const selector = document.getElementById('dbSelector');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner">⟳</span>데이터베이스 연동 중...';
-      result.className = 'message hidden';
+      const result   = document.getElementById('dbResult');
+
+      loading.innerHTML = '<span class="spinner">⟳</span> DB 목록을 불러오는 중...';
+      loading.style.display = 'block';
       selector.classList.add('hidden');
       selector.innerHTML = '';
+      result.className = 'message hidden';
+
+      // 콜백에서 이미 DB가 연동됐으면(템플릿 복제 경로) 곧바로 완료
+      try {
+        const verify = await verifyUser(userId);
+        if (verify.notion_configured) {
+          loading.style.display = 'none';
+          document.getElementById('summary-db').textContent = '검색 DB';
+          completeSection(4);
+          activateSection(5);
+          return;
+        }
+      } catch { /* 아래 자동 조회로 진행 */ }
 
       try {
-        // 템플릿 복제 연결 시 콜백이 이미 DB를 저장했으면 곧바로 완료 처리
-        try {
-          const verify = await verifyUser(userId);
-          if (verify.notion_configured) {
-            btn.disabled = false;
-            btn.textContent = 'Notion으로 연결하기';
-            document.getElementById('summary-db').textContent = '검색 DB';
-            completeSection(3);
-            activateSection(4);
-            return;
-          }
-        } catch { /* 확인 실패 시 아래 자동 조회로 진행 */ }
-
-        // Notion 토큰이 API에 반영되기까지 지연이 있을 수 있어 최대 3회 재시도
+        // Notion API 반영 지연 대비 최대 3회 재시도
         let databases = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
@@ -590,8 +621,7 @@
           }
         }
 
-        btn.disabled = false;
-        btn.textContent = 'Notion으로 연결하기';
+        loading.style.display = 'none';
 
         if (!databases || databases.length === 0) {
           result.className = 'message error';
@@ -600,24 +630,20 @@
           return;
         }
 
-        // Snappy 검색 DB 구조(키워드·매체·상태 속성)를 가진 DB만 추출
+        // Snappy 검색 DB(키워드·매체·상태 속성)를 가진 DB 우선 선택
         const snappyDbs = databases.filter(db => db.is_snappy);
 
         if (snappyDbs.length === 1) {
-          // Snappy DB 하나 → 자동 선택
           await setupWithDatabase(snappyDbs[0].id, snappyDbs[0].title);
         } else if (snappyDbs.length > 1) {
-          // Snappy DB 여럿 → 선택 UI
           showDbPicker(snappyDbs);
         } else {
-          // Snappy DB 없음 = 다른 페이지가 연결됨
           result.className = 'message error';
-          result.textContent = '연결된 페이지에 Snappy 검색 DB가 없습니다. "Notion으로 연결하기"를 다시 누르고 복제한 Snappy 페이지를 선택해주세요.';
+          result.textContent = '연결된 페이지에 Snappy 검색 DB가 없습니다. Notion 연결을 다시 진행해 복제한 Snappy 페이지를 선택해주세요.';
           showDbManualInput();
         }
       } catch (err) {
-        btn.disabled = false;
-        btn.textContent = 'Notion으로 연결하기';
+        loading.style.display = 'none';
         result.className = 'message error';
         result.textContent = err.message;
       }
@@ -637,12 +663,34 @@
       });
     }
 
-    async function setupWithDatabase(dbId, dbTitle) {
-      const btn      = document.getElementById('oauthBtn');
-      const result   = document.getElementById('oauthResult');
+    function showDbManualInput() {
       const selector = document.getElementById('dbSelector');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner">⟳</span>연동 중...';
+      selector.classList.remove('hidden');
+      selector.innerHTML =
+        '<p style="font-size:0.82rem;color:#6b7280;margin-bottom:8px;">Notion에서 검색 DB를 열고 URL의 32자리 ID를 직접 입력하세요.</p>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input type="text" id="manualDbInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="flex:1;min-width:0;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.85rem;">' +
+          '<button id="manualDbBtn" class="btn-primary" style="flex-shrink:0;white-space:nowrap;">연결</button>' +
+        '</div>';
+      document.getElementById('manualDbBtn').addEventListener('click', async () => {
+        const rawId = document.getElementById('manualDbInput').value.trim().replace(/-/g, '');
+        const result = document.getElementById('dbResult');
+        if (!rawId || rawId.length !== 32) {
+          result.className = 'message error';
+          result.textContent = 'DB ID 형식이 올바르지 않습니다. 32자리 영숫자를 입력해주세요.';
+          return;
+        }
+        await setupWithDatabase(rawId, '');
+      });
+    }
+
+    async function setupWithDatabase(dbId, dbTitle) {
+      const loading  = document.getElementById('dbLoading');
+      const selector = document.getElementById('dbSelector');
+      const result   = document.getElementById('dbResult');
+      loading.innerHTML = '<span class="spinner">⟳</span> 연동 중...';
+      loading.style.display = 'block';
+      selector.classList.add('hidden');
       result.className = 'message hidden';
       try {
         const setupRes = await fetch(FUNCTION_BASE + '/manage-user?action=setup-notion', {
@@ -652,14 +700,14 @@
         });
         const setupData = await setupRes.json();
         if (!setupRes.ok) throw new Error(setupData.message || '연동에 실패했습니다.');
-        selector.classList.add('hidden');
+        loading.style.display = 'none';
         selector.innerHTML = '';
         document.getElementById('summary-db').textContent = dbTitle || dbId;
-        completeSection(3);
-        activateSection(4);
+        completeSection(4);
+        activateSection(5);
       } catch (err) {
-        btn.disabled = false;
-        btn.textContent = 'Notion으로 연결하기';
+        loading.style.display = 'none';
+        selector.classList.remove('hidden');
         result.className = 'message error';
         result.textContent = err.message;
       }
@@ -676,6 +724,7 @@
       lockSection(2);
       lockSection(3);
       lockSection(4);
+      lockSection(5);
     });
 
     // ── 섹션 2: 인증키 확인 ───────────────────
@@ -709,9 +758,17 @@
       setAccountActionMode('reset');
       completeSection(2);
       if (account?.notion_configured) {
+        // Notion 연결 + DB 모두 완료
+        completeSection(3);
+        completeSection(4);
+        activateSection(5);
+      } else if (account?.notion_key_set) {
+        // Notion 연결됨, DB 선택 필요
         completeSection(3);
         activateSection(4);
+        loadDbSection();
       } else {
+        // Notion 연결 필요
         activateSection(3);
       }
     }
@@ -722,6 +779,7 @@
       reopenSection(2);
       lockSection(3);
       lockSection(4);
+      lockSection(5);
     });
 
     // ── 섹션 3: Notion OAuth ─────────────────
@@ -730,9 +788,17 @@
     document.getElementById('reconnectBtn').addEventListener('click', () => {
       reopenSection(3);
       lockSection(4);
+      lockSection(5);
     });
 
-    // ── 섹션 4: 검색 버튼 확인 ───────────────
+    // ── 섹션 4: 검색 DB 연결 ─────────────────
+    document.getElementById('changeDbBtn').addEventListener('click', () => {
+      reopenSection(4);
+      lockSection(5);
+      loadDbSection();
+    });
+
+    // ── 섹션 5: 시작하기 ─────────────────────
     document.getElementById('confirmBtn').addEventListener('click', async () => {
       const btn    = document.getElementById('confirmBtn');
       const result = document.getElementById('confirmResult');
@@ -751,7 +817,7 @@
         btn.style.display = 'none';
         result.className = 'message success';
         result.textContent = '✓ 노션 검색 버튼이 내 계정으로 연결되었습니다.';
-        setTimeout(() => completeSection(4), 1800);
+        setTimeout(() => completeSection(5), 1800);
       } catch (err) {
         result.className = 'message error';
         result.textContent = err.message;
@@ -766,7 +832,7 @@
       oauth_failed:   '인증 코드 교환에 실패했습니다. 다시 시도해주세요.',
       store_failed:   '토큰 저장에 실패했습니다. 다시 시도해주세요.',
       server_error:   '서버 오류가 발생했습니다. 다시 시도해주세요.',
-      no_page_access: '연결은 됐지만 접근 가능한 페이지가 없습니다. "Notion으로 연결하기"를 다시 누르고, 승인 화면에서 복제한 Snappy 페이지를 반드시 선택해주세요.',
+      no_page_access: '연결은 됐지만 접근 가능한 페이지가 없습니다. "Notion으로 연결하기"를 다시 누르고 복제한 Snappy 페이지를 선택해주세요.',
     };
 
     (async () => {
@@ -779,13 +845,12 @@
       document.getElementById('userIdInput').value = presetUserId;
 
       if (notionConnected) {
-        // OAuth 완료 후 복귀 — 자동으로 DB 연동 후 시작하기로 진입
+        // OAuth 완료 복귀 — 섹션 3 완료, 섹션 4(DB 연결)로 진입
         if (!(await restoreAccount(presetUserId))) return;
         completeSection(1);
         completeSection(2);
         setAccountActionMode('reset');
-        activateSection(3);
-        await finalizeNotionConnection();
+        await completeOAuthStep();
         return;
       }
 
@@ -801,21 +866,23 @@
         return;
       }
 
-      // 일반 user_id 파라미터 — 상태 확인
+      // 일반 user_id 파라미터 — 현재 상태에 맞게 복원
       try {
         const data = await verifyUser(presetUserId);
         userId = data.user_id || presetUserId;
         setAccountSummary();
+        completeSection(1);
+        completeSection(2);
+        setAccountActionMode('reset');
         if (data.notion_configured) {
-          completeSection(1);
-          completeSection(2);
-          setAccountActionMode('reset');
+          completeSection(3);
+          completeSection(4);
+          activateSection(5);
+        } else if (data.notion_key_set) {
           completeSection(3);
           activateSection(4);
+          loadDbSection();
         } else {
-          completeSection(1);
-          completeSection(2);
-          setAccountActionMode('reset');
           activateSection(3);
         }
       } catch { /* 복원 실패 시 초기 상태 유지 */ }

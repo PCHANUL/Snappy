@@ -247,7 +247,7 @@ async function handleVerifyUser(url: URL): Promise<Response> {
 
   const { data, error } = await getSupabase()
     .from('users')
-    .select('id, subscription_tier, notion_database_id')
+    .select('id, subscription_tier, notion_api_key_encrypted, notion_database_id')
     .eq('id', user_id)
     .single();
 
@@ -259,6 +259,7 @@ async function handleVerifyUser(url: URL): Promise<Response> {
     valid: true,
     user_id: data.id,
     subscription_tier: data.subscription_tier,
+    notion_key_set: !!data.notion_api_key_encrypted,
     notion_configured: !!data.notion_database_id,
   });
 }
