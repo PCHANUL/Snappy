@@ -280,7 +280,7 @@
         </div>
       </div>
 
-      <!-- ── 2. 계정 확인 ── -->
+      <!-- ── 2. 인증키 확인 ── -->
       <div class="flow-row">
         <div class="flow-gutter">
           <div class="sec-num" id="num2">2</div>
@@ -289,16 +289,16 @@
         <div class="flow-body">
           <div class="sec-card locked" id="sec2">
             <div class="sec-head">
-              <h2>계정 확인</h2>
+              <h2>인증키 확인</h2>
             </div>
             <div class="sec-body hidden" id="sec2-body">
               <form id="accountForm" style="margin-top:16px;">
                 <div class="field">
-                  <label for="userIdInput">관리자에게 받은 user_id</label>
+                  <label for="userIdInput">관리자에게 받은 인증키</label>
                   <input type="text" id="userIdInput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" required>
                 </div>
-                <p class="field-hint">전달받은 user_id가 등록된 계정인지 확인한 뒤 다음 단계로 넘어갑니다.</p>
-                <button type="submit" class="btn-primary" id="accountBtn">확인하고 계속 →</button>
+                <p class="field-hint">전달받은 인증키가 등록되어 있는지 확인한 뒤 다음 단계로 넘어갑니다.</p>
+                <button type="submit" class="btn-primary" id="accountBtn">인증키 확인 →</button>
               </form>
               <div id="accountResult" class="message hidden"></div>
             </div>
@@ -519,8 +519,8 @@
     async function verifyUser(userIdToVerify) {
       const res = await fetch(`${FUNCTION_BASE}/manage-user?action=verify-user&user_id=${encodeURIComponent(userIdToVerify)}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || '계정 확인에 실패했습니다.');
-      if (!data.valid) throw new Error('등록되지 않은 user_id입니다. 관리자에게 받은 값을 다시 확인해주세요.');
+      if (!res.ok) throw new Error(data.message || '인증키 확인에 실패했습니다.');
+      if (!data.valid) throw new Error('등록되지 않은 인증키입니다. 관리자에게 받은 값을 다시 확인해주세요.');
       return data;
     }
 
@@ -596,7 +596,7 @@
       lockSection(4);
     });
 
-    // ── 섹션 2: 계정 확인 ─────────────────────
+    // ── 섹션 2: 인증키 확인 ───────────────────
     document.getElementById('accountForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn    = document.getElementById('accountBtn');
@@ -606,7 +606,7 @@
       btn.innerHTML = '<span class="spinner">⟳</span>처리 중';
       result.className = 'message hidden';
       try {
-        if (!enteredUserId) throw new Error('user_id를 입력해주세요.');
+        if (!enteredUserId) throw new Error('인증키를 입력해주세요.');
         const data = await verifyUser(enteredUserId);
         userId = data.user_id || enteredUserId;
         document.getElementById('userIdInput').value = userId;
@@ -615,14 +615,14 @@
         result.className = 'message error';
         result.textContent = err.message;
         btn.disabled = false;
-        btn.textContent = '확인하고 계속 →';
+        btn.textContent = '인증키 확인 →';
       }
     });
 
     function finishAccountVerification(account) {
       const accountBtn = document.getElementById('accountBtn');
       accountBtn.disabled = false;
-      accountBtn.textContent = '확인하고 계속 →';
+      accountBtn.textContent = '인증키 확인 →';
       setAccountSummary();
       setAccountActionMode('reset');
       completeSection(2);
