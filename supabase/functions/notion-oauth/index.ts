@@ -138,7 +138,10 @@ async function handleCallback(url: URL): Promise<Response> {
 
     // 연결 검증: 통합이 어떤 페이지에도 연결되지 않았으면 명확한 에러로 안내
     // (DB를 이미 확보했으면 = 페이지 접근 확인됨 → 검증 통과)
-    if (!update.notion_database_id) {
+    // 템플릿 복제 시 Notion이 복제 페이지에 통합을 자동 연결하므로 접근은 보장된다.
+    // 복제 직후 search 인덱스 반영 지연으로 searchAccessible이 빈 결과를 줄 수 있어,
+    // duplicated_template_id가 있으면 검증을 건너뛴다. (DB 선택은 4단계에서 재시도)
+    if (!update.notion_database_id && !duplicated_template_id) {
       try {
         const notion = new NotionClient(access_token);
         let accessible = await notion.searchAccessible();
