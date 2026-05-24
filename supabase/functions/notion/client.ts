@@ -332,6 +332,21 @@ export class NotionClient {
     return (data.results as any[]) || [];
   }
 
+  // duplicated_template_id로부터 검색 DB ID 해석
+  // 템플릿 루트가 페이지일 수도(내부 인라인 DB), 데이터베이스 자체일 수도 있어 둘 다 처리
+  async resolveSearchDatabase(duplicatedId: string): Promise<string | null> {
+    const id = duplicatedId.replace(/-/g, '');
+
+    // 1. duplicated_template_id 자체가 데이터베이스인 경우
+    try {
+      const db = await this.fetchApi(`databases/${toUuid(id)}`, { method: 'GET' });
+      if (db?.object === 'database') return id;
+    } catch { /* 페이지일 수 있으므로 무시 */ }
+
+    // 2. 페이지인 경우 → 내부 자식 데이터베이스 탐색
+    return await this.findChildDatabaseId(id);
+  }
+
   // 페이지 내 자식 데이터베이스 ID 탐색 (템플릿 복제 후 검색 DB 자동 연동용)
   async findChildDatabaseId(pageId: string): Promise<string | null> {
     let cursor: string | undefined;

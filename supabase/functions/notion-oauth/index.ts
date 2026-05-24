@@ -118,9 +118,9 @@ async function handleCallback(url: URL): Promise<Response> {
     // → 사용자가 승인 화면에서 페이지를 직접 선택하지 않아도 검색 DB를 자동 연동
     if (duplicated_template_id) {
       try {
-        const dbId = await new NotionClient(access_token).findChildDatabaseId(duplicated_template_id);
+        const dbId = await new NotionClient(access_token).resolveSearchDatabase(duplicated_template_id);
         if (dbId) update.notion_database_id = dbId;
-        else logger.info('No child database in duplicated template', { user_id: state, duplicated_template_id });
+        else logger.info('No database resolved from duplicated template', { user_id: state, duplicated_template_id });
       } catch (err) {
         logger.error('Failed to resolve DB from duplicated template', err, { user_id: state });
       }
