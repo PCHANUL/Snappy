@@ -192,45 +192,12 @@ async function createSearchDB(parentPageId) {
 
 // ── 각 페이지 콘텐츠 ────────────────────────────────────────────────────────
 
-function blocksMain(webhookUrl, loadMoreUrl) {
+function blocksMain() {
   return [
     b.embed(SEARCH_URL),
-    b.callout('키워드 입력 → 매체 선택 → 🚀  (기간·결과개수는 기본값 사용 가능)', '⚡'),
-    b.toggle('🆕 처음이신가요?', [
-      b.callout('원본 템플릿에서 바로 셋업하지 말고, 먼저 개인 워크스페이스로 복제하세요.', '📌'),
-      b.num('우측 상단 "복제" 또는 Duplicate 클릭 → 개인 워크스페이스 선택'),
-      b.num('셋업 마법사에서 관리자에게 받은 user_id 입력 → Notion 승인 화면에서 복제한 페이지 선택 → DB 선택'),
-      b.num('셋업 마법사 마지막 단계에서 확인 버튼 클릭 → 검색 버튼 자동 연결'),
-      b.link('셋업 마법사 시작하기', SETUP_URL, '🚀'),
-      b.p('자세한 안내는 📖 시작하기 페이지를 참고하세요.'),
-    ]),
-    b.toggle('📄 더보기 버튼 설정 (최초 1회)', [
-      b.callout([
-        '[ 📄 더보기 버튼 ]',
-        `URL: ${loadMoreUrl}`,
-        'Method: POST',
-        `Authorization: Bearer ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-        `apikey: ${SUPABASE_ANON || 'YOUR_SUPABASE_ANON_KEY'}`,
-        'Content-Type: application/json',
-      ].join('\n'), '⚙️'),
-      b.callout([
-        '{',
-        '  "user_id": "{{user_id}}",',
-        '  "notion_page_id": "{{현재 페이지 ID}}"',
-        '}',
-      ].join('\n'), '📋'),
-      b.p('처음 5개 결과 외 추가 결과가 있을 때 클릭하면 5개씩 서브페이지가 추가됩니다.'),
-    ]),
-    b.divider(),
   ];
 }
 
-function blocksMainBottom() {
-  return [
-    b.divider(),
-    b.p('📖 시작하기   ·   ❓ 자주 묻는 질문   ·   ⚙️ 설정'),
-  ];
-}
 
 function blocksSijak() {
   return [
@@ -269,19 +236,6 @@ function blocksSijak() {
   ];
 }
 
-function blocksGeomseok() {
-  return [
-    b.callout('새 검색: "+ 새로 만들기" → 키워드·매체 입력 → 위 검색 버튼 클릭\n결과는 약 10초 내에 자동으로 나타납니다.', '🎯'),
-    b.divider(),
-    b.h2('DB 속성 안내'),
-    b.bullet('키워드: 검색할 단어 (예: 비건 디저트)'),
-    b.bullet('매체: 네이버블로그 / 유튜브 / 티스토리 / 브런치 (복수 선택 가능)'),
-    b.bullet('기간: 1일 / 1주 / 1개월(기본) / 1년'),
-    b.bullet('결과 개수: 5 / 10(기본) / 20'),
-    b.bullet('상태: 대기 → 검색중 → 완료 / 실패 (자동 변경)'),
-    b.bullet('user_id: 관리자에게 받은 ID — 새 행 추가 시 기본값으로 설정해두세요'),
-  ];
-}
 
 function blocksFaq() {
   return [
@@ -387,13 +341,12 @@ function blocksSeoljeong() {
 async function main() {
   console.log('\n🚀 트렌드 콘텐츠 발견기 노션 템플릿 생성 시작\n');
 
-  const webhookUrl  = `${SUPABASE_URL}/functions/v1/trigger-search`;
   const loadMoreUrl = `${SUPABASE_URL}/functions/v1/load-more`;
 
   // 1. 메인 페이지 상단 블록
   process.stdout.write('📘 메인 페이지 생성 중...');
   const mainPage = await createPage(PARENT_PAGE_ID, '트렌드 콘텐츠 발견기', '📘');
-  await appendBlocks(mainPage.id, blocksMain(webhookUrl, loadMoreUrl));
+  await appendBlocks(mainPage.id, blocksMain());
   console.log(` ✅  ${mainPage.url}`);
 
   await sleep(300);
@@ -405,12 +358,7 @@ async function main() {
 
   await sleep(300);
 
-  // 3. DB 아래 매핑 안내 블록 추가
-  await appendBlocks(mainPage.id, [...blocksGeomseok(), ...blocksMainBottom()]);
-
-  await sleep(300);
-
-  // 4. 시작하기 서브페이지 (셋업 + 문제해결)
+  // 3. 시작하기 서브페이지 (셋업 + 문제해결)
   process.stdout.write('📖 시작하기 페이지 생성 중...');
   const sijakPage = await createPage(mainPage.id, '시작하기', '📖');
   await appendBlocks(sijakPage.id, blocksSijak());
@@ -418,7 +366,7 @@ async function main() {
 
   await sleep(300);
 
-  // 5. FAQ 페이지
+  // 4. FAQ 페이지
   process.stdout.write('❓ FAQ 페이지 생성 중...');
   const faqPage = await createPage(mainPage.id, '자주 묻는 질문', '❓');
   await appendBlocks(faqPage.id, blocksFaq());
@@ -426,7 +374,7 @@ async function main() {
 
   await sleep(300);
 
-  // 6. 설정 페이지
+  // 5. 설정 페이지
   process.stdout.write('⚙️  설정 페이지 생성 중...');
   const seoljeongPage = await createPage(mainPage.id, '설정', '⚙️');
   await appendBlocks(seoljeongPage.id, blocksSeoljeong());
@@ -443,8 +391,11 @@ ${mainPage.url}
 
 1. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
    - "📄 더보기" 속성 클릭 → 자동화 편집
-   - 액션: HTTP 요청 (메인 페이지 "📄 더보기 버튼 설정" 토글 참고)
-   - Body: user_id + notion_page_id
+   - 액션: HTTP 요청
+   - URL: ${loadMoreUrl}
+   - Method: POST
+   - Headers: Authorization: Bearer <SUPABASE_ANON_KEY>, apikey: <SUPABASE_ANON_KEY>
+   - Body: { "user_id": "{{user_id}}", "notion_page_id": "{{현재 페이지 ID}}" }
 
 2. 검색 DB의 user_id 속성에 기본값 설정
    - 관리자에게 받은 user_id 값을 기본값으로 지정
