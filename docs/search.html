@@ -20,16 +20,62 @@
     .wrap {
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 12px;
       width: 100%;
-      max-width: 320px;
+      max-width: 360px;
+    }
+
+    /* ── 입력 필드 ── */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #4b5563;
+      letter-spacing: -0.2px;
+    }
+    #keyword, #period {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: #111827;
+      background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    #keyword:focus, #period:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    /* ── 매체 칩 ── */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 8px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 999px;
+      background: #fff;
+      color: #6b7280;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip:hover { border-color: #a5b4fc; }
+    .chip.active {
+      background: #eef2ff;
+      border-color: #6366f1;
+      color: #4338ca;
     }
 
     /* ── 버튼 ── */
     #searchBtn {
       width: 100%;
       padding: 14px 20px;
+      margin-top: 4px;
       background: #6366f1;
       color: #fff;
       border: none;
@@ -93,6 +139,8 @@
       display: none;
     }
 
+    .disabled-overlay { opacity: 0.5; pointer-events: none; }
+
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
       display: inline-block;
@@ -102,6 +150,33 @@
 </head>
 <body>
   <div class="wrap">
+    <div id="form">
+      <div class="field">
+        <label class="label" for="keyword">키워드</label>
+        <input id="keyword" type="text" placeholder="검색할 단어 (예: 비건 디저트)" maxlength="100" autocomplete="off">
+      </div>
+
+      <div class="field" style="margin-top: 10px;">
+        <label class="label">매체</label>
+        <div class="chips" id="platforms">
+          <button type="button" class="chip active" data-value="naver_blog">네이버블로그</button>
+          <button type="button" class="chip active" data-value="youtube">유튜브</button>
+          <button type="button" class="chip active" data-value="tistory">티스토리</button>
+          <button type="button" class="chip active" data-value="brunch">브런치</button>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top: 10px;">
+        <label class="label" for="period">기간</label>
+        <select id="period">
+          <option value="day">1일</option>
+          <option value="week">1주</option>
+          <option value="month" selected>1개월</option>
+          <option value="year">1년</option>
+        </select>
+      </div>
+    </div>
+
     <button id="searchBtn">🚀 검색하기</button>
     <div id="status"></div>
     <div class="config-guide" id="configGuide">
@@ -122,17 +197,34 @@
     const btn         = document.getElementById('searchBtn');
     const status      = document.getElementById('status');
     const configGuide = document.getElementById('configGuide');
+    const form        = document.getElementById('form');
+    const keywordEl   = document.getElementById('keyword');
+    const periodEl    = document.getElementById('period');
+    const chipsEl     = document.getElementById('platforms');
 
     const configured = !!(userId && pageId);
+
+    // ── 매체 칩 토글 ──────────────────────────────────────────────────────────
+    chipsEl.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      chip.classList.toggle('active');
+    });
+
+    function selectedPlatforms() {
+      return [...chipsEl.querySelectorAll('.chip.active')].map((c) => c.dataset.value);
+    }
 
     // ── 초기 상태 렌더링 ─────────────────────────────────────────────────────
     if (!configured) {
       btn.classList.add('unconfigured');
+      form.classList.add('disabled-overlay');
     } else if (searching) {
       // URL에 ?searching=1 → 다른 기기/새 탭에서 진행 중인 검색 표시
       btn.disabled = true;
       btn.classList.add('searching');
       btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      form.classList.add('disabled-overlay');
       status.className = 'searching';
       status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
     }
@@ -142,12 +234,30 @@
       if (!configured) { configGuide.style.display = 'block'; return; }
       if (btn.disabled) return;
 
+      const keyword   = keywordEl.value.trim();
+      const platforms = selectedPlatforms();
+      const period    = periodEl.value;
+
+      // 클라이언트 검증
+      if (!keyword) {
+        status.className = 'error';
+        status.textContent = '검색 키워드를 입력해주세요.';
+        keywordEl.focus();
+        return;
+      }
+      if (platforms.length === 0) {
+        status.className = 'error';
+        status.textContent = '하나 이상의 매체를 선택해주세요.';
+        return;
+      }
+
       // 1. 즉시 UI 비활성
       btn.disabled = true;
       btn.classList.add('searching');
       btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      form.classList.add('disabled-overlay');
       status.className = 'searching';
-      status.textContent = '노션 페이지에서 키워드를 읽어오고 있어요...';
+      status.textContent = '검색을 요청하고 있어요...';
 
       try {
         // 2. 임베드 URL에 ?searching=1 추가 (다른 기기/새 탭 차단용)
@@ -161,7 +271,13 @@
         const res = await fetch(FUNCTION_BASE + '/trigger-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, notion_page_id: pageId }),
+          body: JSON.stringify({
+            user_id: userId,
+            notion_page_id: pageId,
+            keyword,
+            platforms,
+            period,
+          }),
         });
 
         const data = await res.json();
@@ -180,9 +296,15 @@
         btn.disabled = false;
         btn.classList.remove('searching');
         btn.innerHTML = '🚀 검색하기';
+        form.classList.remove('disabled-overlay');
         status.className = 'error';
         status.textContent = err.message;
       }
+    });
+
+    // 키워드 입력 후 Enter → 검색
+    keywordEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') btn.click();
     });
   </script>
 </body>
