@@ -113,10 +113,6 @@
     }
     .sec-summary.hidden { display: none; }
     .sec-summary-text { display: flex; flex-direction: column; gap: 4px; }
-    #sec2-summary {
-      align-items: stretch;
-      flex-direction: column;
-    }
     .btn-change {
       flex-shrink: 0;
       font-size: 0.75rem;
@@ -189,25 +185,6 @@
       margin-bottom: 14px;
     }
     .info-box strong { color: #6366f1; }
-
-    /* User ID 표시 */
-    .uid-row {
-      display: flex; align-items: center; gap: 10px;
-      background: #eef2ff; border: 1.5px solid #c7d2fe;
-      border-radius: 10px; padding: 14px 18px;
-      margin-top: 10px;
-    }
-    .uid-text {
-      flex: 1; font-family: monospace; font-size: 0.95rem;
-      color: #3730a3; word-break: break-all;
-    }
-    .btn-copy {
-      flex-shrink: 0; padding: 7px 14px;
-      background: #fff; color: #4f46e5;
-      border: 1px solid #c7d2fe; border-radius: 8px;
-      font-size: 0.82rem; font-weight: 600; cursor: pointer;
-    }
-    .btn-copy:hover { background: #e0e7ff; }
 
     /* 완료 섹션 */
     .next-steps ol { padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -304,12 +281,9 @@
             </div>
             <div class="sec-summary hidden" id="sec2-summary">
               <div class="sec-summary-text">
-                <div class="uid-row">
-                  <span class="uid-text" id="displayUserId"></span>
-                  <button class="btn-copy" id="copyBtn">복사</button>
-                </div>
-                <button class="btn-change" id="step2NextBtn" disabled>재설정</button>
+                <span id="summary-auth-key" style="color:#10b981;font-weight:600;">✓ 인증키 확인 완료</span>
               </div>
+              <button class="btn-change" id="step2NextBtn" disabled>재설정</button>
             </div>
           </div>
         </div>
@@ -510,17 +484,7 @@
     }
 
     function setAccountSummary() {
-      const copyKey = userId || '';
-      const copyBtn = document.getElementById('copyBtn');
-      document.getElementById('displayUserId').textContent = copyKey;
-      copyBtn.disabled = !copyKey;
-      copyBtn.onclick = () => {
-        if (!copyKey) return;
-        navigator.clipboard.writeText(copyKey).then(() => {
-          copyBtn.textContent = '✓ 복사됨';
-          setTimeout(() => { copyBtn.textContent = '복사'; }, 2000);
-        });
-      };
+      document.getElementById('summary-auth-key').textContent = '✓ 인증키 확인 완료';
     }
 
     function setAccountActionMode(mode) {
