@@ -23,11 +23,22 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const user_id = body.user_id?.trim();
     const notion_page_id = body.notion_page_id?.trim();
-
-    if (!user_id) throw new ValidationError('user_id required');
     if (!notion_page_id) throw new ValidationError('notion_page_id required');
+
+    // user_id는 버튼 자동화에서 생략 가능 — notion_page_id로 검색 기록에서 조회
+    let user_id = body.user_id?.trim();
+    if (!user_id) {
+      const { data } = await getSupabase()
+        .from('search_results')
+        .select('user_id')
+        .eq('notion_page_id', notion_page_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      user_id = data?.user_id;
+    }
+    if (!user_id) throw new ValidationError('user_id required', '검색 정보를 찾을 수 없습니다.');
 
     // 캐시에 해당 항목이 있는지 먼저 확인 (만료 및 소유권 검증 포함)
     const batch = await getNextBatch(notion_page_id, user_id, BATCH_SIZE);

@@ -7,19 +7,19 @@ import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPa
 import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
 import { PLATFORM_INFO } from '../_shared/types.ts';
 
-// Notion DB 옵션값 → 내부 ID 매핑
-const PLATFORM_MAP: Record<string, Platform> = {
-  '네이버블로그': 'naver_blog', '네이버 블로그': 'naver_blog', 'naver_blog': 'naver_blog',
-  '유튜브': 'youtube', 'youtube': 'youtube',
-  '티스토리': 'tistory', 'tistory': 'tistory',
-  '브런치': 'brunch', 'brunch': 'brunch',
+// 내부 ID → Notion DB 옵션값 매핑 (검색 DB 행 생성 시 사용)
+const PLATFORM_TO_NOTION: Record<Platform, string> = {
+  naver_blog: '네이버블로그',
+  youtube: '유튜브',
+  tistory: '티스토리',
+  brunch: '브런치',
 };
 
-const PERIOD_MAP: Record<string, Period> = {
-  '1일': 'day', 'day': 'day',
-  '1주': 'week', 'week': 'week',
-  '1개월': 'month', 'month': 'month',
-  '1년': 'year', 'year': 'year',
+const PERIOD_TO_NOTION: Record<Period, string> = {
+  day: '1일',
+  week: '1주',
+  month: '1개월',
+  year: '1년',
 };
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
@@ -163,32 +163,26 @@ export class NotionClient {
     await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
   }
 
-  // Notion DB 행의 속성에서 검색 파라미터를 읽어온다
-  async readSearchParams(pageId: string): Promise<{
-    keyword: string;
-    platforms: Platform[];
-    period: Period;
-    result_count: number;
-  }> {
-    const data = await this.fetchApi(`pages/${pageId}`, { method: 'GET' });
-    const props = data.properties || {};
-
-    const keyword = (props['키워드']?.title || [])
-      .map((t: any) => t.plain_text).join('').trim();
-
-    const platforms = ((props['매체']?.multi_select || []) as { name: string }[])
-      .map(s => PLATFORM_MAP[s.name.trim()])
-      .filter((p): p is Platform => Boolean(p));
-
-    const period: Period = PERIOD_MAP[props['기간']?.select?.name?.trim() || ''] || 'month';
-
-    const countRaw = props['결과 개수']?.select?.name;
-    const result_count = countRaw ? Math.max(5, Math.min(20, parseInt(countRaw, 10))) : 10;
-
-    // 페이지의 부모 DB ID (소유권 검증용)
-    const parentDbId = ((data.parent?.database_id as string) || '').replace(/-/g, '');
-
-    return { keyword, platforms, period, result_count, parentDbId };
+  // 검색 DB에 새 행(페이지)을 생성한다 — 검색 파라미터를 속성으로 기록, 상태=검색중
+  // 생성된 페이지 ID를 반환 (결과 서브페이지의 부모로 사용)
+  async createSearchEntry(
+    databaseId: string,
+    params: { keyword: string; platforms: Platform[]; period: Period },
+  ): Promise<string> {
+    const res = await this.fetchApi('pages', {
+      method: 'POST',
+      body: JSON.stringify({
+        parent: { database_id: toUuid(databaseId) },
+        icon: { type: 'emoji', emoji: '🔍' },
+        properties: {
+          '키워드': { title: [{ type: 'text', text: { content: params.keyword } }] },
+          '상태': { status: { name: '검색중' } },
+          '매체': { multi_select: params.platforms.map((p) => ({ name: PLATFORM_TO_NOTION[p] })) },
+          '기간': { select: { name: PERIOD_TO_NOTION[params.period] } },
+        },
+      }),
+    });
+    return res.id as string;
   }
 
   // 블록 추가 (100개 단위 분할)

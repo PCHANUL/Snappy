@@ -10,9 +10,8 @@
 //
 // 수동 작업 (스크립트 완료 후):
 //   1. "📄 더보기" 버튼 자동화 설정 (DB에 이미 속성 추가됨)
-//   2. 검색 DB user_id 속성 기본값 설정
-//   3. DB 뷰 3개 생성 (전체/최근/진행중)
-//   4. 메인 페이지 커버 이미지 추가
+//   2. DB 뷰 3개 생성 (전체/최근/진행중)
+//   3. 메인 페이지 커버 이미지 추가
 
 import fs from 'fs';
 import path from 'path';
@@ -162,30 +161,26 @@ async function createSearchDB(parentPageId) {
     is_inline: true,
     icon:      { type: 'emoji', emoji: '🔍' },
     title:     rich('검색 DB'),
+    // 속성 순서: 키워드(제목) → 상태 → 매체 → 기간 → 발견 콘텐츠 수 → 검색일시 → 더보기
+    // 검색 파라미터는 임베드 폼에서 입력받아 서버가 행을 생성하므로 입력용 속성은 두지 않음
     properties: {
-      '키워드':       { title: {} },
-      '매체':         { multi_select: { options: [
+      '키워드':        { title: {} },
+      '상태':          { status: {} },
+      '매체':          { multi_select: { options: [
         { name: '네이버블로그', color: 'green'  },
         { name: '유튜브',       color: 'red'    },
         { name: '티스토리',     color: 'orange' },
         { name: '브런치',       color: 'brown'  },
       ]}},
-      '기간':         { select: { options: [
+      '기간':          { select: { options: [
         { name: '1일',   color: 'gray'   },
         { name: '1주',   color: 'blue'   },
         { name: '1개월', color: 'purple' },
         { name: '1년',   color: 'pink'   },
       ]}},
-      '결과 개수':    { select: { options: [
-        { name: '5',  color: 'gray'  },
-        { name: '10', color: 'blue'  },
-        { name: '20', color: 'green' },
-      ]}},
-      '상태':         { status: {} },
       '발견 콘텐츠 수': { number: { format: 'number' } },
-      '검색일시':     { created_time: {} },
-      'user_id':      { rich_text: {} },
-      '📄 더보기':    { button: {} },
+      '검색일시':       { created_time: {} },
+      '📄 더보기':      { button: {} },
     },
   });
 }
@@ -395,24 +390,21 @@ ${mainPage.url}
    - URL: ${loadMoreUrl}
    - Method: POST
    - Headers: Authorization: Bearer <SUPABASE_ANON_KEY>, apikey: <SUPABASE_ANON_KEY>
-   - Body: { "user_id": "{{user_id}}", "notion_page_id": "{{현재 페이지 ID}}" }
+   - Body: { "notion_page_id": "{{현재 페이지 ID}}" }
+     (user_id는 서버가 검색 기록에서 자동 조회하므로 생략 가능)
 
-2. 검색 DB의 user_id 속성에 기본값 설정
-   - 관리자에게 받은 user_id 값을 기본값으로 지정
-   - 새 검색 행 추가 시 자동으로 채워짐
-
-3. 검색 DB 뷰 3개 추가
+2. 검색 DB 뷰 3개 추가
    - 전체 (테이블, 검색일시 내림차순)
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-4. ${USER_ID === 'YOUR_USER_ID'
+3. ${USER_ID === 'YOUR_USER_ID'
     ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
     : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
-5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
+4. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
-6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+5. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 `);
 }
 
