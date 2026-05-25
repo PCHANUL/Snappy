@@ -342,6 +342,7 @@ export class NotionClient {
       }),
     });
     return ((data.results as any[]) || [])
+      .filter((obj) => obj.parent?.type === 'workspace')
       .map((obj) => {
         const titleProp = Object.values(obj.properties || {})
           .find((p: any) => (p as any)?.type === 'title') as { title?: any[] } | undefined;
