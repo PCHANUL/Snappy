@@ -374,6 +374,16 @@ export class NotionClient {
     return null;
   }
 
+  // 검색 DB가 속한 부모 페이지의 제목 조회 (템플릿 페이지 검증용)
+  async getDatabaseParentPageTitle(databaseId: string): Promise<string | null> {
+    const parentPageId = await this.getDatabaseParentPageId(databaseId);
+    const page = await this.fetchApi(`pages/${toUuid(parentPageId)}`, { method: 'GET' });
+    const titleProp = Object.values(page.properties || {})
+      .find((p: any) => p?.type === 'title') as { title?: any[] } | undefined;
+    const title = (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
+    return title || null;
+  }
+
   private async getDatabaseParentPageId(databaseId: string): Promise<string> {
     const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
     const rawParentId: string | undefined = dbInfo.parent?.page_id;
