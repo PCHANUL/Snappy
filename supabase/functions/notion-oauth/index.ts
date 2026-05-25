@@ -8,6 +8,7 @@ import { NotionClient } from '../notion/client.ts';
 
 const SETUP_PAGE = (Deno.env.get('SETUP_PAGE_URL') || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '/');
 const NOTION_VERSION = '2022-06-28';
+const EXPECTED_TEMPLATE_PAGE_NAME = (Deno.env.get('TEMPLATE_PAGE_NAME') || '트렌드 콘텐츠 발견기').trim();
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -137,26 +138,30 @@ async function handleCallback(url: URL): Promise<Response> {
       return Response.redirect(`${redirectBase}&error=store_failed`, 302);
     }
 
-    // 연결 검증: 통합이 어떤 페이지에도 연결되지 않았으면 명확한 에러로 안내
-    // (DB를 이미 확보했으면 = 페이지 접근 확인됨 → 검증 통과)
-    // 템플릿 복제 시 Notion이 복제 페이지에 통합을 자동 연결하므로 접근은 보장된다.
-    // 복제 직후 search 인덱스 반영 지연으로 searchAccessible이 빈 결과를 줄 수 있어,
-    // duplicated_template_id가 있으면 검증을 건너뛴다. (DB 선택은 4단계에서 재시도)
-    if (!update.notion_database_id && !duplicated_template_id) {
+    // 페이지 이름 검증: 복제한 Snappy 템플릿 페이지가 연결됐는지 확인
+    // 템플릿 복제 경로(duplicated_template_id)는 Notion이 올바른 페이지를 보장하므로 건너뜀
+    if (!duplicated_template_id) {
       try {
         const notion = new NotionClient(access_token);
-        let accessible = await notion.searchAccessible();
+        // 이름으로 검색해 접근 가능한 결과 중 템플릿 페이지가 있는지 확인
         // search 인덱스 반영 지연 대비 1회 재시도
-        if (accessible.length === 0) {
+        let found = await searchTemplatePage(notion);
+        if (!found) {
           await new Promise((r) => setTimeout(r, 1500));
-          accessible = await notion.searchAccessible();
+          found = await searchTemplatePage(notion);
         }
-        if (accessible.length === 0) {
+        if (found === null) {
+          // 접근 가능한 페이지 자체가 없음
           logger.info('OAuth connected but no page access', { user_id: state });
           return Response.redirect(`${redirectBase}&error=no_page_access`, 302);
         }
+        if (!found) {
+          // 페이지는 있지만 템플릿 이름이 아님
+          logger.info('OAuth connected but wrong page selected', { user_id: state });
+          return Response.redirect(`${redirectBase}&error=wrong_page_name`, 302);
+        }
       } catch (err) {
-        logger.error('Connection verification failed', err, { user_id: state });
+        logger.error('Template page verification failed', err, { user_id: state });
       }
     }
 
@@ -170,4 +175,24 @@ async function handleCallback(url: URL): Promise<Response> {
     logger.error('OAuth callback error', err);
     return Response.redirect(`${redirectBase}&error=server_error`, 302);
   }
+}
+
+// 접근 가능한 결과 중 Snappy 템플릿 페이지가 있는지 검색
+// 반환값: true = 템플릿 페이지 있음, false = 다른 페이지가 있지만 템플릿 아님, null = 접근 가능한 페이지 없음
+async function searchTemplatePage(notion: NotionClient): Promise<boolean | null> {
+  const results = await notion.searchByTitle(EXPECTED_TEMPLATE_PAGE_NAME);
+  if (results === null) return null; // 접근 가능한 객체 없음
+  return results.some((obj: any) => {
+    const title = getObjectTitle(obj).replace(/\s+/g, ' ').trim();
+    return title.startsWith(EXPECTED_TEMPLATE_PAGE_NAME);
+  });
+}
+
+function getObjectTitle(obj: any): string {
+  if (obj.object === 'database') {
+    return ((obj.title || []) as any[]).map((t: any) => t.plain_text).join('').trim();
+  }
+  const titleProp = Object.values(obj.properties || {})
+    .find((p: any) => (p as any)?.type === 'title') as { title?: any[] } | undefined;
+  return (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
 }

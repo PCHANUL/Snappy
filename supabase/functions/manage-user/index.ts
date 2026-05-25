@@ -110,17 +110,6 @@ async function handleSetupNotion(req: Request): Promise<Response> {
     );
   }
 
-  // 검색 DB가 속한 부모 페이지 이름이 Snappy 템플릿 이름과 일치하는지 검증
-  const expectedPageName = (Deno.env.get('TEMPLATE_PAGE_NAME') || '트렌드 콘텐츠 발견기').trim();
-  const pageTitle = await new NotionClient(notion_api_key).getDatabaseParentPageTitle(notion_database_id);
-  const normalizedTitle = (pageTitle || '').replace(/\s+/g, ' ').trim();
-  if (!normalizedTitle.startsWith(expectedPageName)) {
-    throw new ValidationError(
-      `Template page name mismatch: "${pageTitle}"`,
-      `연결한 페이지 이름이 Snappy 템플릿("${expectedPageName}")과 다릅니다. 복제한 템플릿 페이지의 검색 DB를 선택했는지 확인해주세요.`,
-    );
-  }
-
   // API 키 방식이면 암호화 후 저장, OAuth 방식이면 DB ID만 업데이트
   const update = providedKey
     ? { notion_api_key_encrypted: await encryptNotionKey(notion_api_key), notion_database_id }

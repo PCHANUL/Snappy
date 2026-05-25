@@ -342,6 +342,24 @@ export class NotionClient {
     return (data.results as any[]) || [];
   }
 
+  // 제목 쿼리로 검색 — 연결된 객체 중 해당 이름이 있는지 확인용
+  // 반환값: 결과 배열, 또는 접근 가능한 객체가 아예 없으면 null
+  async searchByTitle(title: string): Promise<any[] | null> {
+    // 먼저 전체 접근 가능 객체 수 확인
+    const all = await this.fetchApi('search', {
+      method: 'POST',
+      body: JSON.stringify({ page_size: 1 }),
+    });
+    if (!((all.results as any[]) || []).length) return null;
+
+    // 제목 쿼리로 검색
+    const data = await this.fetchApi('search', {
+      method: 'POST',
+      body: JSON.stringify({ query: title, page_size: 20 }),
+    });
+    return (data.results as any[]) || [];
+  }
+
   // duplicated_template_id로부터 검색 DB ID 해석
   // 템플릿 루트가 페이지일 수도(내부 인라인 DB), 데이터베이스 자체일 수도 있어 둘 다 처리
   async resolveSearchDatabase(duplicatedId: string): Promise<string | null> {
