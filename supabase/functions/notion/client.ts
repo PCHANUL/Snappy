@@ -35,11 +35,6 @@ export class NotionClient {
     status: SearchStatus,
     errorMessage?: string,
   ): Promise<void> {
-    // 검색 시작 시 이전 결과 제거 — 재검색해도 stale 블록이 남지 않도록
-    if (status === '검색중') {
-      await this.clearPageBlocks(pageId);
-    }
-
     if (errorMessage && status === '실패') {
       await this.appendBlocks(pageId, [
         {
@@ -60,25 +55,6 @@ export class NotionClient {
       method: 'PATCH',
       body: JSON.stringify({ properties: { '상태': { status: { name: status } } } }),
     });
-  }
-
-  // 페이지의 모든 블록 삭제 (재검색 전 초기화)
-  private async clearPageBlocks(pageId: string): Promise<void> {
-    let cursor: string | undefined;
-    do {
-      const qs = cursor ? `?start_cursor=${cursor}&page_size=100` : '?page_size=100';
-      const data = await this.fetchApi(`blocks/${pageId}/children${qs}`, { method: 'GET' });
-      const ids: string[] = data.results.map((b: any) => b.id);
-
-      for (let i = 0; i < ids.length; i += 10) {
-        await Promise.all(
-          ids.slice(i, i + 10).map((id) => this.fetchApi(`blocks/${id}`, { method: 'DELETE' })),
-        );
-        if (i + 10 < ids.length) await sleep(400);
-      }
-
-      cursor = data.has_more ? data.next_cursor : undefined;
-    } while (cursor);
   }
 
   // 검색 결과 전체를 페이지에 저장
