@@ -255,13 +255,30 @@ async function handleVerifyUser(url: URL): Promise<Response> {
     return jsonResponse({ valid: false }, 200);
   }
 
+  // 토큰은 있는데 워크스페이스 이름이 비어있으면(과거 연결) Notion에서 한 번 채워온다
+  let workspaceName = data.notion_workspace_name || null;
+  if (!workspaceName && data.notion_api_key_encrypted) {
+    try {
+      const apiKey = await decryptNotionKey(data.notion_api_key_encrypted);
+      workspaceName = await new NotionClient(apiKey).getWorkspaceName();
+      if (workspaceName) {
+        await getSupabase()
+          .from('users')
+          .update({ notion_workspace_name: workspaceName })
+          .eq('id', user_id);
+      }
+    } catch (err) {
+      logger.error('Failed to backfill workspace name', err, { user_id });
+    }
+  }
+
   return jsonResponse({
     valid: true,
     user_id: data.id,
     subscription_tier: data.subscription_tier,
     notion_key_set: !!data.notion_api_key_encrypted,
     notion_configured: !!data.notion_database_id,
-    notion_workspace_name: data.notion_workspace_name || null,
+    notion_workspace_name: workspaceName,
   });
 }
 

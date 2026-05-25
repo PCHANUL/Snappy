@@ -323,6 +323,16 @@ export class NotionClient {
     logger.info('Search embed status updated', { searching, newUrl });
   }
 
+  // OAuth 봇 토큰의 워크스페이스 이름 조회 (users/me → bot.workspace_name)
+  async getWorkspaceName(): Promise<string | null> {
+    try {
+      const me = await this.fetchApi('users/me', { method: 'GET' });
+      return (me?.bot?.workspace_name as string) || null;
+    } catch {
+      return null;
+    }
+  }
+
   // 통합이 접근 가능한 객체(페이지/DB)가 하나라도 있는지 조회 — 연결 검증용
   async searchAccessible(): Promise<any[]> {
     const data = await this.fetchApi('search', {
