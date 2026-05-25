@@ -36,6 +36,8 @@ serve(async (req) => {
         return await handleUsage(req, url);
       case 'list-databases':
         return await handleListDatabases(req);
+      case 'list-pages':
+        return await handleListPages(req);
       case 'verify-user':
         return await handleVerifyUser(url);
       case 'history':
@@ -240,6 +242,29 @@ async function handleListDatabases(req: Request): Promise<Response> {
   return jsonResponse({ databases });
 }
 
+// === 연결된 노션 페이지 목록 조회 ===
+async function handleListPages(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+
+  const { user_id } = await req.json();
+  if (!user_id || typeof user_id !== 'string') throw new ValidationError('user_id required');
+
+  const { data } = await getSupabase()
+    .from('users')
+    .select('notion_api_key_encrypted')
+    .eq('id', user_id)
+    .single();
+
+  if (!data?.notion_api_key_encrypted) {
+    throw new ValidationError('No token stored for user', '노션 연동이 필요합니다.');
+  }
+
+  const apiKey = await decryptNotionKey(data.notion_api_key_encrypted);
+  const pages = await new NotionClient(apiKey).listAccessiblePages();
+
+  return jsonResponse({ pages });
+}
+
 // === user_id 유효성 검증 ===
 async function handleVerifyUser(url: URL): Promise<Response> {
   const user_id = url.searchParams.get('user_id');
@@ -247,29 +272,12 @@ async function handleVerifyUser(url: URL): Promise<Response> {
 
   const { data, error } = await getSupabase()
     .from('users')
-    .select('id, subscription_tier, notion_api_key_encrypted, notion_database_id, notion_workspace_name')
+    .select('id, subscription_tier, notion_api_key_encrypted, notion_database_id')
     .eq('id', user_id)
     .single();
 
   if (error || !data) {
     return jsonResponse({ valid: false }, 200);
-  }
-
-  // 토큰은 있는데 워크스페이스 이름이 비어있으면(과거 연결) Notion에서 한 번 채워온다
-  let workspaceName = data.notion_workspace_name || null;
-  if (!workspaceName && data.notion_api_key_encrypted) {
-    try {
-      const apiKey = await decryptNotionKey(data.notion_api_key_encrypted);
-      workspaceName = await new NotionClient(apiKey).getWorkspaceName();
-      if (workspaceName) {
-        await getSupabase()
-          .from('users')
-          .update({ notion_workspace_name: workspaceName })
-          .eq('id', user_id);
-      }
-    } catch (err) {
-      logger.error('Failed to backfill workspace name', err, { user_id });
-    }
   }
 
   return jsonResponse({
@@ -278,7 +286,6 @@ async function handleVerifyUser(url: URL): Promise<Response> {
     subscription_tier: data.subscription_tier,
     notion_key_set: !!data.notion_api_key_encrypted,
     notion_configured: !!data.notion_database_id,
-    notion_workspace_name: workspaceName,
   });
 }
 

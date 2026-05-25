@@ -323,16 +323,6 @@ export class NotionClient {
     logger.info('Search embed status updated', { searching, newUrl });
   }
 
-  // OAuth 봇 토큰의 워크스페이스 이름 조회 (users/me → bot.workspace_name)
-  async getWorkspaceName(): Promise<string | null> {
-    try {
-      const me = await this.fetchApi('users/me', { method: 'GET' });
-      return (me?.bot?.workspace_name as string) || null;
-    } catch {
-      return null;
-    }
-  }
-
   // 통합이 접근 가능한 객체(페이지/DB)가 하나라도 있는지 조회 — 연결 검증용
   async searchAccessible(): Promise<any[]> {
     const data = await this.fetchApi('search', {
@@ -340,6 +330,25 @@ export class NotionClient {
       body: JSON.stringify({ page_size: 5 }),
     });
     return (data.results as any[]) || [];
+  }
+
+  // 통합이 접근 가능한 모든 페이지의 제목 목록 조회 (연결된 페이지 표시용)
+  async listAccessiblePages(): Promise<{ id: string; title: string }[]> {
+    const data = await this.fetchApi('search', {
+      method: 'POST',
+      body: JSON.stringify({
+        filter: { value: 'page', property: 'object' },
+        page_size: 50,
+      }),
+    });
+    return ((data.results as any[]) || [])
+      .map((obj) => {
+        const titleProp = Object.values(obj.properties || {})
+          .find((p: any) => (p as any)?.type === 'title') as { title?: any[] } | undefined;
+        const title = (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
+        return { id: (obj.id as string).replace(/-/g, ''), title };
+      })
+      .filter((p) => p.title);
   }
 
   // 제목 쿼리로 검색 — 연결된 객체 중 해당 이름이 있는지 확인용
@@ -390,16 +399,6 @@ export class NotionClient {
     } while (cursor);
 
     return null;
-  }
-
-  // 검색 DB가 속한 부모 페이지의 제목 조회 (템플릿 페이지 검증용)
-  async getDatabaseParentPageTitle(databaseId: string): Promise<string | null> {
-    const parentPageId = await this.getDatabaseParentPageId(databaseId);
-    const page = await this.fetchApi(`pages/${toUuid(parentPageId)}`, { method: 'GET' });
-    const titleProp = Object.values(page.properties || {})
-      .find((p: any) => p?.type === 'title') as { title?: any[] } | undefined;
-    const title = (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
-    return title || null;
   }
 
   private async getDatabaseParentPageId(databaseId: string): Promise<string> {

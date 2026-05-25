@@ -316,7 +316,7 @@
             <div class="sec-summary hidden" id="sec3-summary">
               <div class="sec-summary-text">
                 <span style="color:#10b981;font-weight:600;">✓ 노션 페이지 연결 완료</span>
-                <span id="summary-workspace" style="font-size:0.8rem;color:#6b7280;"></span>
+                <span id="summary-pages" style="font-size:0.8rem;color:#6b7280;line-height:1.5;"></span>
               </div>
               <button class="btn-change" id="reconnectBtn">다시 연결</button>
             </div>
@@ -564,7 +564,7 @@
       // 콜백에서 이미 DB가 연동됐으면(템플릿 복제 경로) 곧바로 완료
       try {
         const verify = await verifyUser(userId);
-        if (verify.notion_workspace_name) setWorkspaceSummary(verify.notion_workspace_name);
+        loadConnectedPages();
         if (verify.notion_configured) {
           loading.style.display = 'none';
           document.getElementById('summary-db').textContent = '검색 DB';
@@ -709,8 +709,25 @@
       }
     });
 
-    function setWorkspaceSummary(name) {
-      document.getElementById('summary-workspace').textContent = name || '';
+    // 현재 연결된 노션 페이지 목록을 실시간 조회해 섹션 3 요약에 표시
+    // (재연결로 페이지가 바뀌면 호출 시점의 최신 상태로 갱신됨)
+    async function loadConnectedPages() {
+      const span = document.getElementById('summary-pages');
+      if (!userId || !span) return;
+      span.textContent = '연결된 페이지 확인 중...';
+      try {
+        const res = await fetch(FUNCTION_BASE + '/manage-user?action=list-pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId }),
+        });
+        const data = await res.json();
+        if (!res.ok) { span.textContent = ''; return; }
+        const names = (data.pages || []).map(p => p.title).filter(Boolean);
+        span.textContent = names.length ? '연결된 페이지: ' + names.join(', ') : '연결된 페이지가 없습니다.';
+      } catch {
+        span.textContent = '';
+      }
     }
 
     function finishAccountVerification(account) {
@@ -720,7 +737,7 @@
       setAccountSummary();
       setAccountActionMode('reset');
       completeSection(2);
-      if (account?.notion_workspace_name) setWorkspaceSummary(account.notion_workspace_name);
+      if (account?.notion_key_set || account?.notion_configured) loadConnectedPages();
       if (account?.notion_configured) {
         // Notion 연결 + DB 모두 완료
         completeSection(3);
@@ -836,7 +853,7 @@
         const data = await verifyUser(presetUserId);
         userId = data.user_id || presetUserId;
         setAccountSummary();
-        if (data.notion_workspace_name) setWorkspaceSummary(data.notion_workspace_name);
+        if (data.notion_key_set || data.notion_configured) loadConnectedPages();
         completeSection(1);
         completeSection(2);
         setAccountActionMode('reset');
@@ -861,7 +878,7 @@
         userId = data.user_id || normalizedUserId;
         document.getElementById('userIdInput').value = userId;
         setAccountSummary();
-        if (data.notion_workspace_name) setWorkspaceSummary(data.notion_workspace_name);
+        if (data.notion_key_set || data.notion_configured) loadConnectedPages();
         return true;
       } catch {
         userId = null;
