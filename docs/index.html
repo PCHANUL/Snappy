@@ -896,6 +896,7 @@
         userId = data.user_id || normalizedUserId;
         document.getElementById('userIdInput').value = userId;
         setAccountSummary();
+        if (data.notion_workspace_name) setWorkspaceSummary(data.notion_workspace_name);
         return true;
       } catch {
         userId = null;
