@@ -108,11 +108,12 @@ async function handleCallback(url: URL): Promise<Response> {
     }
 
     const tokenData = await tokenRes.json();
-    const { access_token, workspace_id, duplicated_template_id } = tokenData;
+    const { access_token, workspace_id, workspace_name, duplicated_template_id } = tokenData;
     const encryptedToken = await encryptNotionKey(access_token);
 
     const update: Record<string, string> = { notion_api_key_encrypted: encryptedToken };
     if (workspace_id) update.notion_workspace_id = workspace_id;
+    if (workspace_name) update.notion_workspace_name = workspace_name;
 
     // 템플릿 복제로 연결된 경우: Notion이 복제된 페이지 ID를 돌려주고 통합도 자동 연결해줌
     // → 사용자가 승인 화면에서 페이지를 직접 선택하지 않아도 검색 DB를 자동 연동

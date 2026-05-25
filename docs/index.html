@@ -342,6 +342,7 @@
             <div class="sec-summary hidden" id="sec3-summary">
               <div class="sec-summary-text">
                 <span style="color:#10b981;font-weight:600;">✓ 노션 페이지 연결 완료</span>
+                <span id="summary-workspace" style="font-size:0.8rem;color:#6b7280;"></span>
               </div>
               <button class="btn-change" id="reconnectBtn">다시 연결</button>
             </div>
@@ -358,7 +359,7 @@
         <div class="flow-body">
           <div class="sec-card locked" id="sec4">
             <div class="sec-head">
-              <h2>노션 DB 페이지 연결</h2>
+              <h2>노션 데이터베이스 연결</h2>
             </div>
             <div class="sec-body hidden" id="sec4-body">
               <div style="margin-top:14px;">
@@ -599,6 +600,7 @@
       // 콜백에서 이미 DB가 연동됐으면(템플릿 복제 경로) 곧바로 완료
       try {
         const verify = await verifyUser(userId);
+        if (verify.notion_workspace_name) setWorkspaceSummary(verify.notion_workspace_name);
         if (verify.notion_configured) {
           loading.style.display = 'none';
           document.getElementById('summary-db').textContent = '검색 DB';
@@ -743,6 +745,10 @@
       }
     });
 
+    function setWorkspaceSummary(name) {
+      document.getElementById('summary-workspace').textContent = name || '';
+    }
+
     function finishAccountVerification(account) {
       const accountBtn = document.getElementById('accountBtn');
       accountBtn.disabled = false;
@@ -750,6 +756,7 @@
       setAccountSummary();
       setAccountActionMode('reset');
       completeSection(2);
+      if (account?.notion_workspace_name) setWorkspaceSummary(account.notion_workspace_name);
       if (account?.notion_configured) {
         // Notion 연결 + DB 모두 완료
         completeSection(3);
@@ -864,6 +871,7 @@
         const data = await verifyUser(presetUserId);
         userId = data.user_id || presetUserId;
         setAccountSummary();
+        if (data.notion_workspace_name) setWorkspaceSummary(data.notion_workspace_name);
         completeSection(1);
         completeSection(2);
         setAccountActionMode('reset');

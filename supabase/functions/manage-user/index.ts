@@ -247,7 +247,7 @@ async function handleVerifyUser(url: URL): Promise<Response> {
 
   const { data, error } = await getSupabase()
     .from('users')
-    .select('id, subscription_tier, notion_api_key_encrypted, notion_database_id')
+    .select('id, subscription_tier, notion_api_key_encrypted, notion_database_id, notion_workspace_name')
     .eq('id', user_id)
     .single();
 
@@ -261,6 +261,7 @@ async function handleVerifyUser(url: URL): Promise<Response> {
     subscription_tier: data.subscription_tier,
     notion_key_set: !!data.notion_api_key_encrypted,
     notion_configured: !!data.notion_database_id,
+    notion_workspace_name: data.notion_workspace_name || null,
   });
 }
 
