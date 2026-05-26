@@ -88,12 +88,12 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       period: request.period,
     });
 
-    // 2. 매체별 검색 실행 — 매체당 5개씩
+    // 2. 매체별 검색 실행 — 매체당 10개씩
     await onProgress(`${request.platforms.length}개 매체 검색 중...`);
     const orchestratorResult = await searchAllPlatforms(
       request.keyword,
       request.platforms,
-      5,
+      10,
       request.period,
     );
 
