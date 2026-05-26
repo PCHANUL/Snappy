@@ -333,8 +333,31 @@
       form.classList.remove('disabled-overlay');
     }
 
-    // 다른 기기에서 진행 중인 검색도 폴링으로 감지
-    if (configured && searching) startPolling();
+    // 페이지 로드 시 한 번 즉시 상태 확인 — URL 파라미터가 스테일할 수 있으므로 API가 기준
+    if (configured) (async () => {
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/manage-user?action=get-search-status&user_id=${userId}`);
+        if (!res.ok) return;
+        const { searching: isSearching } = await res.json();
+        if (isSearching && !pollTimer) {
+          btn.disabled = true;
+          btn.classList.add('searching');
+          btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+          form.classList.add('disabled-overlay');
+          status.className = 'searching';
+          status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+          startPolling();
+        } else if (!isSearching) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          resetButton();
+          if (searching) {
+            status.className = 'accepted';
+            status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
+          }
+        }
+      } catch { /* ignore */ }
+    })();
 
     // 키워드 입력 후 Enter → 검색
     keywordEl.addEventListener('keydown', (e) => {
