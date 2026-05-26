@@ -334,29 +334,34 @@
     }
 
     // 페이지 로드 시 한 번 즉시 상태 확인 — URL 파라미터가 스테일할 수 있으므로 API가 기준
+    // API 실패 시 검색중 아님으로 간주(fail-safe) — UI가 영구 잠금되는 것 방지
     if (configured) (async () => {
+      let isSearching = false;
       try {
         const res = await fetch(`${FUNCTION_BASE}/manage-user?action=get-search-status&user_id=${userId}`);
-        if (!res.ok) return;
-        const { searching: isSearching } = await res.json();
-        if (isSearching && !pollTimer) {
-          btn.disabled = true;
-          btn.classList.add('searching');
-          btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
-          form.classList.add('disabled-overlay');
-          status.className = 'searching';
-          status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
-          startPolling();
-        } else if (!isSearching) {
-          clearInterval(pollTimer);
-          pollTimer = null;
-          resetButton();
-          if (searching) {
-            status.className = 'accepted';
-            status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
-          }
+        if (res.ok) {
+          const data = await res.json();
+          isSearching = !!data.searching;
         }
-      } catch { /* ignore */ }
+      } catch { /* 네트워크 오류 → isSearching = false 유지 */ }
+
+      if (isSearching && !pollTimer) {
+        btn.disabled = true;
+        btn.classList.add('searching');
+        btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+        form.classList.add('disabled-overlay');
+        status.className = 'searching';
+        status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+        startPolling();
+      } else if (!isSearching) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        resetButton();
+        if (searching) {
+          status.className = 'accepted';
+          status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
+        }
+      }
     })();
 
     // 키워드 입력 후 Enter → 검색
