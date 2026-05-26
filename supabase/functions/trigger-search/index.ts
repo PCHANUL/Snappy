@@ -9,7 +9,6 @@ import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors
 import { validateSearchRequest } from '../_shared/validator.ts';
 import {
   saveSearchResults,
-  getNextBatch,
   getUserAndCheckQuota,
   incrementUsage,
   logSearch,
@@ -84,18 +83,18 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       period: request.period,
     });
 
-    // 2. 매체별 검색 실행
+    // 2. 매체별 검색 실행 — 매체당 5개씩
     const orchestratorResult = await searchAllPlatforms(
       request.keyword,
       request.platforms,
-      request.result_count,
+      5,
       request.period,
     );
 
     const metadata = { duration_ms: Date.now() - startTime, cost_usd: orchestratorResult.total_cost_usd };
     const totalFound = orchestratorResult.results.reduce((s, r) => s + r.count, 0);
 
-    // 3. 전체 결과를 영구 저장 (이력 누적 + 더보기 페이지네이션)
+    // 3. 검색 이력 저장
     await saveSearchResults(
       pageId,
       request.user_id,
@@ -106,21 +105,18 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       metadata,
     );
 
-    // 4. 저장된 항목 본문 크롤링 — Notion 응답과 무관하게 백그라운드에서 실행
+    // 4. 본문 크롤링 (백그라운드)
     const crawlTargets = orchestratorResult.results.flatMap(r =>
       r.items.map(item => ({ url: item.url, platform: r.platform }))
     );
     EdgeRuntime.waitUntil(crawlSearchResults(crawlTargets));
 
-    // 5. 첫 5개 배치 가져와서 서브페이지로 생성 (상태 → 완료)
-    const firstBatch = await getNextBatch(pageId, request.user_id, 5);
-    await notion.updatePageWithSubPages(
+    // 5. 매체별 탭으로 결과 표시 (상태 → 완료)
+    await notion.updatePageWithTabs(
       pageId,
       request.keyword,
-      firstBatch?.items ?? [],
       orchestratorResult.results,
       metadata,
-      firstBatch?.hasMore ?? false,
       totalFound,
     );
 

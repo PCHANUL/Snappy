@@ -123,6 +123,22 @@ export function buildLoadMoreCallout(remaining: number): NotionBlock {
   );
 }
 
+// 탭 내부 콘텐츠 아이템 블록 (bookmark + 메타데이터)
+export function buildTabItemBlocks(item: ContentItem): NotionBlock[] {
+  const blocks: NotionBlock[] = [];
+
+  blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: item.url } });
+
+  const metaParts: string[] = [];
+  if (item.author) metaParts.push(`👤 ${item.author}`);
+  if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
+  if (metaParts.length > 0) {
+    blocks.push(paragraph(metaParts.join('  •  '), 'gray'));
+  }
+
+  return blocks;
+}
+
 // 서브페이지 내부 콘텐츠 블록
 export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
   const info = PLATFORM_INFO[item.platform];

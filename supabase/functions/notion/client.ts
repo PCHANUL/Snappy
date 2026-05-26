@@ -3,7 +3,7 @@
 
 import { NotionApiError } from '../_shared/errors.ts';
 import { logger } from '../_shared/logger.ts';
-import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks } from './blocks.ts';
+import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks, buildTabItemBlocks } from './blocks.ts';
 import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
 import { PLATFORM_INFO } from '../_shared/types.ts';
 
@@ -130,6 +130,75 @@ export class NotionClient {
     }
 
     logger.info('Notion page updated with sub-pages', { pageId, totalCount, shown: firstBatch.length });
+  }
+
+  // 매체별 탭 + 콘텐츠 블록으로 검색 결과를 페이지에 저장
+  async updatePageWithTabs(
+    pageId: string,
+    keyword: string,
+    results: SearchResult[],
+    metadata: SearchMetadata,
+    totalCount: number,
+  ): Promise<void> {
+    // 1. 속성 업데이트
+    await this.fetchApi(`pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        properties: {
+          '상태': { status: { name: '완료' } },
+          '발견 콘텐츠 수': { number: totalCount },
+        },
+      }),
+    });
+
+    // 2. 요약 callout 추가
+    const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
+    await this.appendBlocks(pageId, summaryBlocks);
+
+    // 3. 결과가 있는 매체만 탭으로 생성
+    const nonEmpty = results.filter(r => r.items.length > 0);
+    if (nonEmpty.length === 0) return;
+
+    // 4. tab 블록 생성 — 매체 이름을 paragraph 텍스트(탭 라벨)로, children은 이후 추가
+    const tabBlock = {
+      type: 'tab',
+      tab: {},
+      children: nonEmpty.map(r => {
+        const info = PLATFORM_INFO[r.platform];
+        return {
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ type: 'text', text: { content: `${info.emoji} ${info.name}` } }],
+          },
+        };
+      }),
+    };
+
+    const tabResult = await this.fetchApi(`blocks/${pageId}/children`, {
+      method: 'PATCH',
+      body: JSON.stringify({ children: [tabBlock] }),
+    });
+
+    const createdTabId = tabResult.results?.[0]?.id as string | undefined;
+    if (!createdTabId) {
+      logger.error('Failed to get created tab block id', undefined, { pageId });
+      return;
+    }
+
+    // 5. 생성된 탭의 paragraph block ID 목록 조회
+    await sleep(300);
+    const tabChildren = await this.fetchApi(`blocks/${createdTabId}/children`, { method: 'GET' });
+    const panelBlocks = (tabChildren.results as any[]) ?? [];
+
+    // 6. 각 패널(paragraph)에 해당 매체 콘텐츠 블록 추가
+    for (let i = 0; i < panelBlocks.length; i++) {
+      const panelId = panelBlocks[i].id as string;
+      const contentBlocks = nonEmpty[i].items.flatMap(item => buildTabItemBlocks(item));
+      await this.appendBlocks(panelId, contentBlocks);
+      if (i < panelBlocks.length - 1) await sleep(350);
+    }
+
+    logger.info('Notion page updated with tabs', { pageId, platforms: nonEmpty.length, totalCount });
   }
 
   // 배치 서브페이지 생성 (더보기용)
