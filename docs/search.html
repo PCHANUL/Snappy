@@ -299,7 +299,7 @@
 
     function startPolling() {
       let attempts = 0;
-      const MAX = 40; // 40 × 3s = 최대 2분
+      const MAX = 120; // 120 × 1s = 최대 2분
 
       pollTimer = setInterval(async () => {
         attempts++;
@@ -325,7 +325,7 @@
           status.className = 'error';
           status.textContent = '시간이 초과됐어요. 노션을 직접 확인해주세요.';
         }
-      }, 3000);
+      }, 1000);
     }
 
     function resetButton() {
