@@ -674,8 +674,258 @@ await test('buildLoadMoreCallout: 남은 개수 포함', () => {
 const hasNaverKey = !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET);
 const hasYoutubeKey = !!process.env.YOUTUBE_API_KEY;
 const hasYoucomKey = !!process.env.YOUCOM_API_KEY;
+const hasNotionKey = !!process.env.NOTION_API_KEY;
 
-section(`통합 테스트 (API 키 필요) - ${hasNaverKey ? '실행' : '스킵'}`);
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const NOTION_STATUS_FALLBACK = {
+  '대기': 'Not started',
+  '검색중': 'In progress',
+  '완료': 'Done',
+  '실패': 'Done',
+};
+
+function toNotionUuid(id) {
+  const s = id.replace(/-/g, '');
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
+}
+
+function extractNotionId(value) {
+  const raw = String(value || '');
+  const uuidMatch = raw.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuidMatch) return toNotionUuid(uuidMatch[0]);
+
+  const compactMatch = raw.match(/[0-9a-fA-F]{32}/);
+  return compactMatch ? toNotionUuid(compactMatch[0]) : '';
+}
+
+function getConfiguredTemplatePageId() {
+  try {
+    const configPath = path.join(ROOT, 'docs', 'config.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    return extractNotionId(config.template_url);
+  } catch {
+    return '';
+  }
+}
+
+async function notionRequest(endpoint, init = {}, retries = 2) {
+  const body = typeof init.body === 'string'
+    ? init.body
+    : init.body === undefined
+      ? undefined
+      : JSON.stringify(init.body);
+
+  const res = await fetch(`https://api.notion.com/v1/${endpoint}`, {
+    ...init,
+    body,
+    headers: {
+      'Authorization': `Bearer ${process.env.NOTION_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Notion-Version': '2022-06-28',
+      ...(init.headers || {}),
+    },
+  });
+
+  if (!res.ok) {
+    if (retries > 0 && (res.status === 429 || res.status >= 500)) {
+      await sleep(res.status === 429 ? 1500 : 800);
+      return notionRequest(endpoint, init, retries - 1);
+    }
+    throw new Error(`Notion API 오류: ${res.status} ${await res.text()}`);
+  }
+  if (res.status === 204) return null;
+  return await res.json();
+}
+
+async function notionFetch(endpoint) {
+  return notionRequest(endpoint);
+}
+
+async function getAllNotionChildren(blockId) {
+  const children = [];
+  let cursor = '';
+  do {
+    const qs = new URLSearchParams({ page_size: '100' });
+    if (cursor) qs.set('start_cursor', cursor);
+    const data = await notionFetch(`blocks/${blockId}/children?${qs.toString()}`);
+    children.push(...(data.results || []));
+    cursor = data.has_more ? data.next_cursor : '';
+  } while (cursor);
+  return children;
+}
+
+async function ensureSearchDatabaseId() {
+  if (notionContext.searchDbId) return notionContext.searchDbId;
+  const children = notionContext.children || await getAllNotionChildren(notionTemplatePageId);
+  notionContext.children = children;
+  const searchDb = children.find(block =>
+    block.type === 'child_database' && block.child_database?.title === '검색 DB'
+  );
+  assert(searchDb, '검색 DB child_database 블록이 필요합니다.');
+  notionContext.searchDbId = searchDb.id;
+  return searchDb.id;
+}
+
+function notionText(content) {
+  return [{ type: 'text', text: { content: String(content || '') } }];
+}
+
+function notionParagraph(content, color) {
+  return {
+    object: 'block',
+    type: 'paragraph',
+    paragraph: {
+      rich_text: notionText(content),
+      ...(color && { color }),
+    },
+  };
+}
+
+function notionCallout(content, emoji) {
+  return {
+    object: 'block',
+    type: 'callout',
+    callout: {
+      rich_text: notionText(content),
+      icon: { type: 'emoji', emoji },
+      color: 'gray_background',
+    },
+  };
+}
+
+function notionDivider() {
+  return { object: 'block', type: 'divider', divider: {} };
+}
+
+function truncateNotionText(value, max = 1900) {
+  const text = String(value || '').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function getNotionTitle(page, propertyName = '키워드') {
+  const title = page.properties?.[propertyName]?.title || [];
+  return title.map(part => part.plain_text || part.text?.content || '').join('');
+}
+
+async function fetchNaverResultForNotionTest(keyword) {
+  const url = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(keyword)}&display=1&sort=sim`;
+  const res = await fetch(url, {
+    headers: {
+      'X-Naver-Client-Id': process.env.NAVER_CLIENT_ID,
+      'X-Naver-Client-Secret': process.env.NAVER_CLIENT_SECRET,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Naver API 오류: ${res.status} ${await res.text()}`);
+  }
+  const data = await res.json();
+  const first = data.items?.[0];
+  assert(first, 'Notion 생성에 사용할 Naver 검색 결과가 필요합니다.');
+  return {
+    platform: 'naver_blog',
+    title: truncateNotionText(stripHtml(first.title || 'Naver 검색 결과')),
+    url: first.link || 'https://example.com/snappy-test-result',
+    description: truncateNotionText(stripHtml(first.description || ''), 500),
+    author: stripHtml(first.bloggername || ''),
+    published_at: parseNaverDate(first.postdate),
+  };
+}
+
+async function createNotionSearchEntryForTest(databaseId, keyword) {
+  const statusName = await getNotionStatusNameForTest(databaseId, '검색중');
+  const data = await notionRequest('pages', {
+    method: 'POST',
+    body: {
+      parent: { database_id: toNotionUuid(databaseId) },
+      icon: { type: 'emoji', emoji: '🔍' },
+      properties: {
+        '키워드': { title: notionText(keyword) },
+        '상태': { status: { name: statusName } },
+        '매체': { multi_select: [{ name: '네이버블로그' }] },
+        '기간': { select: { name: '1개월' } },
+      },
+    },
+  });
+  return data.id;
+}
+
+async function createNotionResultSubPageForTest(parentPageId, item) {
+  const metaParts = ['📝 네이버 블로그'];
+  if (item.author) metaParts.push(`👤 ${item.author}`);
+  if (item.published_at) metaParts.push(`📅 ${item.published_at}`);
+
+  const children = [
+    notionParagraph(metaParts.join('  •  '), 'gray'),
+    { object: 'block', type: 'bookmark', bookmark: { url: item.url } },
+  ];
+  if (item.description) children.push(notionParagraph(item.description));
+
+  return notionRequest('pages', {
+    method: 'POST',
+    body: {
+      parent: { page_id: parentPageId },
+      icon: { type: 'emoji', emoji: '📝' },
+      properties: {
+        title: { title: notionText(item.title) },
+      },
+      children,
+    },
+  });
+}
+
+async function getNotionStatusNameForTest(databaseId, status) {
+  if (!notionContext.statusOptions) {
+    const db = await notionFetch(`databases/${databaseId}`);
+    notionContext.statusOptions = db.properties?.['상태']?.status?.options?.map(option => option.name) || [];
+  }
+
+  if (notionContext.statusOptions.includes(status)) return status;
+
+  const fallback = NOTION_STATUS_FALLBACK[status];
+  if (fallback && notionContext.statusOptions.includes(fallback)) return fallback;
+
+  return status;
+}
+
+async function completeNotionSearchEntryForTest(databaseId, pageId, keyword, item) {
+  const statusName = await getNotionStatusNameForTest(databaseId, '완료');
+  await notionRequest(`pages/${pageId}`, {
+    method: 'PATCH',
+    body: {
+      properties: {
+        '상태': { status: { name: statusName } },
+        '발견 콘텐츠 수': { number: 1 },
+      },
+    },
+  });
+
+  await notionRequest(`blocks/${pageId}/children`, {
+    method: 'PATCH',
+    body: {
+      children: [
+        notionCallout(`🔍 "${keyword}" — 1개 발견 | 통합 테스트`, '🔍'),
+        notionParagraph('📝 네이버 블로그 1개', 'gray'),
+        notionDivider(),
+      ],
+    },
+  });
+
+  const resultPage = await createNotionResultSubPageForTest(pageId, item);
+  return { statusName, resultPage };
+}
+
+async function archiveNotionPage(pageId) {
+  await notionRequest(`pages/${pageId}`, {
+    method: 'PATCH',
+    body: { archived: true },
+  });
+}
+
+const notionTemplatePageId = getConfiguredTemplatePageId();
+const shouldSkipNotion = !hasNotionKey || !notionTemplatePageId;
+const notionContext = { children: null, searchDbId: '', statusOptions: null };
+
+section('통합 테스트 (실제 API 호출)');
 
 await test('Naver 블로그: 비건 디저트 검색', async () => {
   const url = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent('비건 디저트')}&display=5&sort=sim`;
@@ -701,7 +951,9 @@ await test('YouTube: 비건 디저트 검색', async () => {
   const publishedAfter = getPublishedAfter('month');
   const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent('비건 디저트')}&type=video&maxResults=5&regionCode=KR&publishedAfter=${publishedAfter}&key=${process.env.YOUTUBE_API_KEY}`;
   const res = await fetch(url);
-  assert(res.ok, `YouTube API 오류: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`YouTube API 오류: ${res.status} ${await res.text()}`);
+  }
   const data = await res.json();
   assert(Array.isArray(data.items), 'items 배열 필요');
   assert(data.items.length > 0, '결과가 있어야 함');
@@ -716,7 +968,9 @@ await test('You.com: 비건 디저트 + tistory.com 검색', async () => {
   const res = await fetch(url, {
     headers: { 'X-API-KEY': process.env.YOUCOM_API_KEY, 'Accept': 'application/json' },
   });
-  assert(res.ok, `You.com API 오류: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    throw new Error(`You.com API 오류: ${res.status} ${await res.text()}`);
+  }
   const data = await res.json();
   const webResults = data.results?.web || [];
   assert(Array.isArray(webResults), 'results.web 배열 필요');
@@ -727,6 +981,93 @@ await test('You.com: 비건 디저트 + tistory.com 검색', async () => {
     console.log(`     ⚠️  include_domains 파라미터가 완전히 동작하지 않음 (클라이언트 필터링 필요)`);
   }
 }, { skip: !hasYoucomKey });
+
+await test('Notion: config 템플릿 페이지 조회', async () => {
+  const page = await notionFetch(`pages/${notionTemplatePageId}`);
+  assertEquals(page.object, 'page');
+  assert(page.id === notionTemplatePageId, `페이지 ID 불일치: ${page.id}`);
+  console.log(`     페이지 조회 성공: ${page.id}`);
+}, { skip: shouldSkipNotion });
+
+await test('Notion: 템플릿 children에 검색 embed와 검색 DB 존재', async () => {
+  const children = await getAllNotionChildren(notionTemplatePageId);
+  notionContext.children = children;
+
+  const searchEmbed = children.find(block =>
+    block.type === 'embed' && typeof block.embed?.url === 'string' && block.embed.url.includes('search.html')
+  );
+  const searchDb = children.find(block =>
+    block.type === 'child_database' && block.child_database?.title === '검색 DB'
+  );
+
+  assert(searchEmbed, 'search.html embed 블록이 필요합니다.');
+  assert(searchDb, '검색 DB child_database 블록이 필요합니다.');
+
+  notionContext.searchDbId = searchDb.id;
+  console.log(`     children ${children.length}개, 검색 DB: ${searchDb.id}`);
+}, { skip: shouldSkipNotion });
+
+await test('Notion: 검색 DB 스키마 확인', async () => {
+  const searchDbId = await ensureSearchDatabaseId();
+
+  const db = await notionFetch(`databases/${searchDbId}`);
+  assertEquals(db.object, 'database');
+
+  const props = db.properties || {};
+  const expected = {
+    '키워드': 'title',
+    '매체': 'multi_select',
+    '기간': 'select',
+    '상태': 'status',
+    '발견 콘텐츠 수': 'number',
+    '검색일시': 'created_time',
+  };
+
+  for (const [name, type] of Object.entries(expected)) {
+    assert(props[name], `검색 DB 속성 누락: ${name}`);
+    assertEquals(props[name].type, type, `${name} 속성 타입`);
+  }
+  notionContext.statusOptions = props['상태']?.status?.options?.map(option => option.name) || [];
+
+  console.log(`     검색 DB 속성 ${Object.keys(props).length}개 확인`);
+}, { skip: shouldSkipNotion });
+
+await test('Notion: 검색 결과를 검색 DB 페이지와 하위 결과 페이지로 생성', async () => {
+  const searchDbId = await ensureSearchDatabaseId();
+  const searchKeyword = '비건 디저트';
+  const testKeyword = `[TEST] ${searchKeyword} ${new Date().toISOString()}`;
+  let searchPageId = '';
+
+  try {
+    const item = await fetchNaverResultForNotionTest(searchKeyword);
+
+    searchPageId = await createNotionSearchEntryForTest(searchDbId, testKeyword);
+    const { statusName } = await completeNotionSearchEntryForTest(searchDbId, searchPageId, testKeyword, item);
+
+    const page = await notionFetch(`pages/${searchPageId}`);
+    assertEquals(page.properties?.['상태']?.status?.name, statusName, '검색 페이지 상태');
+    assertEquals(page.properties?.['발견 콘텐츠 수']?.number, 1, '발견 콘텐츠 수');
+    assert(getNotionTitle(page).includes(testKeyword), '검색 DB 행 제목에 테스트 키워드가 필요합니다.');
+
+    const children = await getAllNotionChildren(searchPageId);
+    const summary = children.find(block =>
+      block.type === 'callout' &&
+      block.callout?.rich_text?.some(part => (part.plain_text || '').includes(testKeyword))
+    );
+    const resultPage = children.find(block => block.type === 'child_page');
+
+    assert(summary, '검색 요약 callout 블록이 필요합니다.');
+    assert(resultPage, '검색 결과 child_page가 필요합니다.');
+    assert(resultPage.child_page?.title, '검색 결과 child_page 제목이 필요합니다.');
+
+    console.log(`     임시 검색 페이지 생성/검증 후 archive 예정: ${searchPageId}`);
+  } finally {
+    if (searchPageId) {
+      await archiveNotionPage(searchPageId);
+      console.log(`     임시 검색 페이지 archive 완료: ${searchPageId}`);
+    }
+  }
+}, { skip: shouldSkipNotion || !hasNaverKey });
 
 // ── 결과 요약 ─────────────────────────────────────────────────────────────────
 

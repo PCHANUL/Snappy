@@ -22,6 +22,13 @@ const PERIOD_TO_NOTION: Record<Period, string> = {
   year: '1년',
 };
 
+const STATUS_FALLBACK: Record<SearchStatus, string> = {
+  '대기': 'Not started',
+  '검색중': 'In progress',
+  '완료': 'Done',
+  '실패': 'Done',
+};
+
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_API_VERSION = '2022-06-28';
 const MAX_BLOCKS_PER_REQUEST = 100;
@@ -51,10 +58,10 @@ export class NotionClient {
       ]);
     }
 
-    await this.fetchApi(`pages/${pageId}`, {
+    await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ properties: { '상태': { status: { name: status } } } }),
-    });
+      body: JSON.stringify({ properties: { '상태': statusValue(status) } }),
+    }, status);
   }
 
   // 검색 결과 전체를 페이지에 저장
@@ -67,15 +74,15 @@ export class NotionClient {
     const totalCount = results.reduce((sum, r) => sum + r.count, 0);
 
     // 1. 속성 업데이트
-    await this.fetchApi(`pages/${pageId}`, {
+    await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
       method: 'PATCH',
       body: JSON.stringify({
         properties: {
-          '상태': { status: { name: '완료' } },
+          '상태': statusValue('완료'),
           '발견 콘텐츠 수': { number: totalCount },
         },
       }),
-    });
+    }, '완료');
 
     // 2. 페이지 본문에 결과 블록 추가
     const blocks = buildResultBlocks(keyword, results, metadata);
@@ -99,15 +106,15 @@ export class NotionClient {
     totalCount: number,
   ): Promise<void> {
     // 1. 속성 업데이트
-    await this.fetchApi(`pages/${pageId}`, {
+    await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
       method: 'PATCH',
       body: JSON.stringify({
         properties: {
-          '상태': { status: { name: '완료' } },
+          '상태': statusValue('완료'),
           '발견 콘텐츠 수': { number: totalCount },
         },
       }),
-    });
+    }, '완료');
 
     // 2. 요약 블록 추가 (callout + 플랫폼별 요약 + divider)
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
@@ -169,19 +176,19 @@ export class NotionClient {
     databaseId: string,
     params: { keyword: string; platforms: Platform[]; period: Period },
   ): Promise<string> {
-    const res = await this.fetchApi('pages', {
+    const res = await this.fetchApiWithStatusFallback('pages', {
       method: 'POST',
       body: JSON.stringify({
         parent: { database_id: toUuid(databaseId) },
         icon: { type: 'emoji', emoji: '🔍' },
         properties: {
           '키워드': { title: [{ type: 'text', text: { content: params.keyword } }] },
-          '상태': { status: { name: '검색중' } },
+          '상태': statusValue('검색중'),
           '매체': { multi_select: params.platforms.map((p) => ({ name: PLATFORM_TO_NOTION[p] })) },
           '기간': { select: { name: PERIOD_TO_NOTION[params.period] } },
         },
       }),
-    });
+    }, '검색중');
     return res.id as string;
   }
 
@@ -198,6 +205,32 @@ export class NotionClient {
       if (i + MAX_BLOCKS_PER_REQUEST < blocks.length) {
         await sleep(400);
       }
+    }
+  }
+
+  private async fetchApiWithStatusFallback(
+    path: string,
+    init: RequestInit,
+    status: SearchStatus,
+  ): Promise<any> {
+    try {
+      return await this.fetchApi(path, init);
+    } catch (error) {
+      if (!isInvalidStatusOption(error)) throw error;
+
+      const fallback = STATUS_FALLBACK[status];
+      if (!fallback || fallback === status || !init.body) throw error;
+
+      const body = JSON.parse(String(init.body));
+      if (!body.properties?.['상태']) throw error;
+
+      body.properties['상태'] = statusValue(fallback);
+      logger.info('Notion status option fallback applied', { path, status, fallback });
+
+      return await this.fetchApi(path, {
+        ...init,
+        body: JSON.stringify(body),
+      });
     }
   }
 
@@ -414,6 +447,14 @@ export class NotionClient {
 function toUuid(id: string): string {
   const s = id.replace(/-/g, '');
   return `${s.slice(0,8)}-${s.slice(8,12)}-${s.slice(12,16)}-${s.slice(16,20)}-${s.slice(20)}`;
+}
+
+function statusValue(status: string): { status: { name: string } } {
+  return { status: { name: status } };
+}
+
+function isInvalidStatusOption(error: unknown): boolean {
+  return error instanceof NotionApiError && error.message.includes('Invalid status option');
 }
 
 function sleep(ms: number): Promise<void> {
