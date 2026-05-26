@@ -15,6 +15,7 @@ import {
   crawlSearchResults,
   markSearchingStart,
   markSearchingEnd,
+  updateSearchProgress,
 } from '../_shared/db.ts';
 import type { Platform, User } from '../_shared/types.ts';
 
@@ -56,6 +57,9 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
 
   await markSearchingStart(user.id);
 
+  // 진행 메시지를 DB에 기록 — 폴링 응답에 포함되어 임베드 UI에 표시됨
+  const onProgress = (message: string) => updateSearchProgress(user.id, message);
+
   let pageId: string | undefined;
   try {
     // 키워드 누락 시 사용자에게 명확한 안내
@@ -77,6 +81,7 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     });
 
     // 1. 검색 DB에 새 행 생성 (상태: 검색중) — 결과 서브페이지의 부모가 됨
+    await onProgress('노션에 검색 항목 생성 중...');
     pageId = await notion.createSearchEntry(user.notion_database_id, {
       keyword: request.keyword,
       platforms: request.platforms,
@@ -84,6 +89,7 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     });
 
     // 2. 매체별 검색 실행 — 매체당 5개씩
+    await onProgress(`${request.platforms.length}개 매체 검색 중...`);
     const orchestratorResult = await searchAllPlatforms(
       request.keyword,
       request.platforms,
@@ -95,6 +101,7 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     const totalFound = orchestratorResult.results.reduce((s, r) => s + r.count, 0);
 
     // 3. 검색 이력 저장
+    await onProgress(`${totalFound}개 발견, 저장 중...`);
     await saveSearchResults(
       pageId,
       request.user_id,
@@ -118,6 +125,7 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       orchestratorResult.results,
       metadata,
       totalFound,
+      onProgress,
     );
 
     await incrementUsage(request.user_id);

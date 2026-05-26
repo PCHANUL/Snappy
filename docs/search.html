@@ -314,6 +314,8 @@
             resetButton();
             status.className = 'accepted';
             status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
+          } else if (data.message) {
+            status.textContent = data.message;
           }
         } catch { /* 일시적 네트워크 오류 무시 */ }
 

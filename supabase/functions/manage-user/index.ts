@@ -418,13 +418,16 @@ async function handleGetSearchStatus(url: URL): Promise<Response> {
 
   const { data, error } = await getSupabase()
     .from('users')
-    .select('searching_since')
+    .select('searching_since, search_progress')
     .eq('id', user_id)
     .single();
 
   if (error || !data) throw new AuthError('User not found');
 
-  return jsonResponse({ searching: data.searching_since !== null });
+  return jsonResponse({
+    searching: data.searching_since !== null,
+    message: data.search_progress ?? null,
+  });
 }
 
 // === 검색 중 상태 임베드 URL 반영 ===

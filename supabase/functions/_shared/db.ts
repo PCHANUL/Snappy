@@ -111,7 +111,7 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
 export async function markSearchingStart(userId: string): Promise<void> {
   const { error } = await getSupabase()
     .from('users')
-    .update({ searching_since: new Date().toISOString() })
+    .update({ searching_since: new Date().toISOString(), search_progress: null })
     .eq('id', userId);
   if (error) console.error('Failed to mark searching start', error);
 }
@@ -119,9 +119,17 @@ export async function markSearchingStart(userId: string): Promise<void> {
 export async function markSearchingEnd(userId: string): Promise<void> {
   const { error } = await getSupabase()
     .from('users')
-    .update({ searching_since: null })
+    .update({ searching_since: null, search_progress: null })
     .eq('id', userId);
   if (error) console.error('Failed to mark searching end', error);
+}
+
+export async function updateSearchProgress(userId: string, message: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('users')
+    .update({ search_progress: message })
+    .eq('id', userId);
+  if (error) console.error('Failed to update search progress', error);
 }
 
 // ── 사용량 ────────────────────────────────────────────────────────────────────

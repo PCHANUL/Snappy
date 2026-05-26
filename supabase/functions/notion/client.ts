@@ -231,7 +231,11 @@ export class NotionClient {
   }
 
   // 콘텐츠 아이템을 child DB에 페이지(행)로 추가 — Notion 속도 제한 고려 직렬 처리
-  async addItemsToDatabase(databaseId: string, items: FlatResult[]): Promise<void> {
+  async addItemsToDatabase(
+    databaseId: string,
+    items: FlatResult[],
+    onProgress?: (message: string) => Promise<void>,
+  ): Promise<void> {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const info = PLATFORM_INFO[item.platform];
@@ -251,6 +255,7 @@ export class NotionClient {
       if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
 
       await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
+      await onProgress?.(`노션에 콘텐츠 추가 중... (${i + 1}/${items.length})`);
       if (i + 1 < items.length) await sleep(350);
     }
   }
@@ -262,6 +267,7 @@ export class NotionClient {
     results: SearchResult[],
     metadata: SearchMetadata,
     totalCount: number,
+    onProgress?: (message: string) => Promise<void>,
   ): Promise<void> {
     // 1. 속성 업데이트 (상태 → 완료)
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
@@ -275,17 +281,19 @@ export class NotionClient {
     }, '완료');
 
     // 2. 요약 callout 추가
+    await onProgress?.('노션에 요약 작성 중...');
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
     await this.appendBlocks(pageId, summaryBlocks);
 
     // 3. child database 생성
+    await onProgress?.('콘텐츠 DB 생성 중...');
     const databaseId = await this.createContentDatabase(pageId, keyword);
 
     // 4. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지)
     const allItems: FlatResult[] = results.flatMap(r =>
       r.items.map(item => ({ ...item, platform: r.platform }))
     );
-    await this.addItemsToDatabase(databaseId, allItems);
+    await this.addItemsToDatabase(databaseId, allItems, onProgress);
 
     logger.info('Notion page updated with child database', { pageId, totalCount, databaseId });
   }
