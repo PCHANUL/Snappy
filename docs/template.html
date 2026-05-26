@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snappy 템플릿으로 이동</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    main {
+      width: min(100%, 420px);
+      padding: 28px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+    }
+    h1 {
+      font-size: 1.2rem;
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+    p {
+      color: #6b7280;
+      font-size: 0.92rem;
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+    a {
+      display: none;
+      width: 100%;
+      padding: 13px 16px;
+      border-radius: 10px;
+      background: #6366f1;
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    a.visible { display: block; }
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #c7d2fe;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="spinner" aria-hidden="true"></div>
+    <h1>Snappy 템플릿으로 이동 중입니다</h1>
+    <p id="message">최신 템플릿 링크를 확인하고 있습니다.</p>
+    <a id="fallbackLink" href="#" rel="noopener">템플릿 열기</a>
+  </main>
+
+  <script>
+    async function redirectToTemplate() {
+      const message = document.getElementById('message');
+      const fallbackLink = document.getElementById('fallbackLink');
+
+      try {
+        const res = await fetch(`./config.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`config load failed: ${res.status}`);
+
+        const config = await res.json();
+        const templateUrl = String(config.template_url || '').trim();
+        if (!templateUrl) throw new Error('template_url is empty');
+
+        const parsed = new URL(templateUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          throw new Error('template_url must be http(s)');
+        }
+
+        fallbackLink.href = parsed.toString();
+        fallbackLink.classList.add('visible');
+        window.location.replace(parsed.toString());
+      } catch (err) {
+        console.error('Template redirect failed.', err);
+        message.textContent = '템플릿 링크를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.';
+      }
+    }
+
+    redirectToTemplate();
+  </script>
+</body>
+</html>

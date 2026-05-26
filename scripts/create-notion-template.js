@@ -405,6 +405,11 @@ ${mainPage.url}
 4. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
 5. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+
+6. 게시/복제 링크를 docs/config.json 의 template_url에 반영
+   - 사용자가 여는 고정 링크는 https://pchanul.github.io/Snappy/template.html
+
+7. bash scripts/deploy.sh 실행
 `);
 }
 

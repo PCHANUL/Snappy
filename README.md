@@ -82,21 +82,42 @@ cp .env.example .env.local
 supabase link --project-ref [YOUR_PROJECT_REF]
 ```
 
-### 3. 배포 (한 번에)
+### 3. 노션 템플릿 생성 및 게시
+
+`deploy.sh`를 실행하기 전에 셋업 페이지가 가리킬 최신 노션 템플릿 링크를 먼저 확정합니다.
+
+```bash
+# 1) 노션 템플릿 생성
+node scripts/create-notion-template.js <parent-page-id>
+```
+
+생성된 메인 페이지를 Notion에서 게시한 뒤, 템플릿 복제를 허용하고 복제 링크를 얻습니다.
+사용자에게 노출되는 템플릿 링크는 항상 `https://pchanul.github.io/Snappy/template.html`로 고정하고,
+이 페이지가 `docs/config.json`의 `template_url`로 리다이렉트합니다.
+
+```json
+// docs/config.json
+{
+  "template_url": "https://notion-template-link..."
+}
+```
+
+### 4. 배포 (한 번에)
 
 ```bash
 bash scripts/deploy.sh
 ```
 
-전체 흐름: 사전 확인 → DB 마이그레이션 → 시크릿 등록 → 함수 배포 → GitHub Pages 배포 → 검증
+전체 흐름: 템플릿 링크 확인 → 사전 확인 → DB 마이그레이션 → 시크릿 등록 → 함수 배포 → GitHub Pages 배포 → 검증
 
 정적 셋업 페이지는 GitHub Pages에서 제공합니다.
 
 - URL: https://pchanul.github.io/Snappy/
 - 소스: `docs/index.html`
-- 템플릿 링크 설정: `docs/config.json`의 `template_url`
+- 고정 템플릿 링크: https://pchanul.github.io/Snappy/template.html
+- 템플릿 리다이렉트 목적지: `docs/config.json`의 `template_url`
 
-### 4. 로컬 개발
+### 5. 로컬 개발
 
 ```bash
 bash scripts/dev.sh
@@ -121,6 +142,7 @@ bash scripts/dev.sh
 
 ```bash
 # 최초 배포
+# 먼저 노션 템플릿 게시 링크를 docs/config.json에 반영
 bash scripts/deploy.sh
 
 # 코드 변경 후 빠른 재배포 (함수만)

@@ -59,6 +59,8 @@ EOF
 done
 
 PAGES_FILE="$PAGES_DIR/$PAGES_ENTRY"
+PAGES_CONFIG="$PAGES_DIR/config.json"
+PAGES_TEMPLATE="$PAGES_DIR/template.html"
 
 log_step "GitHub Pages 배포"
 
@@ -86,7 +88,52 @@ if ! grep -q 'manage-user' "$PAGES_FILE"; then
   log_warn "$PAGES_FILE 에 manage-user 호출이 없습니다. 셋업 페이지가 의도한 파일인지 확인하세요."
 fi
 
+if [ ! -s "$PAGES_TEMPLATE" ]; then
+  log_error "$PAGES_TEMPLATE 파일이 없거나 비어 있습니다."
+  log_detail "셋업 페이지의 고정 템플릿 링크가 이 파일로 리다이렉트됩니다."
+  exit 1
+fi
+
+if ! grep -q 'config.json' "$PAGES_TEMPLATE"; then
+  log_error "$PAGES_TEMPLATE 에 config.json 참조가 없습니다."
+  exit 1
+fi
+
+if [ ! -s "$PAGES_CONFIG" ]; then
+  log_error "$PAGES_CONFIG 파일이 없거나 비어 있습니다."
+  log_detail "노션 템플릿 게시/복제 링크를 template_url에 설정하세요."
+  exit 1
+fi
+
+if command -v node >/dev/null 2>&1; then
+  if ! template_url=$(node - "$PAGES_CONFIG" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+const templateUrl = String(config.template_url || '').trim();
+if (!templateUrl) throw new Error('template_url is empty');
+const parsed = new URL(templateUrl);
+if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('template_url must be http(s)');
+console.log(parsed.toString());
+NODE
+  ); then
+    log_error "$PAGES_CONFIG 의 template_url을 읽을 수 없습니다."
+    exit 1
+  fi
+else
+  template_url=$(sed -nE 's/.*"template_url"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$PAGES_CONFIG" | head -1)
+  case "$template_url" in
+    http://*|https://*) ;;
+    *)
+      log_error "$PAGES_CONFIG 의 template_url이 유효한 URL로 보이지 않습니다."
+      exit 1
+      ;;
+  esac
+fi
+
 log_success "정적 페이지 파일 확인: $PAGES_FILE ($(wc -c < "$PAGES_FILE" | tr -d ' ') bytes)"
+log_success "템플릿 리다이렉트 파일 확인: $PAGES_TEMPLATE ($(wc -c < "$PAGES_TEMPLATE" | tr -d ' ') bytes)"
+log_success "템플릿 config 확인: $PAGES_CONFIG ($template_url)"
 
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 
@@ -97,8 +144,8 @@ if [ $SKIP_PUSH -eq 0 ]; then
     exit 1
   fi
 
-  if [ -n "$(git status --porcelain -- "$PAGES_FILE")" ]; then
-    log_error "$PAGES_FILE 에 커밋되지 않은 변경이 있습니다."
+  if [ -n "$(git status --porcelain -- "$PAGES_FILE" "$PAGES_TEMPLATE" "$PAGES_CONFIG")" ]; then
+    log_error "$PAGES_FILE, $PAGES_TEMPLATE, 또는 $PAGES_CONFIG 에 커밋되지 않은 변경이 있습니다."
     log_detail "GitHub Pages는 GitHub에 push된 커밋만 배포합니다. 먼저 커밋한 뒤 다시 실행하세요."
     exit 1
   fi

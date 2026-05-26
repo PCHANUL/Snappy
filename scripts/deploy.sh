@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
 # 전체 배포 흐름을 한 번에 실행
-# preflight → migrate → secrets → functions → GitHub Pages → verify
+# template config → preflight → migrate → secrets → functions → GitHub Pages → verify
 #
 # 사용법:
 #   bash scripts/deploy.sh                   # 전체 흐름
 #   bash scripts/deploy.sh --skip-preflight  # 사전 확인 스킵
 #   bash scripts/deploy.sh --skip-db         # 마이그레이션 스킵
 #   bash scripts/deploy.sh --functions-only  # 함수만 재배포
+#
+# 전체 배포 전 순서:
+#   1. node scripts/create-notion-template.js <parent-page-id>
+#   2. 생성된 노션 페이지를 게시하고 템플릿 복제를 허용
+#   3. 게시/복제 링크를 docs/config.json 의 template_url에 반영
+#   4. bash scripts/deploy.sh 실행
 
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # shellcheck source=_common.sh
 source "$SCRIPT_DIR/_common.sh"
+
+PROJECT_ROOT="$(get_project_root)"
+cd "$PROJECT_ROOT"
 
 # 플래그 파싱
 SKIP_PREFLIGHT=0
@@ -53,6 +62,12 @@ for arg in "$@"; do
   --functions-only    함수만 재배포 (preflight/db/secrets/pages/verify 모두 스킵)
   -h, --help          도움말
 
+전체 배포 전 순서:
+  1. node scripts/create-notion-template.js <parent-page-id>
+  2. 노션에서 생성된 메인 페이지 게시 + 템플릿 복제 허용
+  3. docs/config.json 의 template_url 을 게시/복제 링크로 변경
+  4. bash scripts/deploy.sh 실행
+
 예시:
   bash scripts/deploy.sh                    # 전체 흐름
   bash scripts/deploy.sh --functions-only   # 코드 변경 후 빠른 재배포
@@ -71,6 +86,51 @@ done
 # 시작 시각
 START_TIME=$(date +%s)
 
+validate_template_config() {
+  local config_file="docs/config.json"
+  local template_url=""
+
+  log_step "0. 노션 템플릿 링크 확인"
+
+  if [ ! -f "$config_file" ]; then
+    log_error "$config_file 파일이 없습니다."
+    log_detail "노션 템플릿을 게시한 뒤 template_url을 설정하세요."
+    exit 1
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    if ! template_url=$(node - "$config_file" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+const templateUrl = String(config.template_url || '').trim();
+if (!templateUrl) throw new Error('template_url is empty');
+const parsed = new URL(templateUrl);
+if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('template_url must be http(s)');
+console.log(parsed.toString());
+NODE
+    ); then
+      log_error "$config_file 의 template_url을 읽을 수 없습니다."
+      log_detail "노션 템플릿 게시/복제 링크를 template_url에 넣어주세요."
+      exit 1
+    fi
+  else
+    log_warn "node가 없어 $config_file JSON 검증을 단순 검사로 대체합니다."
+    template_url=$(sed -nE 's/.*"template_url"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$config_file" | head -1)
+    case "$template_url" in
+      http://*|https://*) ;;
+      *)
+        log_error "$config_file 의 template_url이 유효한 URL로 보이지 않습니다."
+        exit 1
+        ;;
+    esac
+  fi
+
+  log_success "템플릿 링크 확인: $template_url"
+  log_detail "사용자에게 노출되는 고정 링크: https://pchanul.github.io/Snappy/template.html"
+  log_detail "템플릿 목적지가 바뀌면 deploy.sh 실행 전에 docs/config.json을 먼저 수정하세요."
+}
+
 cat <<EOF
 
 ${BOLD}╔═══════════════════════════════════════════╗
@@ -78,6 +138,13 @@ ${BOLD}╔═══════════════════════�
 ╚═══════════════════════════════════════════╝${NC}
 
 EOF
+
+# 0. 노션 템플릿 링크 확인
+if [ $SKIP_PAGES -eq 0 ]; then
+  validate_template_config
+else
+  log_warn "노션 템플릿 링크 확인 스킵 (GitHub Pages 배포 스킵)"
+fi
 
 # 1. 사전 확인
 if [ $SKIP_PREFLIGHT -eq 0 ]; then
@@ -139,7 +206,6 @@ if [ $FUNCTIONS_ONLY -eq 1 ]; then
 else
   log_info "다음 단계:"
   log_detail "1. 셋업 페이지 확인: https://pchanul.github.io/Snappy/"
-  log_detail "2. 노션 통합 생성 (https://notion.so/my-integrations)"
-  log_detail "3. 노션 템플릿 제작 및 자동화 설정"
-  log_detail "4. 첫 사용자로 가입 후 실제 검색 테스트"
+  log_detail "2. 고정 템플릿 링크 확인: https://pchanul.github.io/Snappy/template.html"
+  log_detail "3. 첫 사용자 인증키 발급 후 실제 셋업/검색 테스트"
 fi
