@@ -3,7 +3,7 @@
 
 import { NotionApiError } from '../_shared/errors.ts';
 import { logger } from '../_shared/logger.ts';
-import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks, buildTabItemBlocks } from './blocks.ts';
+import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks } from './blocks.ts';
 import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
 import { PLATFORM_INFO } from '../_shared/types.ts';
 
@@ -199,6 +199,95 @@ export class NotionClient {
     }
 
     logger.info('Notion page updated with tabs', { pageId, platforms: nonEmpty.length, totalCount });
+  }
+
+  // 검색 결과 페이지 내에 콘텐츠 child database 생성 — 매체별 보드 뷰용
+  async createContentDatabase(pageId: string, keyword: string): Promise<string> {
+    const res = await this.fetchApi('databases', {
+      method: 'POST',
+      body: JSON.stringify({
+        parent: { page_id: toUuid(pageId) },
+        is_inline: true,
+        title: [{ type: 'text', text: { content: `콘텐츠 — ${keyword}` } }],
+        properties: {
+          '제목': { title: {} },
+          '매체': {
+            select: {
+              options: [
+                { name: '네이버블로그', color: 'green' },
+                { name: '유튜브', color: 'red' },
+                { name: '티스토리', color: 'orange' },
+                { name: '브런치', color: 'purple' },
+              ],
+            },
+          },
+          'URL': { url: {} },
+          '작성자': { rich_text: {} },
+          '날짜': { date: {} },
+        },
+      }),
+    });
+    return (res.id as string).replace(/-/g, '');
+  }
+
+  // 콘텐츠 아이템을 child DB에 페이지(행)로 추가 — Notion 속도 제한 고려 직렬 처리
+  async addItemsToDatabase(databaseId: string, items: FlatResult[]): Promise<void> {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const info = PLATFORM_INFO[item.platform];
+      const properties: Record<string, any> = {
+        '제목': { title: [{ type: 'text', text: { content: item.title } }] },
+        '매체': { select: { name: PLATFORM_TO_NOTION[item.platform] } },
+      };
+      if (item.url) properties['URL'] = { url: item.url };
+      if (item.author) properties['작성자'] = { rich_text: [{ type: 'text', text: { content: item.author } }] };
+      if (item.published_at) properties['날짜'] = { date: { start: item.published_at.slice(0, 10) } };
+
+      const body: Record<string, any> = {
+        parent: { database_id: toUuid(databaseId) },
+        icon: { type: 'emoji', emoji: info.emoji },
+        properties,
+      };
+      if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
+
+      await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
+      if (i + 1 < items.length) await sleep(350);
+    }
+  }
+
+  // 요약 callout + child DB로 검색 결과 페이지 완성
+  async updatePageWithChildDatabase(
+    pageId: string,
+    keyword: string,
+    results: SearchResult[],
+    metadata: SearchMetadata,
+    totalCount: number,
+  ): Promise<void> {
+    // 1. 속성 업데이트 (상태 → 완료)
+    await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        properties: {
+          '상태': statusValue('완료'),
+          '발견 콘텐츠 수': { number: totalCount },
+        },
+      }),
+    }, '완료');
+
+    // 2. 요약 callout 추가
+    const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
+    await this.appendBlocks(pageId, summaryBlocks);
+
+    // 3. child database 생성
+    const databaseId = await this.createContentDatabase(pageId, keyword);
+
+    // 4. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지)
+    const allItems: FlatResult[] = results.flatMap(r =>
+      r.items.map(item => ({ ...item, platform: r.platform }))
+    );
+    await this.addItemsToDatabase(databaseId, allItems);
+
+    logger.info('Notion page updated with child database', { pageId, totalCount, databaseId });
   }
 
   // 배치 서브페이지 생성 (더보기용)

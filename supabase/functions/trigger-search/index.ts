@@ -111,8 +111,8 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     );
     EdgeRuntime.waitUntil(crawlSearchResults(crawlTargets));
 
-    // 5. 매체별 탭으로 결과 표시 (상태 → 완료)
-    await notion.updatePageWithTabs(
+    // 5. 요약 callout + child DB(매체별 행)로 결과 표시 (상태 → 완료)
+    await notion.updatePageWithChildDatabase(
       pageId,
       request.keyword,
       orchestratorResult.results,
