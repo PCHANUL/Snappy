@@ -140,16 +140,16 @@ export class NotionClient {
     metadata: SearchMetadata,
     totalCount: number,
   ): Promise<void> {
-    // 1. 속성 업데이트
-    await this.fetchApi(`pages/${pageId}`, {
+    // 1. 속성 업데이트 (status fallback 포함)
+    await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
       method: 'PATCH',
       body: JSON.stringify({
         properties: {
-          '상태': { status: { name: '완료' } },
+          '상태': statusValue('완료'),
           '발견 콘텐츠 수': { number: totalCount },
         },
       }),
-    });
+    }, '완료');
 
     // 2. 요약 callout 추가
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);

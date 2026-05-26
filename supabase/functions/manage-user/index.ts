@@ -52,6 +52,8 @@ serve(async (req) => {
         return await handleSetupSearchButton(req);
       case 'set-search-status':
         return await handleSetSearchStatus(req);
+      case 'get-search-status':
+        return await handleGetSearchStatus(url);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -407,6 +409,22 @@ async function handleAdminUpgradeUser(req: Request): Promise<Response> {
   logger.info('Admin upgraded user', { user_id, subscription_tier, subscription_expires_at });
 
   return jsonResponse({ success: true, user_id, subscription_tier, subscription_expires_at });
+}
+
+// === 검색 완료 여부 폴링용 상태 조회 ===
+async function handleGetSearchStatus(url: URL): Promise<Response> {
+  const user_id = url.searchParams.get('user_id');
+  if (!user_id) throw new ValidationError('user_id required');
+
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('searching_since')
+    .eq('id', user_id)
+    .single();
+
+  if (error || !data) throw new AuthError('User not found');
+
+  return jsonResponse({ searching: data.searching_since !== null });
 }
 
 // === 검색 중 상태 임베드 URL 반영 ===
