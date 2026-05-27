@@ -188,23 +188,26 @@ fi
 TEST_EMAIL="test-$(date +%s)@example.com"
 log_info "테스트 이메일: $TEST_EMAIL"
 
-# 1) 가입
-log_info "가입 요청..."
-signup_response=$(curl -s -X POST "$BASE_URL/manage-user?action=signup" \
+# 1) 관리자 사용자 생성
+require_env "ADMIN_SECRET"
+
+log_info "관리자 사용자 생성 요청..."
+signup_response=$(curl -s -X POST "$BASE_URL/manage-user?action=admin-create-user" \
   -H "$AUTH_HEADER" \
+  -H "x-admin-secret: $ADMIN_SECRET" \
   -H "Content-Type: application/json" \
-  -d "{\"email\": \"$TEST_EMAIL\"}")
+  -d "{\"email\": \"$TEST_EMAIL\", \"subscription_tier\": \"free\"}")
 
 echo "$signup_response" | jq '.'
 
 USER_ID=$(echo "$signup_response" | jq -r '.user_id // empty')
 
 if [ -z "$USER_ID" ]; then
-  log_error "가입 실패 또는 user_id 누락"
+  log_error "관리자 사용자 생성 실패 또는 user_id 누락"
   exit 1
 fi
 
-log_success "가입 성공 (user_id: $USER_ID)"
+log_success "관리자 사용자 생성 성공 (user_id: $USER_ID)"
 
 # 2) 노션 직접 토큰 등록 (선택, OAuth 우회 테스트용)
 echo ""
@@ -268,11 +271,28 @@ fi
 log_step "3. 테스트 사용자 정리"
 
 if confirm "테스트 사용자를 DB에서 삭제하시겠습니까?" "Y"; then
-  log_info "다음 SQL을 Supabase SQL Editor에서 실행하세요:"
-  echo ""
-  echo "  DELETE FROM users WHERE id = '$USER_ID';"
-  echo ""
-  log_detail "또는 Supabase 대시보드 > Table Editor에서 직접 삭제"
+  if [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+    delete_status=$(curl -sS -o /dev/null -w "%{http_code}" \
+      -X DELETE "$SUPABASE_URL/rest/v1/users?id=eq.$USER_ID" \
+      -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+      -H "Prefer: return=minimal")
+
+    if [ "$delete_status" = "200" ] || [ "$delete_status" = "204" ]; then
+      log_success "테스트 사용자 삭제 완료"
+    else
+      log_error "테스트 사용자 삭제 실패 (HTTP $delete_status)"
+      log_info "다음 SQL을 Supabase SQL Editor에서 실행하세요:"
+      echo ""
+      echo "  DELETE FROM users WHERE id = '$USER_ID';"
+      echo ""
+    fi
+  else
+    log_info "SUPABASE_SERVICE_ROLE_KEY가 없어 자동 삭제를 건너뜁니다. 다음 SQL을 실행하세요:"
+    echo ""
+    echo "  DELETE FROM users WHERE id = '$USER_ID';"
+    echo ""
+  fi
 else
   log_info "테스트 사용자 ID: $USER_ID (수동 정리 필요)"
 fi

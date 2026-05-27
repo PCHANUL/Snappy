@@ -38,6 +38,9 @@ fi
 if [ -n "${SETUP_PAGE_URL:-}" ]; then
   SECRETS_TO_SET+=("SETUP_PAGE_URL")
 fi
+if [ -n "${ADMIN_SECRET:-}" ]; then
+  SECRETS_TO_SET+=("ADMIN_SECRET")
+fi
 
 log_info "등록할 시크릿: ${#SECRETS_TO_SET[@]}개"
 for var in "${SECRETS_TO_SET[@]}"; do
