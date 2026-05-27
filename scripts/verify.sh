@@ -212,7 +212,12 @@ log_success "관리자 사용자 생성 성공 (user_id: $USER_ID)"
 # 2) 노션 직접 토큰 등록 (선택, OAuth 우회 테스트용)
 echo ""
 if confirm "노션 API 키 직접 등록도 테스트하시겠습니까? (OAuth 우회)" "N"; then
-  if [ -n "${NOTION_API_KEY:-}" ]; then
+  if [ "${ASSUME_YES:-0}" = "1" ]; then
+    notion_key="${NOTION_API_KEY:-}"
+    if [ -n "$notion_key" ]; then
+      log_info "ASSUME_YES=1: .env.local의 NOTION_API_KEY를 사용합니다."
+    fi
+  elif [ -n "${NOTION_API_KEY:-}" ]; then
     read -p "노션 API 키 입력 (Enter=.env.local NOTION_API_KEY 사용): " notion_key
     notion_key="${notion_key:-$NOTION_API_KEY}"
   else
@@ -224,8 +229,15 @@ if confirm "노션 API 키 직접 등록도 테스트하시겠습니까? (OAuth 
   else
     log_info "노션 API로 접근 가능한 데이터베이스 목록 조회..."
     if list_notion_databases "$notion_key" && [ -n "$FIRST_NOTION_DB_ID" ]; then
-      read -p "노션 DB ID 입력 (Enter=첫 번째 DB 사용): " notion_db_id
-      notion_db_id="${notion_db_id:-$FIRST_NOTION_DB_ID}"
+      if [ "${ASSUME_YES:-0}" = "1" ]; then
+        notion_db_id="$FIRST_NOTION_DB_ID"
+        log_info "ASSUME_YES=1: 첫 번째 노션 DB를 사용합니다."
+      else
+        read -p "노션 DB ID 입력 (Enter=첫 번째 DB 사용): " notion_db_id
+        notion_db_id="${notion_db_id:-$FIRST_NOTION_DB_ID}"
+      fi
+    elif [ "${ASSUME_YES:-0}" = "1" ]; then
+      notion_db_id=""
     else
       read -p "노션 DB ID 입력 (목록에서 직접 복사 또는 수동 입력): " notion_db_id
     fi
