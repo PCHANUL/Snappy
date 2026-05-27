@@ -111,44 +111,54 @@ async function handleCallback(url: URL): Promise<Response> {
     }
 
     const encryptedToken = await encryptNotionKey(access_token);
-    const update: Record<string, any> = {
-      notion_user_id: notionUserId,
+
+    // 핵심 업데이트 필드 (컬럼이 반드시 존재하는 것만 포함)
+    const coreUpdate: Record<string, any> = {
       notion_api_key_encrypted: encryptedToken,
     };
-    if (email) update.email = email;
-    if (workspace_id) update.notion_workspace_id = workspace_id;
-    if (workspace_name) update.notion_workspace_name = workspace_name;
+    if (workspace_id) coreUpdate.notion_workspace_id = workspace_id;
+    if (workspace_name) coreUpdate.notion_workspace_name = workspace_name;
 
     // 템플릿 복제로 연결된 경우: 검색 DB 자동 연동
     if (duplicated_template_id) {
       try {
         const dbId = await new NotionClient(access_token).resolveSearchDatabase(duplicated_template_id);
-        if (dbId) update.notion_database_id = dbId;
+        if (dbId) coreUpdate.notion_database_id = dbId;
         else logger.info('No database resolved from duplicated template', { notionUserId, duplicated_template_id });
       } catch (err) {
         logger.error('Failed to resolve DB from duplicated template', err, { notionUserId });
       }
     }
 
-    // notion_user_id 기준으로 사용자 찾기 — 없으면 생성
-    const { data: existing } = await getSupabase()
-      .from('users')
-      .select('id')
-      .eq('notion_user_id', notionUserId)
-      .maybeSingle();
+    // 사용자 조회: email → notion_user_id 순으로 시도 (마이그레이션 013 미적용 환경 호환)
+    let existing: { id: string } | null = null;
+    if (email) {
+      const { data } = await getSupabase()
+        .from('users').select('id').eq('email', email).maybeSingle();
+      existing = data;
+    }
+    if (!existing) {
+      const { data } = await getSupabase()
+        .from('users').select('id').eq('notion_user_id', notionUserId).maybeSingle();
+      existing = data;
+    }
 
     let userId: string;
     if (existing) {
       userId = existing.id;
-      const { error } = await getSupabase().from('users').update(update).eq('id', userId);
+      const { error } = await getSupabase().from('users').update(coreUpdate).eq('id', userId);
       if (error) {
         logger.error('Failed to update user', { error, userId });
         return redirect('error=store_failed');
       }
     } else {
+      if (!email) {
+        logger.error('Notion OAuth: email missing, cannot create user', { notionUserId });
+        return redirect('error=no_email');
+      }
       const { data: newUser, error } = await getSupabase()
         .from('users')
-        .insert({ ...update, subscription_tier: 'free' })
+        .insert({ ...coreUpdate, email, subscription_tier: 'free' })
         .select('id')
         .single();
       if (error || !newUser) {
@@ -157,6 +167,15 @@ async function handleCallback(url: URL): Promise<Response> {
       }
       userId = newUser.id;
     }
+
+    // notion_user_id는 별도 업데이트 — 마이그레이션 013 미적용 시 무시
+    getSupabase()
+      .from('users')
+      .update({ notion_user_id: notionUserId })
+      .eq('id', userId)
+      .then(({ error }) => {
+        if (error) logger.info('notion_user_id update skipped (migration pending?)', { message: error.message });
+      });
 
     // 템플릿 복제 경로가 아닌 경우: 올바른 페이지가 연결됐는지 이름으로 검증
     if (!duplicated_template_id) {
