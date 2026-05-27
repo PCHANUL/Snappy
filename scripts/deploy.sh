@@ -4,6 +4,7 @@
 #
 # 사용법:
 #   bash scripts/deploy.sh                   # 전체 흐름
+#   bash scripts/deploy.sh --yes             # 모든 확인 프롬프트 자동 승인
 #   bash scripts/deploy.sh --skip-preflight  # 사전 확인 스킵
 #   bash scripts/deploy.sh --skip-db         # 마이그레이션 스킵
 #   bash scripts/deploy.sh --functions-only  # 함수만 재배포
@@ -31,9 +32,11 @@ SKIP_DEPLOY=0
 SKIP_PAGES=0
 SKIP_VERIFY=0
 FUNCTIONS_ONLY=0
+ALL_YES=0
 
 for arg in "$@"; do
   case $arg in
+    --yes|-y) ALL_YES=1 ;;
     --skip-preflight) SKIP_PREFLIGHT=1 ;;
     --skip-db) SKIP_DB=1 ;;
     --skip-secrets) SKIP_SECRETS=1 ;;
@@ -60,6 +63,7 @@ for arg in "$@"; do
   --skip-pages        GitHub Pages 배포 스킵
   --skip-verify       검증 스킵
   --functions-only    함수만 재배포 (preflight/db/secrets/pages/verify 모두 스킵)
+  --yes, -y           모든 확인 프롬프트 자동 승인
   -h, --help          도움말
 
 전체 배포 전 순서:
@@ -70,6 +74,7 @@ for arg in "$@"; do
 
 예시:
   bash scripts/deploy.sh                    # 전체 흐름
+  bash scripts/deploy.sh --yes              # 전체 흐름 + 모든 확인 자동 승인
   bash scripts/deploy.sh --functions-only   # 코드 변경 후 빠른 재배포
   bash scripts/deploy.sh --skip-db          # 마이그레이션 이미 했을 때
   bash scripts/deploy.sh --skip-pages       # GitHub Pages는 따로 배포할 때
@@ -82,6 +87,10 @@ EOF
       ;;
   esac
 done
+
+if [ $ALL_YES -eq 1 ]; then
+  export ASSUME_YES=1
+fi
 
 # 시작 시각
 START_TIME=$(date +%s)

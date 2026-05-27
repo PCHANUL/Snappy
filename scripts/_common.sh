@@ -76,6 +76,11 @@ confirm() {
   local prompt="${1:-계속하시겠습니까?}"
   local default="${2:-N}"
 
+  if [ "${ASSUME_YES:-0}" = "1" ]; then
+    echo "$prompt [auto-yes]"
+    return 0
+  fi
+
   local options
   if [ "$default" = "Y" ]; then
     options="[Y/n]"
