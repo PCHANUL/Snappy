@@ -139,6 +139,34 @@
       display: none;
     }
 
+    /* ── 트렌드 칩 ── */
+    #trendsSection { margin-bottom: 4px; }
+    .trend-chip {
+      padding: 6px 12px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 999px;
+      color: #9a3412;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .trend-chip:hover { background: #ffedd5; border-color: #fb923c; }
+
+    /* ── 키워드 트렌드 ── */
+    #keywordTrend {
+      padding: 10px 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      color: #374151;
+      text-align: center;
+      line-height: 1.7;
+    }
+
     .disabled-overlay { opacity: 0.5; pointer-events: none; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -150,6 +178,11 @@
 </head>
 <body>
   <div class="wrap">
+    <div id="trendsSection" style="display:none">
+      <div class="label">🔥 오늘의 트렌드</div>
+      <div class="chips" id="trendChips" style="margin-top:6px"></div>
+    </div>
+
     <div id="form">
       <div class="field">
         <label class="label" for="keyword">키워드</label>
@@ -179,6 +212,7 @@
 
     <button id="searchBtn">🚀 검색하기</button>
     <div id="status"></div>
+    <div id="keywordTrend" style="display:none"></div>
     <div class="config-guide" id="configGuide">
       셋업을 완료하면 이 버튼이 활성화됩니다.<br>
       <a href="https://pchanul.github.io/Snappy/" target="_blank"
@@ -252,6 +286,7 @@
       }
 
       // 1. 즉시 UI 비활성
+      document.getElementById('keywordTrend').style.display = 'none';
       btn.disabled = true;
       btn.classList.add('searching');
       btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
@@ -318,6 +353,7 @@
             } else {
               status.className = 'accepted';
               status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
+              showKeywordTrend(keywordEl.value.trim());
             }
           } else if (data.message) {
             status.textContent = data.message;
@@ -380,6 +416,66 @@
     keywordEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') btn.click();
     });
+
+    // ── 트렌드 ──────────────────────────────────────────────────────────────
+    async function loadDailyTrends() {
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/trend-data?action=daily`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.topics?.length) return;
+
+        const section = document.getElementById('trendsSection');
+        const chips = document.getElementById('trendChips');
+        data.topics.slice(0, 8).forEach((t) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'trend-chip';
+          btn.textContent = t.keyword;
+          btn.addEventListener('click', () => {
+            keywordEl.value = t.keyword;
+            keywordEl.focus();
+          });
+          chips.appendChild(btn);
+        });
+        section.style.display = 'block';
+      } catch { /* 트렌드 로딩 실패는 무시 */ }
+    }
+
+    async function showKeywordTrend(keyword) {
+      if (!keyword) return;
+      try {
+        const res = await fetch(
+          `${FUNCTION_BASE}/trend-data?action=keyword&keyword=${encodeURIComponent(keyword)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.trend) return;
+
+        const { direction, changePercent, points } = data.trend;
+        const sparkline = toSparkline(points.map((p) => p.ratio));
+        const arrow = direction === 'up' ? '📈' : direction === 'down' ? '📉' : '➡️';
+        const changeText =
+          direction === 'up' ? `+${changePercent}%` :
+          direction === 'down' ? `${changePercent}%` : '보합';
+
+        const el = document.getElementById('keywordTrend');
+        el.innerHTML =
+          `${arrow} <strong>'${keyword}'</strong> 검색량 ${changeText} (최근 2주)<br>` +
+          `<span style="font-family:monospace;letter-spacing:3px;font-size:1rem">${sparkline}</span>`;
+        el.style.display = 'block';
+      } catch { /* 트렌드 표시 실패는 무시 */ }
+    }
+
+    function toSparkline(values) {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const range = max - min || 1;
+      const chars = '▁▂▃▄▅▆▇█';
+      return values.slice(-12).map((v) => chars[Math.round((v - min) / range * 7)]).join('');
+    }
+
+    if (configured) loadDailyTrends();
   </script>
 </body>
 </html>
