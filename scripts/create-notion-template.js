@@ -45,6 +45,7 @@ const SETUP_URL      = `${PAGES_BASE}/`;
 const SEARCH_URL     = `${PAGES_BASE}/search.html`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
+const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
 
 // --user-id <value> 플래그: 임베드 URL에 user_id 자동 삽입
 const userIdFlagIdx = process.argv.indexOf('--user-id');
@@ -181,6 +182,31 @@ async function createSearchDB(parentPageId) {
       '발견 콘텐츠 수': { number: { format: 'number' } },
       '검색일시':       { created_time: {} },
       '📄 더보기':      { button: {} },
+    },
+  });
+}
+
+async function createContentDB(parentPageId) {
+  return notion('POST', '/databases', {
+    parent: { page_id: parentPageId },
+    is_inline: true,
+    icon: { type: 'emoji', emoji: '📚' },
+    title: rich('콘텐츠'),
+    properties: {
+      '제목': { title: {} },
+      '매체': {
+        select: {
+          options: [
+            { name: '네이버블로그', color: 'green' },
+            { name: '유튜브', color: 'red' },
+            { name: '티스토리', color: 'orange' },
+            { name: '브런치', color: 'purple' },
+          ],
+        },
+      },
+      'URL': { url: {} },
+      '작성자': { rich_text: {} },
+      '날짜': { date: {} },
     },
   });
 }
@@ -375,6 +401,15 @@ async function main() {
   await appendBlocks(seoljeongPage.id, blocksSeoljeong());
   console.log(` ✅`);
 
+  await sleep(300);
+
+  // 6. 설정 하위 검색 결과 템플릿 페이지 + 콘텐츠 DB
+  process.stdout.write('📚 콘텐츠 DB 템플릿 페이지 생성 중...');
+  const templateSearchPage = await createPage(seoljeongPage.id, SEARCH_TEMPLATE_PAGE_TITLE, '📄');
+  await sleep(300);
+  const contentDb = await createContentDB(templateSearchPage.id);
+  console.log(` ✅  Page ID: ${templateSearchPage.id}, DB ID: ${contentDb.id}`);
+
   // 완료
   console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -393,23 +428,29 @@ ${mainPage.url}
    - Body: { "notion_page_id": "{{현재 페이지 ID}}" }
      (user_id는 서버가 검색 기록에서 자동 조회하므로 생략 가능)
 
-2. 검색 DB 뷰 3개 추가
+2. 검색 결과 템플릿 확인
+   - 스크립트가 설정 페이지 아래에 "${SEARCH_TEMPLATE_PAGE_TITLE}" 페이지를 생성했습니다.
+   - 해당 페이지 안에 "콘텐츠" 인라인 DB도 생성되어 있습니다.
+   - 서버는 새 검색 행 생성 시 이 페이지를 템플릿으로 적용하고, 복제된 콘텐츠 DB에 검색 결과를 추가합니다.
+   - 이 페이지는 삭제하거나 이름을 바꾸지 마세요.
+
+3. 검색 DB 뷰 3개 추가
    - 전체 (테이블, 검색일시 내림차순)
    - 최근 검색 (갤러리, 지난 7일 필터)
    - 진행 중 (보드, 상태별 그룹)
 
-3. ${USER_ID === 'YOUR_USER_ID'
+4. ${USER_ID === 'YOUR_USER_ID'
     ? '설정 페이지 사용량/기록 임베드 URL에서 YOUR_USER_ID를 실제 값으로 교체\n   (또는 다음번엔 --user-id <user_id> 옵션으로 자동 삽입)'
     : `✅ 사용량/기록 임베드 URL에 user_id 자동 삽입됨 (${USER_ID.slice(0, 8)}...)`}
 
-4. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
+5. 메인 페이지에 커버 이미지 추가 (Unsplash → "minimal workspace")
 
-5. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
+6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 
-6. 게시/복제 링크를 docs/config.json 의 template_url에 반영
+7. 게시/복제 링크를 docs/config.json 의 template_url에 반영
    - 사용자가 여는 고정 링크는 https://pchanul.github.io/Snappy/template.html
 
-7. bash scripts/deploy.sh 실행
+8. bash scripts/deploy.sh 실행
 `);
 }
 

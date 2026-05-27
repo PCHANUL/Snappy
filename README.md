@@ -91,6 +91,12 @@ supabase link --project-ref [YOUR_PROJECT_REF]
 node scripts/create-notion-template.js <parent-page-id>
 ```
 
+스크립트는 `설정` 페이지 아래에 `검색 결과 템플릿` 페이지를 만들고, 그 페이지 안에 `콘텐츠`
+인라인 DB를 자동 생성합니다. 이 DB에는 `제목`, `매체`, `URL`, `작성자`, `날짜` 속성이 포함됩니다.
+서버는 새 검색 행 생성 시 `검색 결과 템플릿` 페이지를 `template_id`로 적용하고, 복제된
+`콘텐츠` DB에 검색 결과를 추가합니다. 이 페이지를 찾지 못하면 기존처럼 검색 결과 페이지마다
+`콘텐츠` DB를 직접 생성합니다.
+
 생성된 메인 페이지를 Notion에서 게시한 뒤, 템플릿 복제를 허용하고 복제 링크를 얻습니다.
 사용자에게 노출되는 템플릿 링크는 항상 `https://pchanul.github.io/Snappy/template.html`로 고정하고,
 이 페이지가 `docs/config.json`의 `template_url`로 리다이렉트합니다.

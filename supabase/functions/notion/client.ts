@@ -31,9 +31,13 @@ const STATUS_FALLBACK: Record<SearchStatus, string> = {
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_API_VERSION = '2022-06-28';
+const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
+const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
 
 export class NotionClient {
+  private pagesCreatedWithTemplate = new Set<string>();
+
   constructor(private apiKey: string) {}
 
   // 페이지 상태만 업데이트
@@ -274,20 +278,31 @@ export class NotionClient {
       method: 'PATCH',
       body: JSON.stringify({
         properties: {
+          '키워드': { title: [{ type: 'text', text: { content: keyword } }] },
           '상태': statusValue('완료'),
           '발견 콘텐츠 수': { number: totalCount },
         },
       }),
     }, '완료');
 
-    // 2. 요약 callout 추가
-    await onProgress?.('노션에 요약 작성 중...');
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
-    await this.appendBlocks(pageId, summaryBlocks);
+    const createdWithTemplate = this.pagesCreatedWithTemplate.has(toUuid(pageId));
+    let databaseId: string;
 
-    // 3. child database 생성
-    await onProgress?.('콘텐츠 DB 생성 중...');
-    const databaseId = await this.createContentDatabase(pageId, keyword);
+    if (createdWithTemplate) {
+      // 템플릿 적용은 비동기라, 콘텐츠 DB 복제가 끝난 뒤 결과 블록을 추가한다.
+      await onProgress?.('콘텐츠 DB 확인 중...');
+      databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
+
+      await onProgress?.('노션에 요약 작성 중...');
+      await this.appendBlocks(pageId, summaryBlocks);
+    } else {
+      await onProgress?.('노션에 요약 작성 중...');
+      await this.appendBlocks(pageId, summaryBlocks);
+
+      await onProgress?.('콘텐츠 DB 확인 중...');
+      databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
+    }
 
     // 4. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지)
     const allItems: FlatResult[] = results.flatMap(r =>
@@ -342,17 +357,32 @@ export class NotionClient {
     databaseId: string,
     params: { keyword: string; platforms: Platform[]; period: Period },
   ): Promise<string> {
+    try {
+      const dataSourceId = await this.getDataSourceId(databaseId);
+      const templatePageId = await this.findSearchEntryTemplatePage(databaseId);
+
+      if (templatePageId) {
+        return await this.createSearchEntryWithTemplate(databaseId, dataSourceId, templatePageId, params);
+      }
+
+      logger.warn('Search entry template page not found; trying Notion default template', {
+        databaseId,
+        templateTitle: SEARCH_TEMPLATE_PAGE_TITLE,
+      });
+      return await this.createSearchEntryWithDefaultTemplate(databaseId, dataSourceId, params);
+    } catch (error) {
+      logger.warn('Notion template was not applied; falling back to direct page creation', {
+        databaseId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     const res = await this.fetchApiWithStatusFallback('pages', {
       method: 'POST',
       body: JSON.stringify({
         parent: { database_id: toUuid(databaseId) },
         icon: { type: 'emoji', emoji: '🔍' },
-        properties: {
-          '키워드': { title: [{ type: 'text', text: { content: params.keyword } }] },
-          '상태': statusValue('검색중'),
-          '매체': { multi_select: params.platforms.map((p) => ({ name: PLATFORM_TO_NOTION[p] })) },
-          '기간': { select: { name: PERIOD_TO_NOTION[params.period] } },
-        },
+        properties: searchEntryProperties(params),
       }),
     }, '검색중');
     return res.id as string;
@@ -396,6 +426,192 @@ export class NotionClient {
       return await this.fetchApi(path, {
         ...init,
         body: JSON.stringify(body),
+      });
+    }
+  }
+
+  private async getDataSourceId(databaseId: string): Promise<string> {
+    const db = await this.fetchApi(`databases/${toUuid(databaseId)}`, {
+      method: 'GET',
+      headers: { 'Notion-Version': NOTION_TEMPLATE_API_VERSION },
+    });
+    const dataSourceId = db.data_sources?.[0]?.id;
+    if (!dataSourceId) {
+      throw new NotionApiError('data source not found for database');
+    }
+    return dataSourceId as string;
+  }
+
+  private async findSearchEntryTemplatePage(databaseId: string): Promise<string | null> {
+    const settingsTemplatePageId = await this.findSettingsTemplatePage(databaseId);
+    if (settingsTemplatePageId) return settingsTemplatePageId;
+
+    // 이전 템플릿 구조 호환: 검색 DB 안에 템플릿용 행이 있으면 계속 사용한다.
+    const data = await this.fetchApi(`databases/${toUuid(databaseId)}/query`, {
+      method: 'POST',
+      body: JSON.stringify({
+        page_size: 1,
+        filter: {
+          property: '키워드',
+          title: { equals: SEARCH_TEMPLATE_PAGE_TITLE },
+        },
+      }),
+    });
+
+    const templatePage = ((data.results as any[]) || [])[0];
+    return typeof templatePage?.id === 'string' ? templatePage.id : null;
+  }
+
+  private async findSettingsTemplatePage(databaseId: string): Promise<string | null> {
+    const parentPageId = await this.getDatabaseParentPageId(databaseId);
+    const settingsPageId = await this.findChildPageIdByTitle(parentPageId, '설정');
+    if (!settingsPageId) return null;
+
+    return await this.findChildPageIdByTitle(settingsPageId, SEARCH_TEMPLATE_PAGE_TITLE);
+  }
+
+  private async findChildPageIdByTitle(pageId: string, title: string): Promise<string | null> {
+    let cursor: string | undefined;
+    do {
+      const qs = new URLSearchParams({ page_size: '100' });
+      if (cursor) qs.set('start_cursor', cursor);
+
+      const data = await this.fetchApi(`blocks/${toUuid(pageId)}/children?${qs.toString()}`, { method: 'GET' });
+      const block = ((data.results as any[]) || []).find(
+        (b) => b.type === 'child_page' && b.child_page?.title === title,
+      );
+      if (block?.id) return block.id as string;
+
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    return null;
+  }
+
+  private async createSearchEntryWithTemplate(
+    databaseId: string,
+    dataSourceId: string,
+    templatePageId: string,
+    params: { keyword: string; platforms: Platform[]; period: Period },
+  ): Promise<string> {
+    const res = await this.createSearchEntryWithNotionTemplate(
+      dataSourceId,
+      params,
+      { type: 'template_id', template_id: toUuid(templatePageId) },
+    );
+
+    this.pagesCreatedWithTemplate.add(toUuid(res.id as string));
+    logger.info('Notion search entry created with template page', {
+      pageId: res.id,
+      databaseId,
+      dataSourceId,
+      templatePageId,
+    });
+    return res.id as string;
+  }
+
+  private async createSearchEntryWithDefaultTemplate(
+    databaseId: string,
+    dataSourceId: string,
+    params: { keyword: string; platforms: Platform[]; period: Period },
+  ): Promise<string> {
+    const res = await this.createSearchEntryWithNotionTemplate(
+      dataSourceId,
+      params,
+      { type: 'default' },
+    );
+
+    this.pagesCreatedWithTemplate.add(toUuid(res.id as string));
+    logger.info('Notion search entry created with default template', { pageId: res.id, databaseId, dataSourceId });
+    return res.id as string;
+  }
+
+  private async createSearchEntryWithNotionTemplate(
+    dataSourceId: string,
+    params: { keyword: string; platforms: Platform[]; period: Period },
+    template: Record<string, unknown>,
+  ): Promise<any> {
+    return await this.fetchApiWithStatusFallback('pages', {
+      method: 'POST',
+      headers: { 'Notion-Version': NOTION_TEMPLATE_API_VERSION },
+      body: JSON.stringify({
+        parent: {
+          type: 'data_source_id',
+          data_source_id: toUuid(dataSourceId),
+        },
+        icon: { type: 'emoji', emoji: '🔍' },
+        properties: searchEntryProperties(params),
+        template,
+      }),
+    }, '검색중');
+  }
+
+  private async findOrCreateContentDatabase(pageId: string, keyword: string): Promise<string> {
+    const normalizedPageId = toUuid(pageId);
+    const shouldWaitForTemplate = this.pagesCreatedWithTemplate.has(normalizedPageId);
+
+    const existing = shouldWaitForTemplate
+      ? await this.waitForTemplateContentDatabase(normalizedPageId)
+      : await this.findContentDatabase(normalizedPageId);
+
+    if (existing) {
+      this.pagesCreatedWithTemplate.delete(normalizedPageId);
+      await this.renameContentDatabase(existing, keyword);
+      logger.info('Using content database from template', { pageId, databaseId: existing });
+      return existing.replace(/-/g, '');
+    }
+
+    this.pagesCreatedWithTemplate.delete(normalizedPageId);
+    return await this.createContentDatabase(pageId, keyword);
+  }
+
+  private async waitForTemplateContentDatabase(pageId: string): Promise<string | null> {
+    for (let i = 0; i < 12; i++) {
+      const databaseId = await this.findContentDatabase(pageId);
+      if (databaseId) return databaseId;
+      await sleep(500);
+    }
+    return null;
+  }
+
+  private async findContentDatabase(pageId: string): Promise<string | null> {
+    const databases: Array<{ id: string; title: string }> = [];
+    let cursor: string | undefined;
+
+    do {
+      const qs = new URLSearchParams({ page_size: '100' });
+      if (cursor) qs.set('start_cursor', cursor);
+
+      const data = await this.fetchApi(`blocks/${toUuid(pageId)}/children?${qs.toString()}`, { method: 'GET' });
+      for (const block of (data.results as any[]) || []) {
+        if (block.type === 'child_database') {
+          databases.push({
+            id: block.id as string,
+            title: block.child_database?.title || '',
+          });
+        }
+      }
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    const contentDb = databases.find(db => isContentDatabaseTitle(db.title));
+    if (contentDb) return contentDb.id;
+
+    return databases.length === 1 ? databases[0].id : null;
+  }
+
+  private async renameContentDatabase(databaseId: string, keyword: string): Promise<void> {
+    try {
+      await this.fetchApi(`databases/${toUuid(databaseId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: [{ type: 'text', text: { content: `콘텐츠 — ${keyword}` } }],
+        }),
+      });
+    } catch (error) {
+      logger.warn('Failed to rename template content database', {
+        databaseId,
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }
@@ -617,6 +833,20 @@ function toUuid(id: string): string {
 
 function statusValue(status: string): { status: { name: string } } {
   return { status: { name: status } };
+}
+
+function searchEntryProperties(params: { keyword: string; platforms: Platform[]; period: Period }): Record<string, any> {
+  return {
+    '키워드': { title: [{ type: 'text', text: { content: params.keyword } }] },
+    '상태': statusValue('검색중'),
+    '매체': { multi_select: params.platforms.map((p) => ({ name: PLATFORM_TO_NOTION[p] })) },
+    '기간': { select: { name: PERIOD_TO_NOTION[params.period] } },
+  };
+}
+
+function isContentDatabaseTitle(title: string): boolean {
+  const normalized = title.trim().toLowerCase();
+  return normalized.startsWith('콘텐츠') || normalized.startsWith('content');
 }
 
 function isInvalidStatusOption(error: unknown): boolean {
