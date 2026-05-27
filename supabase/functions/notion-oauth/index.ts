@@ -21,7 +21,7 @@ serve(async (req) => {
 
     switch (action) {
       case 'authorize':
-        return handleAuthorize(url);
+        return handleAuthorize();
       case 'callback':
         return await handleCallback(url);
       default:
@@ -47,10 +47,8 @@ function resolveAction(url: URL): string | null {
   return null;
 }
 
-function handleAuthorize(url: URL): Response {
-  const userId = url.searchParams.get('user_id');
-  if (!userId) throw new ValidationError('user_id required');
-
+// user_id 없이 시작 — Notion이 owner.user.id로 사용자를 식별해줌
+function handleAuthorize(): Response {
   const { clientId, redirectUri } = env.notion;
   if (!clientId || !redirectUri) {
     throw new ValidationError('Notion OAuth not configured', 'OAuth 설정이 완료되지 않았습니다.');
@@ -61,7 +59,7 @@ function handleAuthorize(url: URL): Response {
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('owner', 'user');
   authUrl.searchParams.set('redirect_uri', redirectUri);
-  authUrl.searchParams.set('state', userId);
+  authUrl.searchParams.set('state', crypto.randomUUID()); // CSRF 방지
 
   return new Response(JSON.stringify({ url: authUrl.toString() }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -70,23 +68,19 @@ function handleAuthorize(url: URL): Response {
 
 async function handleCallback(url: URL): Promise<Response> {
   const code = url.searchParams.get('code');
-  const state = url.searchParams.get('state'); // user_id
   const oauthError = url.searchParams.get('error');
 
-  const redirectBase = `${SETUP_PAGE}?user_id=${encodeURIComponent(state || '')}`;
-
-  if (oauthError || !code || !state) {
-    return Response.redirect(`${redirectBase}&error=${oauthError || 'missing_params'}`, 302);
+  if (oauthError || !code) {
+    return redirect(`error=${oauthError || 'missing_params'}`);
   }
 
   try {
     const { clientId, clientSecret, redirectUri } = env.notion;
     if (!clientId || !clientSecret || !redirectUri) {
-      return Response.redirect(`${redirectBase}&error=server_error`, 302);
+      return redirect('error=server_error');
     }
 
     const credentials = btoa(`${clientId}:${clientSecret}`);
-
     const tokenRes = await fetch('https://api.notion.com/v1/oauth/token', {
       method: 'POST',
       headers: {
@@ -95,93 +89,115 @@ async function handleCallback(url: URL): Promise<Response> {
         'Content-Type': 'application/json',
         'Notion-Version': NOTION_VERSION,
       },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-      }),
+      body: JSON.stringify({ grant_type: 'authorization_code', code, redirect_uri: redirectUri }),
     });
 
     if (!tokenRes.ok) {
       const body = await tokenRes.text();
       logger.error('Notion token exchange failed', { status: tokenRes.status, body });
-      return Response.redirect(`${redirectBase}&error=oauth_failed`, 302);
+      return redirect('error=oauth_failed');
     }
 
     const tokenData = await tokenRes.json();
     const { access_token, workspace_id, workspace_name, duplicated_template_id } = tokenData;
-    const encryptedToken = await encryptNotionKey(access_token);
 
-    const update: Record<string, string> = { notion_api_key_encrypted: encryptedToken };
+    // Notion 계정(사람) 기준 식별 — 워크스페이스가 달라도 동일 ID
+    const notionUserId: string | undefined = tokenData.owner?.user?.id;
+    const email: string | undefined = tokenData.owner?.user?.person?.email;
+
+    if (!notionUserId) {
+      logger.error('Notion OAuth: owner.user.id missing', { tokenData });
+      return redirect('error=no_user_id');
+    }
+
+    const encryptedToken = await encryptNotionKey(access_token);
+    const update: Record<string, any> = {
+      notion_user_id: notionUserId,
+      notion_api_key_encrypted: encryptedToken,
+    };
+    if (email) update.email = email;
     if (workspace_id) update.notion_workspace_id = workspace_id;
     if (workspace_name) update.notion_workspace_name = workspace_name;
 
-    // 템플릿 복제로 연결된 경우: Notion이 복제된 페이지 ID를 돌려주고 통합도 자동 연결해줌
-    // → 사용자가 승인 화면에서 페이지를 직접 선택하지 않아도 검색 DB를 자동 연동
+    // 템플릿 복제로 연결된 경우: 검색 DB 자동 연동
     if (duplicated_template_id) {
       try {
         const dbId = await new NotionClient(access_token).resolveSearchDatabase(duplicated_template_id);
         if (dbId) update.notion_database_id = dbId;
-        else logger.info('No database resolved from duplicated template', { user_id: state, duplicated_template_id });
+        else logger.info('No database resolved from duplicated template', { notionUserId, duplicated_template_id });
       } catch (err) {
-        logger.error('Failed to resolve DB from duplicated template', err, { user_id: state });
+        logger.error('Failed to resolve DB from duplicated template', err, { notionUserId });
       }
     }
 
-    const { error: dbError } = await getSupabase()
+    // notion_user_id 기준으로 사용자 찾기 — 없으면 생성
+    const { data: existing } = await getSupabase()
       .from('users')
-      .update(update)
-      .eq('id', state);
+      .select('id')
+      .eq('notion_user_id', notionUserId)
+      .maybeSingle();
 
-    if (dbError) {
-      logger.error('Failed to store OAuth token', { error: dbError });
-      return Response.redirect(`${redirectBase}&error=store_failed`, 302);
+    let userId: string;
+    if (existing) {
+      userId = existing.id;
+      const { error } = await getSupabase().from('users').update(update).eq('id', userId);
+      if (error) {
+        logger.error('Failed to update user', { error, userId });
+        return redirect('error=store_failed');
+      }
+    } else {
+      const { data: newUser, error } = await getSupabase()
+        .from('users')
+        .insert({ ...update, subscription_tier: 'free' })
+        .select('id')
+        .single();
+      if (error || !newUser) {
+        logger.error('Failed to create user', { error });
+        return redirect('error=store_failed');
+      }
+      userId = newUser.id;
     }
 
-    // 페이지 이름 검증: 복제한 Snappy 템플릿 페이지가 연결됐는지 확인
-    // 템플릿 복제 경로(duplicated_template_id)는 Notion이 올바른 페이지를 보장하므로 건너뜀
+    // 템플릿 복제 경로가 아닌 경우: 올바른 페이지가 연결됐는지 이름으로 검증
     if (!duplicated_template_id) {
       try {
         const notion = new NotionClient(access_token);
-        // 이름으로 검색해 접근 가능한 결과 중 템플릿 페이지가 있는지 확인
-        // search 인덱스 반영 지연 대비 1회 재시도
         let found = await searchTemplatePage(notion);
         if (!found) {
           await new Promise((r) => setTimeout(r, 1500));
           found = await searchTemplatePage(notion);
         }
         if (found === null) {
-          // 접근 가능한 페이지 자체가 없음
-          logger.info('OAuth connected but no page access', { user_id: state });
-          return Response.redirect(`${redirectBase}&error=no_page_access`, 302);
+          return redirect(`user_id=${userId}&error=no_page_access`);
         }
         if (!found) {
-          // 페이지는 있지만 템플릿 이름이 아님
-          logger.info('OAuth connected but wrong page selected', { user_id: state });
-          return Response.redirect(`${redirectBase}&error=wrong_page_name`, 302);
+          return redirect(`user_id=${userId}&error=wrong_page_name`);
         }
       } catch (err) {
-        logger.error('Template page verification failed', err, { user_id: state });
+        logger.error('Template page verification failed', err, { userId });
       }
     }
 
     logger.info('Notion OAuth completed', {
-      user_id: state,
+      userId,
+      notionUserId,
       has_duplicated_template: !!duplicated_template_id,
       db_resolved: !!update.notion_database_id,
     });
-    return Response.redirect(`${redirectBase}&notion_connected=1`, 302);
+    return redirect(`user_id=${userId}&notion_connected=1`);
   } catch (err) {
     logger.error('OAuth callback error', err);
-    return Response.redirect(`${redirectBase}&error=server_error`, 302);
+    return redirect('error=server_error');
   }
 }
 
-// 접근 가능한 결과 중 Snappy 템플릿 페이지가 있는지 검색
-// 반환값: true = 템플릿 페이지 있음, false = 다른 페이지가 있지만 템플릿 아님, null = 접근 가능한 페이지 없음
+function redirect(params: string): Response {
+  return Response.redirect(`${SETUP_PAGE}?${params}`, 302);
+}
+
 async function searchTemplatePage(notion: NotionClient): Promise<boolean | null> {
   const results = await notion.searchByTitle(EXPECTED_TEMPLATE_PAGE_NAME);
-  if (results === null) return null; // 접근 가능한 객체 없음
+  if (results === null) return null;
   return results.some((obj: any) => {
     const title = getObjectTitle(obj).replace(/\s+/g, ' ').trim();
     return title.startsWith(EXPECTED_TEMPLATE_PAGE_NAME);
