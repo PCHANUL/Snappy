@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snappy 트렌드</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: transparent;
+      padding: 14px 16px;
+      color: #111827;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #374151;
+      letter-spacing: -0.2px;
+    }
+    .right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .meta {
+      font-size: 0.7rem;
+      color: #9ca3af;
+    }
+    #refreshBtn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+      line-height: 1;
+    }
+    #refreshBtn:hover { color: #6b7280; background: #f3f4f6; }
+    #refreshBtn.spinning { animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 트렌드 목록 */
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .item:hover { background: #f3f4f6; }
+    .item:active { background: #e5e7eb; }
+
+    .rank {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #d1d5db;
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .rank.hot { color: #ef4444; }
+
+    .keyword {
+      flex: 1;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #111827;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .traffic {
+      font-size: 0.7rem;
+      color: #6b7280;
+      background: #f3f4f6;
+      padding: 2px 8px;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    /* 스켈레톤 */
+    .skeleton {
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #f3f4f6 25%, #e9eaf0 50%, #f3f4f6 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      margin-bottom: 2px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .empty {
+      text-align: center;
+      color: #9ca3af;
+      padding: 24px 0;
+      font-size: 0.82rem;
+    }
+
+    .footer {
+      margin-top: 10px;
+      font-size: 0.68rem;
+      color: #d1d5db;
+      text-align: right;
+    }
+
+    /* 토스트 */
+    .toast {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2937;
+      color: #fff;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="title">🔥 오늘의 트렌드</span>
+    <div class="right">
+      <span class="meta" id="meta"></span>
+      <button id="refreshBtn" title="새로고침">↻</button>
+    </div>
+  </div>
+  <div id="list"></div>
+  <div class="footer">Google 트렌드 · 한국</div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
+    const params  = new URLSearchParams(location.search);
+    const userId  = params.get('user_id');
+    const pageId  = params.get('page_id');
+
+    const list       = document.getElementById('list');
+    const metaEl     = document.getElementById('meta');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const toast      = document.getElementById('toast');
+
+    refreshBtn.addEventListener('click', load);
+
+    // 트렌드 목록 클릭 위임
+    list.addEventListener('click', (e) => {
+      const item = e.target.closest('.item');
+      if (!item) return;
+      handleClick(item.dataset.keyword);
+    });
+
+    async function load() {
+      refreshBtn.classList.add('spinning');
+      list.innerHTML = '';
+      for (let i = 0; i < 8; i++) {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton';
+        list.appendChild(sk);
+      }
+
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/trend-data?action=daily`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        list.innerHTML = '';
+        if (!data.topics?.length) {
+          const el = document.createElement('div');
+          el.className = 'empty';
+          el.textContent = '트렌드를 불러올 수 없습니다';
+          list.appendChild(el);
+          return;
+        }
+
+        data.topics.forEach((t, i) => {
+          const item = document.createElement('div');
+          item.className = 'item';
+          item.dataset.keyword = t.keyword;
+
+          const rank = document.createElement('span');
+          rank.className = 'rank' + (i < 3 ? ' hot' : '');
+          rank.textContent = String(i + 1);
+
+          const kw = document.createElement('span');
+          kw.className = 'keyword';
+          kw.textContent = t.keyword;
+
+          item.appendChild(rank);
+          item.appendChild(kw);
+
+          if (t.traffic) {
+            const tr = document.createElement('span');
+            tr.className = 'traffic';
+            tr.textContent = t.traffic;
+            item.appendChild(tr);
+          }
+
+          list.appendChild(item);
+        });
+
+        const now = new Date();
+        metaEl.textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} 기준`;
+      } catch {
+        list.innerHTML = '';
+        const el = document.createElement('div');
+        el.className = 'empty';
+        el.textContent = '트렌드를 불러올 수 없습니다';
+        list.appendChild(el);
+      } finally {
+        refreshBtn.classList.remove('spinning');
+      }
+    }
+
+    function handleClick(keyword) {
+      if (!keyword) return;
+      if (userId && pageId) {
+        const url = `https://pchanul.github.io/Snappy/search.html` +
+          `?user_id=${encodeURIComponent(userId)}` +
+          `&page_id=${encodeURIComponent(pageId)}` +
+          `&keyword=${encodeURIComponent(keyword)}`;
+        window.open(url, '_blank');
+      } else {
+        navigator.clipboard.writeText(keyword)
+          .then(() => showToast(`'${keyword}' 복사됨`))
+          .catch(() => showToast(keyword));
+      }
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    load();
+  </script>
+</body>
+</html>

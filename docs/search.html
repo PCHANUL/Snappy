@@ -223,10 +223,11 @@
   <script>
     const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
 
-    const params    = new URLSearchParams(location.search);
-    const userId    = params.get('user_id');
-    const pageId    = params.get('page_id');
-    const searching = params.get('searching') === '1';
+    const params         = new URLSearchParams(location.search);
+    const userId         = params.get('user_id');
+    const pageId         = params.get('page_id');
+    const searching      = params.get('searching') === '1';
+    const presetKeyword  = params.get('keyword');
 
     const btn         = document.getElementById('searchBtn');
     const status      = document.getElementById('status');
@@ -237,6 +238,8 @@
     const chipsEl     = document.getElementById('platforms');
 
     const configured = !!(userId && pageId);
+
+    if (presetKeyword) keywordEl.value = presetKeyword;
 
     // ── 매체 칩 토글 ──────────────────────────────────────────────────────────
     chipsEl.addEventListener('click', (e) => {
