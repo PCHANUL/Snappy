@@ -111,11 +111,12 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
 export async function markSearchingStart(userId: string): Promise<void> {
   const { error } = await getSupabase()
     .from('users')
-    .update({ searching_since: new Date().toISOString(), search_progress: null })
+    .update({ searching_since: new Date().toISOString(), search_progress: null, last_search_error: null })
     .eq('id', userId);
   if (error) console.error('Failed to mark searching start', error);
 }
 
+// 검색 종료 — 진행 상태만 해제. last_search_error는 보존(실패 시 폴링이 읽음)
 export async function markSearchingEnd(userId: string): Promise<void> {
   const { error } = await getSupabase()
     .from('users')
@@ -130,6 +131,14 @@ export async function updateSearchProgress(userId: string, message: string): Pro
     .update({ search_progress: message })
     .eq('id', userId);
   if (error) console.error('Failed to update search progress', error);
+}
+
+export async function setSearchError(userId: string, message: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('users')
+    .update({ last_search_error: message })
+    .eq('id', userId);
+  if (error) console.error('Failed to set search error', error);
 }
 
 // ── 사용량 ────────────────────────────────────────────────────────────────────

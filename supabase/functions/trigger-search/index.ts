@@ -5,7 +5,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { searchAllPlatforms } from '../search/orchestrator.ts';
 import { NotionClient } from '../notion/client.ts';
 import { logger } from '../_shared/logger.ts';
-import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
+import { AppError, corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
 import { validateSearchRequest } from '../_shared/validator.ts';
 import {
   saveSearchResults,
@@ -16,6 +16,7 @@ import {
   markSearchingStart,
   markSearchingEnd,
   updateSearchProgress,
+  setSearchError,
 } from '../_shared/db.ts';
 import type { Platform, User } from '../_shared/types.ts';
 
@@ -144,6 +145,12 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Search failed', error, { user_id: user.id, keyword });
+
+    // 사용자에게 표시할 메시지 기록 — 폴링이 검색 종료 후 읽어 표시
+    const userMessage = error instanceof AppError
+      ? (error.userMessage || '검색에 실패했습니다.')
+      : '검색에 실패했습니다. 잠시 후 다시 시도해주세요.';
+    await setSearchError(user.id, userMessage);
 
     // 행이 이미 생성됐다면 실패 상태로 표시
     if (pageId) {
