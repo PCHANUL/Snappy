@@ -54,6 +54,8 @@ serve(async (req) => {
         return await handleSetSearchStatus(req);
       case 'get-search-status':
         return await handleGetSearchStatus(url);
+      case 'trend-daily':
+        return await handleTrendDaily();
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -443,6 +445,30 @@ async function handleSetupSearchButton(req: Request): Promise<Response> {
 
   logger.info('Search button embed updated', { user_id, embedUrl });
   return jsonResponse({ success: true, embed_url: embedUrl });
+}
+
+// === Google 트렌드 — 한국 오늘의 인기 검색어 (인증 불필요) ===
+async function handleTrendDaily(): Promise<Response> {
+  try {
+    const res = await fetch(
+      'https://trends.google.com/trends/api/dailytrends?hl=ko&tz=-540&geo=KR&ns=15',
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!res.ok) throw new Error(`Google Trends ${res.status}`);
+
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/^\)\]\}'\n/, ''));
+    const searches = (json.default?.trendingSearchesDays?.[0]?.trendingSearches as any[]) || [];
+
+    const topics = searches
+      .slice(0, 10)
+      .map((item: any) => ({ keyword: item.title?.query || '', traffic: item.formattedTraffic || '' }))
+      .filter((t) => t.keyword);
+
+    return jsonResponse({ topics });
+  } catch {
+    return jsonResponse({ topics: [] });
+  }
 }
 
 // === 헬퍼 함수 ===
