@@ -201,7 +201,7 @@ async function handleCallback(url: URL): Promise<Response> {
       userId,
       notionUserId,
       has_duplicated_template: !!duplicated_template_id,
-      db_resolved: !!update.notion_database_id,
+      db_resolved: !!coreUpdate.notion_database_id,
     });
     return redirect(`user_id=${userId}&notion_connected=1`);
   } catch (err) {
