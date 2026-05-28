@@ -647,6 +647,35 @@ export class NotionClient {
     return await response.json();
   }
 
+  // 노션 DB 부모 페이지의 trends.html 임베드 블록 추가/업데이트
+  async updateTrendsEmbed(databaseId: string, userId: string): Promise<void> {
+    try {
+      const parentPageId = await this.getDatabaseParentPageId(databaseId);
+      const newUrl = `https://pchanul.github.io/Snappy/trends.html?user_id=${userId}&page_id=${parentPageId}`;
+      const embed = await this.findEmbedInPage(parentPageId, 'trends.html');
+
+      if (embed) {
+        if (embed.currentUrl === newUrl) return;
+        await this.fetchApi(`blocks/${embed.blockId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ embed: { url: newUrl } }),
+        });
+      } else {
+        await this.appendBlocks(parentPageId, [{
+          object: 'block',
+          type: 'embed',
+          embed: { url: newUrl },
+        }]);
+      }
+
+      logger.info('Trends embed updated', { userId, parentPageId });
+    } catch (error) {
+      logger.warn('Failed to update trends embed (non-fatal)', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   // 노션 DB 부모 페이지의 search.html 임베드 블록 URL을 user_id + page_id 포함 URL로 교체
   async updateSearchEmbed(databaseId: string, userId: string): Promise<string> {
     try {
@@ -799,9 +828,10 @@ export class NotionClient {
     return rawParentId.replace(/-/g, '');
   }
 
-  // DB 부모 페이지에서 search.html 임베드 블록 탐색 (공통 헬퍼)
-  private async findSearchEmbedInPage(
+  // DB 부모 페이지에서 URL fragment가 포함된 임베드 블록 탐색
+  private async findEmbedInPage(
     parentPageId: string,
+    urlFragment: string,
   ): Promise<{ blockId: string; currentUrl: string } | null> {
     let cursor: string | undefined;
     do {
@@ -810,19 +840,22 @@ export class NotionClient {
 
       const data = await this.fetchApi(`blocks/${parentPageId}/children?${qs.toString()}`, { method: 'GET' });
       const block = (data.results as any[]).find(
-        (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes('search.html'),
+        (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes(urlFragment),
       );
       if (block) {
-        return {
-          blockId: block.id,
-          currentUrl: block.embed.url as string,
-        };
+        return { blockId: block.id, currentUrl: block.embed.url as string };
       }
 
       cursor = data.has_more ? data.next_cursor : undefined;
     } while (cursor);
 
     return null;
+  }
+
+  private async findSearchEmbedInPage(
+    parentPageId: string,
+  ): Promise<{ blockId: string; currentUrl: string } | null> {
+    return this.findEmbedInPage(parentPageId, 'search.html');
   }
 }
 
