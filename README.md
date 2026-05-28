@@ -84,10 +84,11 @@ supabase link --project-ref [YOUR_PROJECT_REF]
 
 ### 3. 노션 템플릿 생성 및 게시
 
-`deploy.sh`를 실행하기 전에 셋업 페이지가 가리킬 최신 노션 템플릿 링크를 먼저 확정합니다.
+`deploy.sh`를 실행하면 시작 단계에서 노션 템플릿을 만들고, 게시/복제 링크를 입력받아
+`docs/config.json`의 `template_url`에 자동 반영합니다.
 
 ```bash
-# 1) 노션 템플릿 생성
+# 단독으로 템플릿만 생성해야 할 때
 node scripts/create-notion-template.js <parent-page-id>
 ```
 
@@ -114,7 +115,7 @@ node scripts/create-notion-template.js <parent-page-id>
 bash scripts/deploy.sh
 ```
 
-전체 흐름: 템플릿 링크 확인 → 사전 확인 → DB 마이그레이션 → 시크릿 등록 → 함수 배포 → GitHub Pages 배포 → 검증
+전체 흐름: 노션 템플릿 생성 → 템플릿 링크 입력/config 업데이트 → 사전 확인 → DB 마이그레이션 → 시크릿 등록 → 함수 배포 → GitHub Pages 배포 → 검증
 
 정적 셋업 페이지는 GitHub Pages에서 제공합니다.
 
@@ -148,7 +149,6 @@ bash scripts/dev.sh
 
 ```bash
 # 최초 배포
-# 먼저 노션 템플릿 게시 링크를 docs/config.json에 반영
 bash scripts/deploy.sh
 
 # 코드 변경 후 빠른 재배포 (함수만)

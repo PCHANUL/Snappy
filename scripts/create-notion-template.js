@@ -46,6 +46,7 @@ const SEARCH_URL     = `${PAGES_BASE}/search.html`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
+const RUNNING_IN_DEPLOY = process.env.SNAPPY_DEPLOY_FLOW === '1';
 
 // --user-id <value> 플래그: 임베드 URL에 user_id 자동 삽입
 const userIdFlagIdx = process.argv.indexOf('--user-id');
@@ -447,10 +448,12 @@ ${mainPage.url}
 
 6. 페이지 공유 → "웹에 게시" + "템플릿으로 복제 허용" 체크
 
-7. 게시/복제 링크를 docs/config.json 의 template_url에 반영
+7. ${RUNNING_IN_DEPLOY
+    ? '배포 스크립트 프롬프트에 게시/복제 링크 입력'
+    : '게시/복제 링크를 docs/config.json 의 template_url에 반영'}
    - 사용자가 여는 고정 링크는 https://pchanul.github.io/Snappy/template.html
 
-8. bash scripts/deploy.sh 실행
+8. ${RUNNING_IN_DEPLOY ? '배포 스크립트가 이어서 기존 배포 흐름을 진행합니다.' : 'bash scripts/deploy.sh 실행'}
 `);
 }
 
