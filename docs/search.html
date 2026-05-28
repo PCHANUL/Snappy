@@ -423,7 +423,7 @@
     // ── 트렌드 ──────────────────────────────────────────────────────────────
     async function loadDailyTrends() {
       try {
-        const res = await fetch(`${FUNCTION_BASE}/trend-data?action=daily`);
+        const res = await fetch(`${FUNCTION_BASE}/manage-user?action=trend-daily`);
         if (!res.ok) return;
         const data = await res.json();
         if (!data.topics?.length) return;

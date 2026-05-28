@@ -178,7 +178,7 @@
       }
 
       try {
-        const res = await fetch(`${FUNCTION_BASE}/trend-data?action=daily`);
+        const res = await fetch(`${FUNCTION_BASE}/manage-user?action=trend-daily`);
         if (!res.ok) throw new Error();
         const data = await res.json();
 
