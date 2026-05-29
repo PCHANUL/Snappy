@@ -387,7 +387,7 @@ async function handleGetSearchStatus(url: URL): Promise<Response> {
 
   const { data, error } = await getSupabase()
     .from('users')
-    .select('searching_since, search_progress, last_search_error')
+    .select('searching_since, search_progress, last_search_error, last_related_keywords')
     .eq('id', user_id)
     .single();
 
@@ -397,6 +397,7 @@ async function handleGetSearchStatus(url: URL): Promise<Response> {
     searching: data.searching_since !== null,
     message: data.search_progress ?? null,
     error: data.last_search_error ?? null,
+    relatedKeywords: data.last_related_keywords ?? [],
   });
 }
 

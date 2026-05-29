@@ -264,6 +264,26 @@ export class NotionClient {
     }
   }
 
+  // 연관 인기 키워드 callout 블록을 페이지에 추가
+  async appendRelatedKeywords(
+    pageId: string,
+    keywords: Array<{ keyword: string; ratio: number }>,
+  ): Promise<void> {
+    if (!keywords.length) return;
+    const chips = keywords.map((k) => `${k.keyword} ${k.ratio}`).join('  ·  ');
+    await this.appendBlocks(pageId, [
+      {
+        object: 'block',
+        type: 'callout',
+        callout: {
+          rich_text: [{ type: 'text', text: { content: `🔗 연관 인기 키워드\n${chips}` } }],
+          icon: { type: 'emoji', emoji: '📊' },
+          color: 'blue_background',
+        },
+      },
+    ]);
+  }
+
   // 요약 callout + child DB로 검색 결과 페이지 완성
   async updatePageWithChildDatabase(
     pageId: string,

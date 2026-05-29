@@ -111,9 +111,17 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
 export async function markSearchingStart(userId: string): Promise<void> {
   const { error } = await getSupabase()
     .from('users')
-    .update({ searching_since: new Date().toISOString(), search_progress: null, last_search_error: null })
+    .update({ searching_since: new Date().toISOString(), search_progress: null, last_search_error: null, last_related_keywords: null })
     .eq('id', userId);
   if (error) console.error('Failed to mark searching start', error);
+}
+
+export async function setRelatedKeywords(userId: string, keywords: Array<{ keyword: string; ratio: number }>): Promise<void> {
+  const { error } = await getSupabase()
+    .from('users')
+    .update({ last_related_keywords: keywords })
+    .eq('id', userId);
+  if (error) console.error('Failed to set related keywords', error);
 }
 
 // 검색 종료 — 진행 상태만 해제. last_search_error는 보존(실패 시 폴링이 읽음)

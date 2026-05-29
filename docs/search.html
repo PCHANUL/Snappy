@@ -198,6 +198,40 @@
       line-height: 1.7;
     }
 
+    /* ── 연관 인기 키워드 ── */
+    #relatedSection { margin-top: 4px; }
+    .related-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #4b5563;
+      margin-bottom: 6px;
+      letter-spacing: -0.2px;
+    }
+    .related-chip {
+      padding: 6px 12px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 999px;
+      color: #1d4ed8;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .related-chip:hover { background: #dbeafe; border-color: #93c5fd; }
+    .related-chip .ratio {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #3b82f6;
+      background: #bfdbfe;
+      border-radius: 999px;
+      padding: 1px 5px;
+    }
+
     .disabled-overlay { opacity: 0.5; pointer-events: none; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -246,6 +280,10 @@
 
     <button id="searchBtn">🚀 검색하기</button>
     <div id="status"></div>
+    <div id="relatedSection" style="display:none">
+      <div class="related-label">📊 연관 인기 키워드</div>
+      <div class="chips" id="relatedChips"></div>
+    </div>
     <div id="keywordTrend" style="display:none"></div>
     <div class="config-guide" id="configGuide">
       셋업을 완료하면 이 버튼이 활성화됩니다.<br>
@@ -324,6 +362,7 @@
 
       // 1. 즉시 UI 비활성
       document.getElementById('keywordTrend').style.display = 'none';
+      document.getElementById('relatedSection').style.display = 'none';
       btn.disabled = true;
       btn.classList.add('searching');
       btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
@@ -391,6 +430,7 @@
               status.className = 'accepted';
               status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
               showKeywordTrend(keywordEl.value.trim());
+              if (data.relatedKeywords?.length) showRelatedKeywords(data.relatedKeywords);
             }
           } else if (data.message) {
             status.textContent = data.message;
@@ -579,6 +619,25 @@
           `<span style="font-family:monospace;letter-spacing:3px;font-size:1rem">${sparkline}</span>`;
         el.style.display = 'block';
       } catch { /* 트렌드 표시 실패는 무시 */ }
+    }
+
+    function showRelatedKeywords(keywords) {
+      const section = document.getElementById('relatedSection');
+      const chips = document.getElementById('relatedChips');
+      chips.innerHTML = '';
+      keywords.forEach(({ keyword, ratio }) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'related-chip';
+        chip.innerHTML = `${keyword}<span class="ratio">${ratio}</span>`;
+        chip.addEventListener('click', () => {
+          keywordEl.value = keyword;
+          section.style.display = 'none';
+          keywordEl.focus();
+        });
+        chips.appendChild(chip);
+      });
+      section.style.display = 'block';
     }
 
     function toSparkline(values) {
