@@ -23,11 +23,6 @@ export const env = {
     clientId: required('NAVER_CLIENT_ID'),
     clientSecret: required('NAVER_CLIENT_SECRET'),
   },
-  naverAd: {
-    apiKey: optional('NAVER_AD_API_KEY', ''),
-    secret: optional('NAVER_AD_SECRET', ''),
-    customerId: optional('NAVER_AD_CUSTOMER_ID', ''),
-  },
   youtube: {
     apiKey: required('YOUTUBE_API_KEY'),
   },
