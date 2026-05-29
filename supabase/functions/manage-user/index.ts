@@ -397,7 +397,7 @@ async function handleGetSearchStatus(url: URL): Promise<Response> {
     searching: data.searching_since !== null,
     message: data.search_progress ?? null,
     error: data.last_search_error ?? null,
-    relatedKeywords: data.last_related_keywords ?? [],
+    related: data.last_related_keywords ?? null,
   });
 }
 

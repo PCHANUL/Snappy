@@ -264,7 +264,7 @@ export class NotionClient {
     }
   }
 
-  // 연관 인기 키워드 callout 블록을 페이지에 추가
+  // 연관 인기 키워드 callout 블록을 페이지에 추가 (키워드별 DataLab ratio 표기)
   async appendRelatedKeywords(
     pageId: string,
     keywords: Array<{ keyword: string; ratio: number }>,

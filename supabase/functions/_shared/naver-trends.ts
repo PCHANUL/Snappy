@@ -5,7 +5,7 @@ export interface DailyTrendTopic {
 
 export interface RankedKeyword {
   keyword: string;
-  ratio: number; // 0–100, 해당 키워드의 최근 기간 내 최고값 대비 상대값
+  ratio: number; // 0–100, 해당 키워드의 기간 내 최고값 대비 최신 주차 상대값
 }
 
 interface NaverTrendPoint {
@@ -80,8 +80,8 @@ export async function fetchNaverTrendTopics(
     .map(({ keyword, traffic }) => ({ keyword, traffic }));
 }
 
-// 후보 키워드 목록을 DataLab에 5개씩 요청해 최신 ratio 기준으로 정렬 반환
-// ratio는 키워드 자체의 기간 내 최고값 대비 상대값(0–100)이므로 호출 간 직접 비교 가능
+// 후보 키워드 상위 5개를 각각 1그룹(1키워드)으로 묶어 1회 호출 → 개별 ratio 반환
+// keywordGroups는 요청당 최대 5개이므로 1회 호출로 개별 비교 가능한 최대치가 5개
 export async function rankCandidatesByTrend(
   clientId: string,
   clientSecret: string,
@@ -89,49 +89,40 @@ export async function rankCandidatesByTrend(
 ): Promise<RankedKeyword[]> {
   if (!candidates.length) return [];
 
+  const batch = candidates.slice(0, 5); // 1회 호출 = 최대 5그룹
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 28);
-  const start = formatDate(startDate);
-  const end = formatDate(endDate);
 
-  const BATCH = 5; // DataLab 최대 keywordGroups 수
-  const ranked: RankedKeyword[] = [];
+  try {
+    const res = await fetch('https://openapi.naver.com/v1/datalab/search', {
+      method: 'POST',
+      headers: {
+        'X-Naver-Client-Id': clientId,
+        'X-Naver-Client-Secret': clientSecret,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        startDate: formatDate(startDate),
+        endDate: formatDate(endDate),
+        timeUnit: 'week',
+        keywordGroups: batch.map((kw) => ({ groupName: kw, keywords: [kw] })),
+      }),
+    });
 
-  for (let i = 0; i < candidates.length; i += BATCH) {
-    const batch = candidates.slice(i, i + BATCH);
-    try {
-      const res = await fetch('https://openapi.naver.com/v1/datalab/search', {
-        method: 'POST',
-        headers: {
-          'X-Naver-Client-Id': clientId,
-          'X-Naver-Client-Secret': clientSecret,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          startDate: start,
-          endDate: end,
-          timeUnit: 'week',
-          keywordGroups: batch.map((kw) => ({
-            groupName: kw,
-            keywords: [kw],
-          })),
-        }),
-      });
+    if (!res.ok) return [];
 
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      for (const result of (data.results ?? []) as NaverTrendResult[]) {
-        const latestRatio = result.data.at(-1)?.ratio ?? 0;
-        ranked.push({ keyword: result.title || result.keywords?.[0] || '', ratio: Math.round(latestRatio) });
-      }
-    } catch {
-      // 배치 하나 실패해도 나머지 계속
-    }
+    const data = await res.json();
+    return ((data.results ?? []) as NaverTrendResult[])
+      .map((result) => ({
+        keyword: result.title || result.keywords?.[0] || '',
+        ratio: Math.round(result.data.at(-1)?.ratio ?? 0),
+      }))
+      .filter((r) => r.keyword)
+      .sort((a, b) => b.ratio - a.ratio);
+  } catch {
+    return [];
   }
-
-  return ranked.filter((r) => r.keyword).sort((a, b) => b.ratio - a.ratio);
 }
 
 function trendKeywords(rawKeywords: string): string[] {

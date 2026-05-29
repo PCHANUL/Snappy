@@ -21,6 +21,7 @@ import {
 } from '../_shared/db.ts';
 import { extractCandidateKeywords } from '../_shared/keyword-extractor.ts';
 import { rankCandidatesByTrend } from '../_shared/naver-trends.ts';
+import type { RankedKeyword } from '../_shared/naver-trends.ts';
 import { env } from '../_shared/env.ts';
 import type { Platform, User } from '../_shared/types.ts';
 
@@ -123,24 +124,21 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     );
     EdgeRuntime.waitUntil(crawlSearchResults(crawlTargets));
 
-    // 4-b. 연관 인기 키워드 추출 + DataLab 랭킹 (비차단 — 실패해도 검색 완료에 영향 없음)
-    let relatedKeywords: Array<{ keyword: string; ratio: number }> = [];
+    // 4-b. 연관 인기 키워드 추출 + DataLab 개별 ratio 랭킹 (비차단)
+    // 빈도순 상위 후보를 1회 호출(최대 5그룹)로 개별 ratio 조회 후 ratio순 정렬
+    let relatedKeywords: RankedKeyword[] = [];
     try {
       await onProgress('연관 키워드 분석 중...');
       const candidates = extractCandidateKeywords(orchestratorResult.results, request.keyword);
       if (candidates.length) {
-        relatedKeywords = (await rankCandidatesByTrend(
-          env.naver.clientId,
-          env.naver.clientSecret,
-          candidates,
-        )).slice(0, 5);
+        relatedKeywords = await rankCandidatesByTrend(env.naver.clientId, env.naver.clientSecret, candidates);
       }
     } catch (err) {
-      logger.warn('Related keyword ranking failed (non-fatal)', { error: String(err) });
+      logger.warn('Related keyword analysis failed (non-fatal)', { error: String(err) });
     }
 
     if (relatedKeywords.length) {
-      await setRelatedKeywords(user.id, relatedKeywords);
+      await setRelatedKeywords(user.id, { keywords: relatedKeywords });
     }
 
     // 5. 요약 callout + child DB(매체별 행)로 결과 표시 (상태 → 완료)

@@ -430,7 +430,7 @@
               status.className = 'accepted';
               status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
               showKeywordTrend(keywordEl.value.trim());
-              if (data.relatedKeywords?.length) showRelatedKeywords(data.relatedKeywords);
+              if (data.related?.keywords?.length) showRelatedKeywords(data.related);
             }
           } else if (data.message) {
             status.textContent = data.message;
@@ -621,11 +621,11 @@
       } catch { /* 트렌드 표시 실패는 무시 */ }
     }
 
-    function showRelatedKeywords(keywords) {
+    function showRelatedKeywords(related) {
       const section = document.getElementById('relatedSection');
       const chips = document.getElementById('relatedChips');
       chips.innerHTML = '';
-      keywords.forEach(({ keyword, ratio }) => {
+      related.keywords.forEach(({ keyword, ratio }) => {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'related-chip';
