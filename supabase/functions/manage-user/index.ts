@@ -10,6 +10,7 @@ import { decryptNotionKey } from '../_shared/crypto.ts';
 import { getSupabase } from '../_shared/db.ts';
 import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
+import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
 import {
   AuthError,
   corsHeaders,
@@ -447,26 +448,18 @@ async function handleSetupSearchButton(req: Request): Promise<Response> {
   return jsonResponse({ success: true, embed_url: embedUrl });
 }
 
-// === Google 트렌드 — 한국 오늘의 인기 검색어 (인증 불필요) ===
+// === 네이버 데이터랩 — 후보 키워드 검색량 트렌드 ===
 async function handleTrendDaily(): Promise<Response> {
   try {
-    const res = await fetch(
-      'https://trends.google.com/trends/api/dailytrends?hl=ko&tz=-540&geo=KR&ns=15',
-      { headers: { Accept: 'application/json' } },
-    );
-    if (!res.ok) throw new Error(`Google Trends ${res.status}`);
-
-    const text = await res.text();
-    const json = JSON.parse(text.replace(/^\)\]\}'\n/, ''));
-    const searches = (json.default?.trendingSearchesDays?.[0]?.trendingSearches as any[]) || [];
-
-    const topics = searches
-      .slice(0, 10)
-      .map((item: any) => ({ keyword: item.title?.query || '', traffic: item.formattedTraffic || '' }))
-      .filter((t) => t.keyword);
-
-    return jsonResponse({ topics });
-  } catch {
+    return jsonResponse({
+      topics: await fetchNaverTrendTopics(
+        env.naver.clientId,
+        env.naver.clientSecret,
+        Deno.env.get('NAVER_TREND_KEYWORDS') || '',
+      ),
+    });
+  } catch (error) {
+    logger.warn('Naver trend unavailable', { error: String(error) });
     return jsonResponse({ topics: [] });
   }
 }
