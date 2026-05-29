@@ -139,6 +139,37 @@
       display: none;
     }
 
+    /* ── 자동완성 드롭다운 ── */
+    .kw-wrap { position: relative; }
+    .suggest {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+      z-index: 20;
+      display: none;
+    }
+    .suggest.open { display: block; }
+    .suggest-item {
+      padding: 9px 14px;
+      font-size: 0.9rem;
+      color: #374151;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .suggest-item:hover, .suggest-item.active {
+      background: #eef2ff;
+      color: #4338ca;
+    }
+    .suggest-item .ico { font-size: 0.78rem; color: #9ca3af; flex-shrink: 0; }
+
     /* ── 트렌드 칩 ── */
     #trendsSection { margin-bottom: 4px; }
     .trend-chip {
@@ -186,7 +217,10 @@
     <div id="form">
       <div class="field">
         <label class="label" for="keyword">키워드</label>
-        <input id="keyword" type="text" placeholder="검색할 단어 (예: 비건 디저트)" maxlength="100" autocomplete="off">
+        <div class="kw-wrap">
+          <input id="keyword" type="text" placeholder="검색할 단어 (예: 비건 디저트)" maxlength="100" autocomplete="off">
+          <div id="suggest" class="suggest"></div>
+        </div>
       </div>
 
       <div class="field" style="margin-top: 10px;">
@@ -415,10 +449,87 @@
       }
     })();
 
-    // 키워드 입력 후 Enter → 검색
-    keywordEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') btn.click();
+    // ── 자동완성 ─────────────────────────────────────────────────────────────
+    const suggestEl = document.getElementById('suggest');
+    let suggestItems = [];
+    let activeIdx = -1;
+    let suggestTimer = null;
+    let lastQuery = '';
+
+    function closeSuggest() {
+      suggestEl.classList.remove('open');
+      suggestEl.innerHTML = '';
+      suggestItems = [];
+      activeIdx = -1;
+    }
+
+    function renderSuggest(words) {
+      if (!words.length) { closeSuggest(); return; }
+      suggestItems = words;
+      activeIdx = -1;
+      suggestEl.innerHTML = '';
+      words.forEach((w) => {
+        const item = document.createElement('div');
+        item.className = 'suggest-item';
+        item.innerHTML = '<span class="ico">🔍</span>';
+        item.appendChild(document.createTextNode(w));
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // blur 먼저 발생 방지
+          keywordEl.value = w;
+          closeSuggest();
+          keywordEl.focus();
+        });
+        suggestEl.appendChild(item);
+      });
+      suggestEl.classList.add('open');
+    }
+
+    async function fetchSuggest(q) {
+      try {
+        const res = await fetch(
+          `${FUNCTION_BASE}/manage-user?action=trend-suggest&keyword=${encodeURIComponent(q)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (keywordEl.value.trim() === q) renderSuggest(data.suggestions || []);
+      } catch { /* 자동완성 실패는 무시 */ }
+    }
+
+    function highlight(delta) {
+      if (!suggestItems.length) return;
+      const items = suggestEl.querySelectorAll('.suggest-item');
+      if (activeIdx >= 0) items[activeIdx]?.classList.remove('active');
+      activeIdx = (activeIdx + delta + suggestItems.length) % suggestItems.length;
+      items[activeIdx]?.classList.add('active');
+    }
+
+    keywordEl.addEventListener('input', () => {
+      const q = keywordEl.value.trim();
+      if (q === lastQuery) return;
+      lastQuery = q;
+      clearTimeout(suggestTimer);
+      if (q.length < 1) { closeSuggest(); return; }
+      suggestTimer = setTimeout(() => fetchSuggest(q), 200);
     });
+
+    keywordEl.addEventListener('keydown', (e) => {
+      const open = suggestEl.classList.contains('open');
+      if (open && e.key === 'ArrowDown') { e.preventDefault(); highlight(1); return; }
+      if (open && e.key === 'ArrowUp')   { e.preventDefault(); highlight(-1); return; }
+      if (e.key === 'Enter') {
+        if (open && activeIdx >= 0) {
+          e.preventDefault();
+          keywordEl.value = suggestItems[activeIdx];
+          closeSuggest();
+          return;
+        }
+        btn.click();
+        return;
+      }
+      if (e.key === 'Escape') closeSuggest();
+    });
+
+    keywordEl.addEventListener('blur', () => setTimeout(closeSuggest, 120));
 
     // ── 트렌드 ──────────────────────────────────────────────────────────────
     async function loadDailyTrends() {

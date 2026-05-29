@@ -11,6 +11,7 @@ import { getSupabase } from '../_shared/db.ts';
 import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
 import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
+import { fetchNaverAutocomplete } from '../_shared/naver-autocomplete.ts';
 import {
   AuthError,
   corsHeaders,
@@ -57,6 +58,8 @@ serve(async (req) => {
         return await handleGetSearchStatus(url);
       case 'trend-daily':
         return await handleTrendDaily();
+      case 'trend-suggest':
+        return await handleTrendSuggest(url);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
