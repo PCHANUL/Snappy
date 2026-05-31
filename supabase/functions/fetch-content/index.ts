@@ -1,20 +1,22 @@
-// 본문 가져오기 Edge Function
-// Notion 콘텐츠 행에 임베드된 버튼이 호출 → 해당 URL의 본문을 크롤링/조회 후
-// 그 행(page_id)의 본문 블록으로 추가한다.
+// 콘텐츠 분석 Edge Function
+// Notion 콘텐츠 행에 임베드된 버튼이 호출 →
+// 해당 URL의 본문을 크롤링/조회 후 분석 결과를 Notion 행에 추가한다.
 //
-// 흐름:
-//   1. user_id로 Notion API 키 복호화
-//   2. content_items에서 url 기준 full_text 조회 (백그라운드 크롤 결과 재사용)
-//   3. 없으면 즉석 크롤링
-//   4. page_id에 본문 블록 추가 (중복 방지 마커 확인)
+// 추가 블록 순서:
+//   북마크 → AI 요약 → 핵심 키워드 → 검색어 적합도 → 메타데이터
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { getSupabase } from '../_shared/db.ts';
 import { decryptNotionKey } from '../_shared/crypto.ts';
 import { crawlUrl } from '../_shared/crawler.ts';
 import { NotionClient } from '../notion/client.ts';
+import type { ContentAnalysis } from '../notion/client.ts';
 import { logger } from '../_shared/logger.ts';
 import { corsHeaders, errorToResponse, ValidationError, AuthError } from '../_shared/errors.ts';
+import { summarizeContent } from '../_shared/anthropic.ts';
+import { extractCandidateKeywords } from '../_shared/keyword-extractor.ts';
+import { env } from '../_shared/env.ts';
+import type { SearchResult, Platform } from '../_shared/types.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -23,7 +25,7 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, url, page_id } = await req.json();
+    const { user_id, url, page_id, keyword } = await req.json();
     if (!user_id || typeof user_id !== 'string') throw new ValidationError('user_id required');
     if (!url || typeof url !== 'string') throw new ValidationError('url required');
     if (!page_id || typeof page_id !== 'string') throw new ValidationError('page_id required');
@@ -38,22 +40,22 @@ serve(async (req) => {
     if (!user?.notion_api_key_encrypted) throw new AuthError('Notion not connected');
     const apiKey = await decryptNotionKey(user.notion_api_key_encrypted);
 
-    // 2. content_items에서 본문 조회
+    // 2. content_items에서 저장된 데이터 조회
     const { data: content } = await getSupabase()
       .from('content_items')
-      .select('full_text, crawl_status, platform, title')
+      .select('full_text, crawl_status, platform, title, description, word_count, published_at')
       .eq('url', url)
       .maybeSingle();
 
     let fullText = content?.full_text ?? '';
     const platform = content?.platform ?? guessPlatform(url);
+    const description = content?.description ?? '';
 
     // 3. 본문이 없고 스킵 대상이 아니면 즉석 크롤링
     if (!fullText && content?.crawl_status !== 'skip') {
       const result = await crawlUrl(url, platform);
       if (result.status === 'done' && result.full_text) {
         fullText = result.full_text;
-        // 캐시 업데이트 (다음 호출 시 재사용)
         await getSupabase()
           .from('content_items')
           .update({
@@ -66,22 +68,85 @@ serve(async (req) => {
       }
     }
 
-    if (!fullText) {
-      return jsonResponse({
-        success: false,
-        reason: 'no_content',
-        message: '본문을 가져올 수 없는 페이지예요.',
-      });
+    // 4. 분석용 텍스트 소스 결정 (폴백 체인: 본문 → 설명 → 제목)
+    let sourceText: string;
+    let summarySource: string;
+    if (fullText) {
+      sourceText = fullText;
+      summarySource = '본문 기반';
+    } else if (description) {
+      sourceText = description;
+      summarySource = '설명 기반';
+    } else {
+      sourceText = content?.title ?? '';
+      summarySource = '제목 기반';
     }
 
-    // 4. Notion 행에 본문 추가 (중복 방지)
+    // 5. AI 요약 (비필수 — 실패해도 나머지 분석은 계속)
+    let summary: string | undefined;
+    const anthropicKey = env.anthropic.apiKey;
+    if (anthropicKey && sourceText && keyword) {
+      try {
+        summary = await summarizeContent(anthropicKey, sourceText, keyword);
+      } catch (err) {
+        logger.warn('AI summary failed (non-fatal)', { error: String(err) });
+      }
+    }
+
+    // 6. 핵심 키워드 추출
+    let keywords: string[] = [];
+    if (sourceText) {
+      try {
+        const pseudoResults: SearchResult[] = [{
+          platform: platform as Platform,
+          items: [{
+            title: content?.title ?? '',
+            url,
+            description: sourceText.slice(0, 5000),
+            platform: platform as Platform,
+          }],
+          count: 1,
+        }];
+        keywords = extractCandidateKeywords(pseudoResults, keyword ?? '', 8);
+      } catch (err) {
+        logger.warn('Keyword extraction failed (non-fatal)', { error: String(err) });
+      }
+    }
+
+    // 7. 검색어 적합도 (keyword가 있을 때만)
+    let seoCount: number | undefined;
+    let seoScore: number | undefined;
+    if (keyword && sourceText) {
+      seoCount = countOccurrences(sourceText, keyword);
+      seoScore = seoScoreFromCount(seoCount);
+    }
+
+    // 8. 읽기 시간 추정 (어절 수 × 3.5자 / 분당 500자)
+    const wordCount = content?.word_count || 0;
+    const charEstimate = wordCount > 0 ? wordCount * 3.5 : sourceText.length;
+    const readMinutes = charEstimate > 0 ? Math.max(1, Math.ceil(charEstimate / 500)) : undefined;
+
+    // 9. Notion 행에 분석 블록 추가
     const notion = new NotionClient(apiKey);
-    const added = await notion.appendArticleBody(page_id, fullText, url);
+    const analysis: ContentAnalysis = {
+      url,
+      summary,
+      summarySource: summary ? summarySource : undefined,
+      keywords: keywords.length ? keywords : undefined,
+      seoKeyword: keyword,
+      seoCount,
+      seoScore,
+      wordCount: wordCount || undefined,
+      readMinutes,
+      platform,
+      publishedAt: content?.published_at ?? undefined,
+    };
+    const added = await notion.appendContentAnalysis(page_id, analysis);
 
     return jsonResponse({
       success: true,
       already_added: !added,
-      message: added ? '본문을 추가했어요.' : '이미 본문을 추가했어요.',
+      message: added ? '분석 결과를 추가했어요.' : '이미 추가되어 있어요.',
     });
   } catch (error) {
     logger.error('fetch-content failed', error);
@@ -95,6 +160,27 @@ function guessPlatform(url: string): string {
   if (url.includes('brunch.')) return 'brunch';
   if (url.includes('youtube.') || url.includes('youtu.be')) return 'youtube';
   return 'naver_blog';
+}
+
+function countOccurrences(text: string, keyword: string): number {
+  const lower = text.toLowerCase();
+  const kw = keyword.toLowerCase();
+  let count = 0;
+  let idx = 0;
+  while ((idx = lower.indexOf(kw, idx)) !== -1) {
+    count++;
+    idx += kw.length;
+  }
+  return count;
+}
+
+function seoScoreFromCount(count: number): number {
+  if (count === 0) return 0;
+  if (count <= 2) return 1;
+  if (count <= 5) return 2;
+  if (count <= 10) return 3;
+  if (count <= 20) return 4;
+  return 5;
 }
 
 function jsonResponse(data: unknown, status = 200): Response {

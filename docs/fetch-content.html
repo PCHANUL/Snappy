@@ -48,7 +48,7 @@
   </style>
 </head>
 <body>
-  <button id="btn">📄 본문 가져오기</button>
+  <button id="btn">📊 콘텐츠 분석</button>
   <span id="hint"></span>
 
   <script>
@@ -57,6 +57,7 @@
     const userId  = params.get('user_id');
     const url     = params.get('url');
     const pageId  = params.get('page_id');
+    const keyword = params.get('keyword');
 
     const btn  = document.getElementById('btn');
     const hint = document.getElementById('hint');
@@ -73,14 +74,14 @@
 
       btn.classList.add('loading');
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner">⟳</span> 가져오는 중...';
+      btn.innerHTML = '<span class="spinner">⟳</span> 분석 중...';
       hint.textContent = '';
 
       try {
         const res = await fetch(`${FUNCTION_BASE}/fetch-content`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, url, page_id: pageId }),
+          body: JSON.stringify({ user_id: userId, url, page_id: pageId, keyword }),
         });
         const data = await res.json();
 
@@ -88,17 +89,16 @@
 
         if (res.ok && data.success) {
           btn.classList.add('done');
-          btn.innerHTML = '✓ 본문 추가됨';
+          btn.innerHTML = '✓ 분석 완료';
           hint.textContent = data.already_added ? '이미 추가되어 있어요' : '아래에서 확인하세요';
         } else {
           btn.classList.add('error');
           btn.innerHTML = '✗ 실패';
-          hint.textContent = data.message || data.userMessage || '본문을 가져오지 못했어요';
-          // 일시 오류일 수 있으니 5초 후 재시도 가능 상태로 복원
+          hint.textContent = data.message || data.userMessage || '분석하지 못했어요';
           setTimeout(() => {
             btn.classList.remove('error');
             btn.disabled = false;
-            btn.innerHTML = '📄 다시 시도';
+            btn.innerHTML = '📊 다시 시도';
           }, 5000);
         }
       } catch (err) {
@@ -109,7 +109,7 @@
         setTimeout(() => {
           btn.classList.remove('error');
           btn.disabled = false;
-          btn.innerHTML = '📄 다시 시도';
+          btn.innerHTML = '📊 다시 시도';
         }, 5000);
       }
     });

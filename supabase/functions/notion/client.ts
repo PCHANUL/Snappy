@@ -7,6 +7,20 @@ import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPa
 import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
 import { PLATFORM_INFO } from '../_shared/types.ts';
 
+export interface ContentAnalysis {
+  url: string;
+  summary?: string;
+  summarySource?: string;
+  keywords?: string[];
+  seoKeyword?: string;
+  seoCount?: number;
+  seoScore?: number;
+  wordCount?: number;
+  readMinutes?: number;
+  platform?: string;
+  publishedAt?: string;
+}
+
 // 내부 ID → Notion DB 옵션값 매핑 (검색 DB 행 생성 시 사용)
 const PLATFORM_TO_NOTION: Record<Platform, string> = {
   naver_blog: '네이버블로그',
@@ -244,6 +258,7 @@ export class NotionClient {
     items: FlatResult[],
     onProgress?: (message: string) => Promise<void>,
     userId?: string,
+    keyword?: string,
   ): Promise<void> {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -271,7 +286,8 @@ export class NotionClient {
         const embedUrl = `${PAGES_BASE}/fetch-content.html` +
           `?user_id=${encodeURIComponent(userId)}` +
           `&url=${encodeURIComponent(item.url)}` +
-          `&page_id=${encodeURIComponent(rowId.replace(/-/g, ''))}`;
+          `&page_id=${encodeURIComponent(rowId.replace(/-/g, ''))}` +
+          (keyword ? `&keyword=${encodeURIComponent(keyword)}` : '');
         try {
           await this.appendBlocks(rowId, [{ object: 'block', type: 'embed', embed: { url: embedUrl } }]);
         } catch (error) {
@@ -286,43 +302,91 @@ export class NotionClient {
     }
   }
 
-  // 콘텐츠 행에 본문을 블록으로 추가. 이미 추가됐으면 false 반환(중복 방지)
-  async appendArticleBody(pageId: string, fullText: string, sourceUrl: string): Promise<boolean> {
+  // 콘텐츠 행에 분석 결과(북마크+요약+키워드+SEO+메타데이터)를 추가한다.
+  // 이미 추가된 경우(bookmark 블록 또는 📄 마커 callout 존재) false 반환.
+  async appendContentAnalysis(pageId: string, analysis: ContentAnalysis): Promise<boolean> {
     const normalizedPageId = toUuid(pageId);
 
-    // 중복 방지: 본문 마커 callout이 이미 있으면 스킵
     const existing = await this.fetchApi(`blocks/${normalizedPageId}/children?page_size=100`, { method: 'GET' });
-    const hasMarker = ((existing.results as any[]) || []).some(
-      (b) => b.type === 'callout' && b.callout?.rich_text?.[0]?.text?.content?.startsWith(ARTICLE_MARKER),
+    const alreadyAdded = ((existing.results as any[]) || []).some(
+      (b) => b.type === 'bookmark' ||
+        (b.type === 'callout' && b.callout?.rich_text?.[0]?.text?.content?.includes(ARTICLE_MARKER)),
     );
-    if (hasMarker) return false;
+    if (alreadyAdded) return false;
 
-    const blocks: any[] = [
-      {
+    const blocks: any[] = [];
+
+    // 1. 북마크
+    blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: analysis.url } });
+    blocks.push({ object: 'block', type: 'divider', divider: {} });
+
+    // 2. AI 요약 (📄 마커로 중복 방지 역할도 겸함)
+    if (analysis.summary) {
+      blocks.push({
         object: 'block',
         type: 'callout',
         callout: {
-          rich_text: [{ type: 'text', text: { content: `${ARTICLE_MARKER} 본문` } }],
-          icon: { type: 'emoji', emoji: '📄' },
-          color: 'gray_background',
-        },
-      },
-      ...chunkText(fullText).map((chunk) => ({
-        object: 'block',
-        type: 'paragraph',
-        paragraph: { rich_text: [{ type: 'text', text: { content: chunk } }] },
-      })),
-      {
-        object: 'block',
-        type: 'paragraph',
-        paragraph: {
           rich_text: [{
             type: 'text',
-            text: { content: '원문 보기', link: { url: sourceUrl } },
+            text: { content: `${ARTICLE_MARKER} 요약 (${analysis.summarySource ?? '기반'})\n${analysis.summary}` },
           }],
+          icon: { type: 'emoji', emoji: '💡' },
+          color: 'gray_background',
         },
-      },
-    ];
+      });
+    }
+
+    // 3. 핵심 키워드
+    if (analysis.keywords?.length) {
+      blocks.push({
+        object: 'block',
+        type: 'callout',
+        callout: {
+          rich_text: [{ type: 'text', text: { content: `🏷️ 핵심 키워드\n${analysis.keywords.join('  ·  ')}` } }],
+          icon: { type: 'emoji', emoji: '🏷️' },
+          color: 'gray_background',
+        },
+      });
+    }
+
+    // 4. 검색어 적합도 (keyword가 있을 때만)
+    if (analysis.seoKeyword && analysis.seoCount !== undefined) {
+      const filled = Math.min(5, analysis.seoScore ?? 0);
+      const stars = '★'.repeat(filled) + '☆'.repeat(5 - filled);
+      blocks.push({
+        object: 'block',
+        type: 'callout',
+        callout: {
+          rich_text: [{
+            type: 'text',
+            text: { content: `📊 검색어 적합도\n검색어 "${analysis.seoKeyword}" 본문 내 ${analysis.seoCount}회 등장  ·  ${stars}` },
+          }],
+          icon: { type: 'emoji', emoji: '📊' },
+          color: 'blue_background',
+        },
+      });
+    }
+
+    // 5. 메타데이터
+    const metaParts: string[] = [];
+    if (analysis.publishedAt) metaParts.push(`📅 ${analysis.publishedAt.slice(0, 10)}`);
+    if (analysis.readMinutes) metaParts.push(`⏱ 약 ${analysis.readMinutes}분`);
+    if (analysis.wordCount) metaParts.push(`📝 ${analysis.wordCount.toLocaleString()}자`);
+    if (analysis.platform) {
+      const platformName = PLATFORM_INFO[analysis.platform as Platform]?.name ?? analysis.platform;
+      metaParts.push(platformName);
+    }
+    if (metaParts.length) {
+      blocks.push({
+        object: 'block',
+        type: 'callout',
+        callout: {
+          rich_text: [{ type: 'text', text: { content: `📋 정보\n${metaParts.join('  ·  ')}` } }],
+          icon: { type: 'emoji', emoji: '📋' },
+          color: 'gray_background',
+        },
+      });
+    }
 
     await this.appendBlocks(normalizedPageId, blocks);
     return true;
@@ -393,7 +457,7 @@ export class NotionClient {
     const allItems: FlatResult[] = results.flatMap(r =>
       r.items.map(item => ({ ...item, platform: r.platform }))
     );
-    await this.addItemsToDatabase(databaseId, allItems, onProgress, userId);
+    await this.addItemsToDatabase(databaseId, allItems, onProgress, userId, keyword);
 
     logger.info('Notion page updated with child database', { pageId, totalCount, databaseId });
   }

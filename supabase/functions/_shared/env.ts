@@ -39,6 +39,9 @@ export const env = {
   admin: {
     secret: optional('ADMIN_SECRET', ''),
   },
+  anthropic: {
+    apiKey: optional('ANTHROPIC_API_KEY', ''),
+  },
   notion: {
     clientId: optional('NOTION_CLIENT_ID', ''),
     clientSecret: optional('NOTION_CLIENT_SECRET', ''),
