@@ -34,6 +34,9 @@ const NOTION_API_VERSION = '2022-06-28';
 const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
+const PAGES_BASE = 'https://pchanul.github.io/Snappy';
+const ARTICLE_MARKER = '📄'; // 본문 추가 여부 판별용 callout 마커
+const NOTION_TEXT_LIMIT = 1900; // 단일 rich_text content 최대(2000) 여유
 
 export class NotionClient {
   private pagesCreatedWithTemplate = new Set<string>();
@@ -235,10 +238,12 @@ export class NotionClient {
   }
 
   // 콘텐츠 아이템을 child DB에 페이지(행)로 추가 — Notion 속도 제한 고려 직렬 처리
+  // userId가 있으면 크롤 가능한 매체의 각 행에 "본문 가져오기" 임베드 버튼을 추가한다.
   async addItemsToDatabase(
     databaseId: string,
     items: FlatResult[],
     onProgress?: (message: string) => Promise<void>,
+    userId?: string,
   ): Promise<void> {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -258,10 +263,69 @@ export class NotionClient {
       };
       if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
 
-      await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
+      const created = await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
+
+      // 본문 가져오기 버튼 임베드 — 크롤 가능한 매체(유튜브 제외)에만
+      if (userId && item.url && isCrawlablePlatform(item.platform)) {
+        const rowId = created.id as string;
+        const embedUrl = `${PAGES_BASE}/fetch-content.html` +
+          `?user_id=${encodeURIComponent(userId)}` +
+          `&url=${encodeURIComponent(item.url)}` +
+          `&page_id=${encodeURIComponent(rowId.replace(/-/g, ''))}`;
+        try {
+          await this.appendBlocks(rowId, [{ object: 'block', type: 'embed', embed: { url: embedUrl } }]);
+        } catch (error) {
+          logger.warn('Failed to add fetch-content embed (non-fatal)', {
+            rowId, error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
       await onProgress?.(`노션에 콘텐츠 추가 중... (${i + 1}/${items.length})`);
       if (i + 1 < items.length) await sleep(350);
     }
+  }
+
+  // 콘텐츠 행에 본문을 블록으로 추가. 이미 추가됐으면 false 반환(중복 방지)
+  async appendArticleBody(pageId: string, fullText: string, sourceUrl: string): Promise<boolean> {
+    const normalizedPageId = toUuid(pageId);
+
+    // 중복 방지: 본문 마커 callout이 이미 있으면 스킵
+    const existing = await this.fetchApi(`blocks/${normalizedPageId}/children?page_size=100`, { method: 'GET' });
+    const hasMarker = ((existing.results as any[]) || []).some(
+      (b) => b.type === 'callout' && b.callout?.rich_text?.[0]?.text?.content?.startsWith(ARTICLE_MARKER),
+    );
+    if (hasMarker) return false;
+
+    const blocks: any[] = [
+      {
+        object: 'block',
+        type: 'callout',
+        callout: {
+          rich_text: [{ type: 'text', text: { content: `${ARTICLE_MARKER} 본문` } }],
+          icon: { type: 'emoji', emoji: '📄' },
+          color: 'gray_background',
+        },
+      },
+      ...chunkText(fullText).map((chunk) => ({
+        object: 'block',
+        type: 'paragraph',
+        paragraph: { rich_text: [{ type: 'text', text: { content: chunk } }] },
+      })),
+      {
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{
+            type: 'text',
+            text: { content: '원문 보기', link: { url: sourceUrl } },
+          }],
+        },
+      },
+    ];
+
+    await this.appendBlocks(normalizedPageId, blocks);
+    return true;
   }
 
   // 연관 인기 키워드 callout 블록을 페이지에 추가 (키워드별 DataLab ratio 표기)
@@ -292,6 +356,7 @@ export class NotionClient {
     metadata: SearchMetadata,
     totalCount: number,
     onProgress?: (message: string) => Promise<void>,
+    userId?: string,
   ): Promise<void> {
     // 1. 속성 업데이트 (상태 → 완료)
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
@@ -328,7 +393,7 @@ export class NotionClient {
     const allItems: FlatResult[] = results.flatMap(r =>
       r.items.map(item => ({ ...item, platform: r.platform }))
     );
-    await this.addItemsToDatabase(databaseId, allItems, onProgress);
+    await this.addItemsToDatabase(databaseId, allItems, onProgress, userId);
 
     logger.info('Notion page updated with child database', { pageId, totalCount, databaseId });
   }
@@ -904,6 +969,29 @@ function isContentDatabaseTitle(title: string): boolean {
 
 function isInvalidStatusOption(error: unknown): boolean {
   return error instanceof NotionApiError && error.message.includes('Invalid status option');
+}
+
+// 유튜브는 JS 렌더링이 필요해 크롤 불가 → 본문 버튼 제외
+function isCrawlablePlatform(platform: Platform): boolean {
+  return platform !== 'youtube';
+}
+
+// 긴 본문을 Notion rich_text 제한(2000자) 이하의 문단으로 분할
+function chunkText(text: string): string[] {
+  const chunks: string[] = [];
+  let remaining = text.trim();
+  while (remaining.length > 0) {
+    if (remaining.length <= NOTION_TEXT_LIMIT) {
+      chunks.push(remaining);
+      break;
+    }
+    // 가능하면 공백 경계에서 자름
+    let cut = remaining.lastIndexOf(' ', NOTION_TEXT_LIMIT);
+    if (cut < NOTION_TEXT_LIMIT * 0.5) cut = NOTION_TEXT_LIMIT;
+    chunks.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut).trim();
+  }
+  return chunks;
 }
 
 function sleep(ms: number): Promise<void> {

@@ -20,6 +20,8 @@ FUNCTIONS=(
   "notion-oauth"
   "load-more"
   "pages"
+  "trend-data"
+  "fetch-content"
 )
 
 # 도움말

@@ -149,6 +149,7 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       metadata,
       totalFound,
       onProgress,
+      user.id,
     );
 
     // 6. 연관 인기 키워드 Notion 블록 추가
