@@ -110,6 +110,30 @@
       font-size: 0.82rem;
     }
 
+    /* 소스 토글 */
+    .src-tabs {
+      display: flex;
+      gap: 4px;
+    }
+    .src-btn {
+      padding: 3px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      background: #fff;
+      font-size: 0.73rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.13s;
+    }
+    .src-btn:hover { border-color: #d1d5db; color: #374151; }
+    .src-btn.active {
+      background: #111827;
+      border-color: #111827;
+      color: #fff;
+    }
+
     .footer {
       margin-top: 10px;
       font-size: 0.68rem;
@@ -140,12 +164,16 @@
   <div class="header">
     <span class="title">🔥 오늘의 트렌드</span>
     <div class="right">
+      <div class="src-tabs">
+        <button class="src-btn active" data-src="naver">네이버</button>
+        <button class="src-btn" data-src="google">구글</button>
+      </div>
       <span class="meta" id="meta"></span>
       <button id="refreshBtn" title="새로고침">↻</button>
     </div>
   </div>
   <div id="list"></div>
-  <div class="footer">네이버 데이터랩 · 한국</div>
+  <div class="footer" id="footer">네이버 데이터랩 · 한국</div>
   <div class="toast" id="toast"></div>
 
   <script>
@@ -156,8 +184,22 @@
 
     const list       = document.getElementById('list');
     const metaEl     = document.getElementById('meta');
+    const footerEl   = document.getElementById('footer');
     const refreshBtn = document.getElementById('refreshBtn');
     const toast      = document.getElementById('toast');
+
+    let currentSrc = 'naver'; // 'naver' | 'google'
+
+    // ── 소스 토글 ──────────────────────────────────────────────────────────────
+    document.querySelectorAll('.src-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.src === currentSrc) return;
+        document.querySelectorAll('.src-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSrc = btn.dataset.src;
+        load();
+      });
+    });
 
     refreshBtn.addEventListener('click', load);
 
@@ -170,64 +212,85 @@
 
     async function load() {
       refreshBtn.classList.add('spinning');
-      list.innerHTML = '';
-      for (let i = 0; i < 8; i++) {
-        const sk = document.createElement('div');
-        sk.className = 'skeleton';
-        list.appendChild(sk);
-      }
+      showSkeleton(8);
 
       try {
-        const res = await fetch(`${FUNCTION_BASE}/manage-user?action=trend-daily`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
+        let topics;
+        if (currentSrc === 'google') {
+          const res = await fetch(`${FUNCTION_BASE}/manage-user?action=trend-google-daily`);
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          topics = data.topics;
+          footerEl.textContent = '구글 트렌드 · 한국';
+        } else {
+          const res = await fetch(`${FUNCTION_BASE}/manage-user?action=trend-daily`);
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          topics = data.topics;
+          footerEl.textContent = '네이버 데이터랩 · 한국';
+        }
 
         list.innerHTML = '';
-        if (!data.topics?.length) {
-          const el = document.createElement('div');
-          el.className = 'empty';
-          el.textContent = '트렌드를 불러올 수 없습니다';
-          list.appendChild(el);
+        if (!topics?.length) {
+          showEmpty('트렌드를 불러올 수 없습니다');
           return;
         }
 
-        data.topics.forEach((t, i) => {
-          const item = document.createElement('div');
-          item.className = 'item';
-          item.dataset.keyword = t.keyword;
-
-          const rank = document.createElement('span');
-          rank.className = 'rank' + (i < 3 ? ' hot' : '');
-          rank.textContent = String(i + 1);
-
-          const kw = document.createElement('span');
-          kw.className = 'keyword';
-          kw.textContent = t.keyword;
-
-          item.appendChild(rank);
-          item.appendChild(kw);
-
-          if (t.traffic) {
-            const tr = document.createElement('span');
-            tr.className = 'traffic';
-            tr.textContent = t.traffic;
-            item.appendChild(tr);
-          }
-
-          list.appendChild(item);
-        });
+        renderTopics(topics);
 
         const now = new Date();
         metaEl.textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} 기준`;
       } catch {
-        list.innerHTML = '';
-        const el = document.createElement('div');
-        el.className = 'empty';
-        el.textContent = '트렌드를 불러올 수 없습니다';
-        list.appendChild(el);
+        showEmpty('트렌드를 불러올 수 없습니다');
       } finally {
         refreshBtn.classList.remove('spinning');
       }
+    }
+
+    function renderTopics(topics) {
+      list.innerHTML = '';
+      topics.forEach((t, i) => {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.dataset.keyword = t.keyword;
+
+        const rank = document.createElement('span');
+        rank.className = 'rank' + (i < 3 ? ' hot' : '');
+        rank.textContent = String(i + 1);
+
+        const kw = document.createElement('span');
+        kw.className = 'keyword';
+        kw.textContent = t.keyword;
+
+        item.appendChild(rank);
+        item.appendChild(kw);
+
+        if (t.traffic) {
+          const tr = document.createElement('span');
+          tr.className = 'traffic';
+          tr.textContent = t.traffic;
+          item.appendChild(tr);
+        }
+
+        list.appendChild(item);
+      });
+    }
+
+    function showSkeleton(n) {
+      list.innerHTML = '';
+      for (let i = 0; i < n; i++) {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton';
+        list.appendChild(sk);
+      }
+    }
+
+    function showEmpty(msg) {
+      list.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = 'empty';
+      el.textContent = msg;
+      list.appendChild(el);
     }
 
     function handleClick(keyword) {

@@ -12,6 +12,7 @@ import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
 import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
 import { fetchNaverAutocomplete } from '../_shared/naver-autocomplete.ts';
+import { fetchGoogleDailyTrends, fetchGoogleRelatedQueries } from '../_shared/google-trends.ts';
 import {
   AuthError,
   corsHeaders,
@@ -58,6 +59,10 @@ serve(async (req) => {
         return await handleGetSearchStatus(url);
       case 'trend-daily':
         return await handleTrendDaily();
+      case 'trend-google-daily':
+        return await handleTrendGoogleDaily();
+      case 'trend-google-related':
+        return await handleTrendGoogleRelated(url);
       case 'trend-suggest':
         return await handleTrendSuggest(url);
       default:
@@ -465,6 +470,30 @@ async function handleTrendDaily(): Promise<Response> {
   } catch (error) {
     logger.warn('Naver trend unavailable', { error: String(error) });
     return jsonResponse({ topics: [] });
+  }
+}
+
+// === 구글 트렌드 — 오늘의 인기 검색어 (RSS) ===
+async function handleTrendGoogleDaily(): Promise<Response> {
+  try {
+    const topics = await fetchGoogleDailyTrends('KR');
+    return jsonResponse({ topics, source: 'google' });
+  } catch (error) {
+    logger.warn('Google Trends daily unavailable', { error: String(error) });
+    return jsonResponse({ topics: [], source: 'google' });
+  }
+}
+
+// === 구글 트렌드 — 키워드 상승 관련 검색어 (explore + multirange) ===
+async function handleTrendGoogleRelated(url: URL): Promise<Response> {
+  const keyword = url.searchParams.get('keyword')?.trim() || '';
+  if (!keyword) return jsonResponse({ queries: [] });
+  try {
+    const queries = await fetchGoogleRelatedQueries(keyword);
+    return jsonResponse({ queries });
+  } catch (error) {
+    logger.warn('Google related queries unavailable', { error: String(error) });
+    return jsonResponse({ queries: [] });
   }
 }
 

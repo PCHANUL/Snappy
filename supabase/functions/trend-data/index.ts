@@ -3,6 +3,7 @@ import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors
 import { env } from '../_shared/env.ts';
 import { logger } from '../_shared/logger.ts';
 import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
+import { fetchGoogleInterestOverTime } from '../_shared/google-trends.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -16,6 +17,11 @@ serve(async (req) => {
       const keyword = url.searchParams.get('keyword') || '';
       if (!keyword) throw new ValidationError('keyword is required', '키워드를 입력해주세요.');
       return await handleKeywordTrend(keyword);
+    }
+    if (action === 'google-keyword') {
+      const keyword = url.searchParams.get('keyword') || '';
+      if (!keyword) throw new ValidationError('keyword is required', '키워드를 입력해주세요.');
+      return await handleGoogleKeywordTrend(keyword);
     }
     throw new ValidationError(`Unknown action: ${action}`);
   } catch (error) {
@@ -89,6 +95,17 @@ async function handleKeywordTrend(keyword: string): Promise<Response> {
       points: points.map((d) => ({ period: d.period, ratio: Math.round(d.ratio) })),
     },
   });
+}
+
+// 구글 트렌드 — 키워드 시계열 방향 (pytrends: interest_over_time)
+async function handleGoogleKeywordTrend(keyword: string): Promise<Response> {
+  try {
+    const result = await fetchGoogleInterestOverTime(keyword);
+    return jsonRes({ trend: result });
+  } catch (error) {
+    logger.warn('Google keyword trend failed', { keyword, error: String(error) });
+    return jsonRes({ trend: null });
+  }
 }
 
 function avg(arr: number[]): number {
