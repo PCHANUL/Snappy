@@ -41,6 +41,9 @@ fi
 if [ -n "${ADMIN_SECRET:-}" ]; then
   SECRETS_TO_SET+=("ADMIN_SECRET")
 fi
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+  SECRETS_TO_SET+=("ANTHROPIC_API_KEY")
+fi
 
 log_info "등록할 시크릿: ${#SECRETS_TO_SET[@]}개"
 for var in "${SECRETS_TO_SET[@]}"; do
