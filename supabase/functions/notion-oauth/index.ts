@@ -115,6 +115,8 @@ async function handleCallback(url: URL): Promise<Response> {
     // 핵심 업데이트 필드 (컬럼이 반드시 존재하는 것만 포함)
     const coreUpdate: Record<string, any> = {
       notion_api_key_encrypted: encryptedToken,
+      // 새 OAuth 승인 범위가 이전 템플릿과 다를 수 있으므로 오래된 DB 연결은 유지하지 않는다.
+      notion_database_id: null,
     };
     if (workspace_id) coreUpdate.notion_workspace_id = workspace_id;
     if (workspace_name) coreUpdate.notion_workspace_name = workspace_name;
@@ -203,7 +205,7 @@ async function handleCallback(url: URL): Promise<Response> {
       has_duplicated_template: !!duplicated_template_id,
       db_resolved: !!coreUpdate.notion_database_id,
     });
-    return redirect(`user_id=${userId}&notion_connected=1`);
+    return redirect(`user_id=${userId}&notion_connected=1&db_resolved=${coreUpdate.notion_database_id ? '1' : '0'}`);
   } catch (err) {
     logger.error('OAuth callback error', err);
     return redirect('error=server_error');

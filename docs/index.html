@@ -348,7 +348,8 @@
     }
 
     // OAuth 완료 후: 섹션 2 완료 → 섹션 3(DB 연결) 진입
-    async function completeOAuthStep() {
+    async function completeOAuthStep(options = {}) {
+      const forceDatabaseSelection = !!options.forceDatabaseSelection;
       completeSection(2);
       activateSection(3);
       loadConnectedPages();
@@ -356,11 +357,12 @@
       loading.innerHTML = '<span class="spinner">⟳</span> 연결 반영 중... (잠시 기다려주세요)';
       loading.style.display = 'block';
       await new Promise(r => setTimeout(r, 3000));
-      await loadDbSection();
+      await loadDbSection({ forceDatabaseSelection });
     }
 
     // 섹션 3: DB 목록 자동 로드
-    async function loadDbSection() {
+    async function loadDbSection(options = {}) {
+      const forceDatabaseSelection = !!options.forceDatabaseSelection;
       const loading  = document.getElementById('dbLoading');
       const selector = document.getElementById('dbSelector');
       const result   = document.getElementById('dbResult');
@@ -372,16 +374,18 @@
       result.className = 'message hidden';
 
       // 템플릿 복제 경로에서 DB가 이미 자동 연동됐는지 확인
-      try {
-        const verify = await verifyUser(userId);
-        if (verify.notion_configured) {
-          loading.style.display = 'none';
-          document.getElementById('summary-db').textContent = '검색 DB';
-          completeSection(3);
-          activateSection(4);
-          return;
-        }
-      } catch { /* 아래 자동 조회로 진행 */ }
+      if (!forceDatabaseSelection) {
+        try {
+          const verify = await verifyUser(userId);
+          if (verify.notion_configured) {
+            loading.style.display = 'none';
+            document.getElementById('summary-db').textContent = '검색 DB';
+            completeSection(3);
+            activateSection(4);
+            return;
+          }
+        } catch { /* 아래 자동 조회로 진행 */ }
+      }
 
       try {
         let databases = null;
@@ -402,7 +406,7 @@
         if (!databases || databases.length === 0) {
           result.className = 'message error';
           result.textContent = '연결된 데이터베이스를 찾지 못했습니다. 복제한 Snappy 페이지가 연결되어 있는지 확인 후 다시 시도해주세요.';
-          showDbRetryButton();
+          showDbRetryButton(options);
           return;
         }
         showDbPicker(databases);
@@ -410,7 +414,7 @@
         loading.style.display = 'none';
         result.className = 'message error';
         result.textContent = err.message;
-        showDbRetryButton();
+        showDbRetryButton(options);
       }
     }
 
@@ -437,11 +441,11 @@
       });
     }
 
-    function showDbRetryButton() {
+    function showDbRetryButton(options = {}) {
       const selector = document.getElementById('dbSelector');
       selector.classList.remove('hidden');
       selector.innerHTML = '<button id="dbRetryBtn" class="btn-primary" style="margin-top:8px;">다시 시도</button>';
-      document.getElementById('dbRetryBtn').addEventListener('click', loadDbSection);
+      document.getElementById('dbRetryBtn').addEventListener('click', () => loadDbSection(options));
     }
 
     async function setupWithDatabase(dbId, dbTitle) {
@@ -524,7 +528,7 @@
     document.getElementById('changeDbBtn').addEventListener('click', () => {
       reopenSection(3);
       lockSection(4);
-      loadDbSection();
+      loadDbSection({ forceDatabaseSelection: true });
     });
 
     // ── 섹션 4 이벤트 ────────────────────────────
@@ -570,13 +574,14 @@
       const params          = new URLSearchParams(location.search);
       const presetUserId    = params.get('user_id')?.trim();
       const notionConnected = params.get('notion_connected') === '1';
+      const dbResolved      = params.get('db_resolved') === '1';
       const oauthError      = params.get('error');
 
       if (notionConnected && presetUserId) {
         // OAuth 완료 복귀
         userId = presetUserId;
         completeSection(1);
-        await completeOAuthStep();
+        await completeOAuthStep({ forceDatabaseSelection: !dbResolved });
         return;
       }
 
