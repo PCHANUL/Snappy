@@ -113,12 +113,13 @@ serve(async (req) => {
       }
     }
 
-    // 7. 검색어 적합도 (keyword가 있을 때만)
+    // 7. 검색어 적합도 — 본문 크롤링이 성공한 경우에만 측정.
+    // 스니펫/제목은 검색엔진이 키워드 주변을 잘라낸 것이라 밀도 측정이 무의미.
     let seoCount: number | undefined;
     let seoScore: number | undefined;
-    if (keyword && sourceText) {
-      seoCount = countOccurrences(sourceText, keyword);
-      seoScore = seoScoreFromCount(seoCount);
+    if (keyword && fullText) {
+      seoCount = countOccurrences(fullText, keyword);
+      seoScore = seoScoreFromDensity(seoCount, fullText.length, keyword.length);
     }
 
     // 8. 읽기 시간 추정 (어절 수 × 3.5자 / 분당 500자)
@@ -174,13 +175,17 @@ function countOccurrences(text: string, keyword: string): number {
   return count;
 }
 
-function seoScoreFromCount(count: number): number {
-  if (count === 0) return 0;
-  if (count <= 2) return 1;
-  if (count <= 5) return 2;
-  if (count <= 10) return 3;
-  if (count <= 20) return 4;
-  return 5;
+// 키워드 밀도(등장 글자수 / 전체 글자수) 기반 점수.
+// 너무 낮으면 주제 적합도 부족, 너무 높으면 키워드 스터핑(과최적화)으로 간주해 감점.
+function seoScoreFromDensity(count: number, textLength: number, keywordLength = 1): number {
+  if (count === 0 || textLength === 0) return 0;
+  const density = (count * Math.max(1, keywordLength)) / textLength; // 0~1
+  const pct = density * 100;
+  if (pct < 0.3) return 1; // 거의 안 다룸
+  if (pct < 0.8) return 3; // 적정 하단
+  if (pct <= 2.5) return 5; // 적정 (주제 집중)
+  if (pct <= 4) return 4; // 다소 과함
+  return 2; // 과최적화 의심
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
