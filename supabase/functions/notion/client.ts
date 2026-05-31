@@ -49,8 +49,7 @@ const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
 const PAGES_BASE = 'https://pchanul.github.io/Snappy';
-const ARTICLE_MARKER = '📄'; // 본문 추가 여부 판별용 callout 마커
-const NOTION_TEXT_LIMIT = 1900; // 단일 rich_text content 최대(2000) 여유
+const ARTICLE_MARKER = '📄'; // 분석 추가 여부 판별용 callout 마커
 
 export class NotionClient {
   private pagesCreatedWithTemplate = new Set<string>();
@@ -1038,24 +1037,6 @@ function isInvalidStatusOption(error: unknown): boolean {
 // 유튜브는 JS 렌더링이 필요해 크롤 불가 → 본문 버튼 제외
 function isCrawlablePlatform(platform: Platform): boolean {
   return platform !== 'youtube';
-}
-
-// 긴 본문을 Notion rich_text 제한(2000자) 이하의 문단으로 분할
-function chunkText(text: string): string[] {
-  const chunks: string[] = [];
-  let remaining = text.trim();
-  while (remaining.length > 0) {
-    if (remaining.length <= NOTION_TEXT_LIMIT) {
-      chunks.push(remaining);
-      break;
-    }
-    // 가능하면 공백 경계에서 자름
-    let cut = remaining.lastIndexOf(' ', NOTION_TEXT_LIMIT);
-    if (cut < NOTION_TEXT_LIMIT * 0.5) cut = NOTION_TEXT_LIMIT;
-    chunks.push(remaining.slice(0, cut));
-    remaining = remaining.slice(cut).trim();
-  }
-  return chunks;
 }
 
 function sleep(ms: number): Promise<void> {
