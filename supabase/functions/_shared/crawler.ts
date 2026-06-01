@@ -1,5 +1,8 @@
-// 블로그 본문 크롤러
-// naver_blog / tistory / brunch 지원 — YouTube는 JS 렌더링 필요로 스킵
+// 블로그/유튜브 콘텐츠 크롤러
+// - naver_blog: m.blog.naver.com 모바일 URL로 변환 후 크롤 (iframe 우회)
+// - youtube: Data API v3 videos.list 로 설명 + 태그 취득
+// - tistory / brunch: 직접 크롤
+// - 공통 폴백: OG/description 메타 태그
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const TIMEOUT_MS = 10_000;
@@ -13,8 +16,9 @@ export interface CrawlResult {
   word_count?: number;
 }
 
-// YouTube는 JS 렌더링이 필요하므로 크롤링 불가 → skip
-const SKIP_PLATFORMS = new Set(['youtube']);
+export interface CrawlOptions {
+  youtubeApiKey?: string;
+}
 
 // 플랫폼별 본문 클래스명 후보 (앞쪽 우선)
 const SELECTORS: Record<string, string[]> = {
@@ -23,12 +27,18 @@ const SELECTORS: Record<string, string[]> = {
   brunch:     ['wrap_body', 'article_view', 'wrap_article_body'],
 };
 
-export async function crawlUrl(url: string, platform: string): Promise<CrawlResult> {
-  if (SKIP_PLATFORMS.has(platform)) return { status: 'skip' };
+export async function crawlUrl(url: string, platform: string, options?: CrawlOptions): Promise<CrawlResult> {
+  if (platform === 'youtube') {
+    return fetchYouTubeContent(url, options?.youtubeApiKey);
+  }
+
+  // 네이버 블로그: 데스크톱 URL은 iframe 내부에 본문이 있어 직접 크롤 불가.
+  // m.blog.naver.com 모바일 버전은 서버사이드 렌더링으로 본문이 직접 노출됨.
+  const fetchUrl = platform === 'naver_blog' ? toNaverMobileUrl(url) ?? url : url;
 
   let html: string;
   try {
-    const res = await fetch(url, {
+    const res = await fetch(fetchUrl, {
       headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,*/*' },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -39,13 +49,95 @@ export async function crawlUrl(url: string, platform: string): Promise<CrawlResu
   }
 
   const text = extractText(html, platform);
-  if (!text || text.length < 100) return { status: 'failed' };
+  if (text && text.length >= 100) {
+    return { status: 'done', full_text: text, word_count: countWords(text) };
+  }
 
-  return {
-    status: 'done',
-    full_text: text,
-    word_count: countWords(text),
-  };
+  // 본문 CSS 셀렉터 실패 → OG/description 메타 태그 폴백
+  const ogText = extractOgMeta(html);
+  if (ogText && ogText.length >= 20) {
+    return { status: 'done', full_text: ogText, word_count: countWords(ogText) };
+  }
+
+  return { status: 'failed' };
+}
+
+// blog.naver.com/user/postid → m.blog.naver.com/user/postid
+function toNaverMobileUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.endsWith('blog.naver.com')) return null;
+    return `https://m.blog.naver.com${u.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+// YouTube Data API v3 — videos.list (snippet) → description + tags
+async function fetchYouTubeContent(url: string, apiKey?: string): Promise<CrawlResult> {
+  if (!apiKey) return { status: 'failed' };
+
+  const videoId = extractYouTubeId(url);
+  if (!videoId) return { status: 'failed' };
+
+  try {
+    const apiUrl = `https://www.googleapis.com/youtube/v3/videos` +
+      `?part=snippet&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(apiKey)}`;
+
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!res.ok) return { status: 'failed' };
+
+    const data = await res.json();
+    const snippet = data.items?.[0]?.snippet;
+    if (!snippet) return { status: 'failed' };
+
+    const tags: string = (snippet.tags ?? []).join(' ');
+    const text = [snippet.title, snippet.description, tags]
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+      .slice(0, MAX_TEXT);
+
+    if (text.length < 20) return { status: 'failed' };
+
+    return { status: 'done', full_text: text, word_count: countWords(text) };
+  } catch {
+    return { status: 'failed' };
+  }
+}
+
+function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1) || null;
+    return u.searchParams.get('v');
+  } catch {
+    return null;
+  }
+}
+
+// OG description 또는 <meta name="description"> 태그에서 텍스트 추출
+function extractOgMeta(html: string): string {
+  const patterns = [
+    /property=["']og:description["'][^>]+content=["']([^"']{20,})["']/i,
+    /content=["']([^"']{20,})["'][^>]+property=["']og:description["']/i,
+    /name=["']description["'][^>]+content=["']([^"']{20,})["']/i,
+    /content=["']([^"']{20,})["'][^>]+name=["']description["']/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m?.[1]) {
+      return m[1]
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim();
+    }
+  }
+  return '';
 }
 
 function extractText(html: string, platform: string): string {
@@ -66,7 +158,6 @@ function extractText(html: string, platform: string): string {
 }
 
 function extractByClass(html: string, className: string): string {
-  // class 속성에 정확히 className이 포함된 첫 번째 태그를 찾음
   const candidates = [
     `class="${className}"`,
     `class="${className} `,
@@ -118,6 +209,5 @@ function cleanHtml(raw: string): string {
 }
 
 function countWords(text: string): number {
-  // 한국어: 공백 기준 어절 수. 영어 혼합이면 공백 분리가 그대로 적용됨.
   return text.split(/\s+/).filter(Boolean).length;
 }

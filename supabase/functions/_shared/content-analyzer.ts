@@ -41,10 +41,11 @@ export async function analyzeContentItem(opts: {
   const description = content?.description ?? '';
   const title = content?.title ?? opts.title ?? '';
 
-  // 2. 본문이 없고 스킵 대상이 아니면 즉석 크롤링 + 캐시
-  if (!fullText && content?.crawl_status !== 'skip') {
+  // 2. 본문이 없으면 즉석 크롤링 + 캐시
+  // ('skip' 상태였던 유튜브도 API 방식으로 재시도)
+  if (!fullText) {
     try {
-      const result = await crawlUrl(url, platform);
+      const result = await crawlUrl(url, platform, { youtubeApiKey: env.youtube.apiKey });
       if (result.status === 'done' && result.full_text) {
         fullText = result.full_text;
         await getSupabase()
