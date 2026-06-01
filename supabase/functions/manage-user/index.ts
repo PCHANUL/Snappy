@@ -3,6 +3,7 @@
 //
 // 엔드포인트:
 //   POST /functions/v1/manage-user?action=setup-notion
+//   POST /functions/v1/manage-user?action=ensure-search-database
 //   GET  /functions/v1/manage-user?action=usage&user_id=...
 //
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -23,6 +24,8 @@ import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
 import type { SubscriptionTier } from '../_shared/types.ts';
 import { NotionClient } from '../notion/client.ts';
 
+const EXPECTED_TEMPLATE_PAGE_NAME = (Deno.env.get('TEMPLATE_PAGE_NAME') || '트렌드 콘텐츠 발견기').trim();
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -39,6 +42,8 @@ serve(async (req) => {
         return await handleUsage(req, url);
       case 'list-databases':
         return await handleListDatabases(req);
+      case 'ensure-search-database':
+        return await handleEnsureSearchDatabase(req);
       case 'list-pages':
         return await handleListPages(req);
       case 'verify-user':
@@ -107,6 +112,86 @@ async function handleSetupNotion(req: Request): Promise<Response> {
   return jsonResponse({
     success: true,
     message: '노션 연동이 완료되었습니다.',
+  });
+}
+
+// === 연결된 노션 페이지에 검색 DB 생성/연동 ===
+async function handleEnsureSearchDatabase(req: Request): Promise<Response> {
+  if (req.method !== 'POST') throw new ValidationError('POST required');
+
+  const body = await req.json();
+  const { user_id } = body;
+  const requestedPageId = typeof body.page_id === 'string' ? body.page_id.trim() : '';
+
+  if (!user_id || typeof user_id !== 'string') {
+    throw new ValidationError('user_id required');
+  }
+
+  const { data: user, error: userError } = await getSupabase()
+    .from('users')
+    .select('notion_api_key_encrypted')
+    .eq('id', user_id)
+    .single();
+
+  if (userError || !user) {
+    throw new ValidationError('User not found', '유저를 찾을 수 없습니다.');
+  }
+  if (!user.notion_api_key_encrypted) {
+    throw new ValidationError('No token stored for user', '노션 연동이 필요합니다.');
+  }
+
+  const apiKey = await decryptNotionKey(user.notion_api_key_encrypted);
+  const notion = new NotionClient(apiKey);
+
+  let page: { id: string; title: string } | null = requestedPageId
+    ? { id: requestedPageId.replace(/-/g, ''), title: '연결된 페이지' }
+    : await notion.findAccessiblePageByTitle(EXPECTED_TEMPLATE_PAGE_NAME);
+
+  if (!page) {
+    const pages = await notion.listAccessiblePages();
+    if (pages.length === 1) {
+      page = pages[0];
+    } else if (pages.length === 0) {
+      throw new ValidationError(
+        'No accessible Notion page',
+        '연결된 Notion 페이지를 찾지 못했습니다. Notion 연결을 다시 진행하면서 복제한 Snappy 페이지를 선택해주세요.',
+      );
+    } else {
+      throw new ValidationError(
+        'Multiple accessible Notion pages',
+        '여러 Notion 페이지가 연결되어 대상 페이지를 고를 수 없습니다. Notion 연결을 다시 진행하면서 복제한 Snappy 페이지만 선택해주세요.',
+      );
+    }
+  }
+
+  const database = await notion.ensureSearchDatabase(page.id);
+
+  const { error: updateError } = await getSupabase()
+    .from('users')
+    .update({ notion_database_id: database.id })
+    .eq('id', user_id);
+
+  if (updateError) {
+    throw new Error(`Setup failed: ${updateError.message}`);
+  }
+
+  logger.info('Search database ensured', {
+    user_id,
+    page_id: page.id,
+    database_id: database.id,
+    created: database.created,
+  });
+
+  return jsonResponse({
+    success: true,
+    notion_database_id: database.id,
+    database_title: database.title,
+    page_id: page.id,
+    page_title: page.title,
+    created: database.created,
+    message: database.created
+      ? '검색 DB를 생성하고 연결했습니다.'
+      : '기존 검색 DB를 연결했습니다.',
   });
 }
 

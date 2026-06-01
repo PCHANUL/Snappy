@@ -47,6 +47,7 @@ const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_API_VERSION = '2022-06-28';
 const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
+const SEARCH_DATABASE_TITLE = '검색 DB';
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
 const PAGES_BASE = 'https://pchanul.github.io/Snappy';
 export class NotionClient {
@@ -246,6 +247,40 @@ export class NotionClient {
       }),
     });
     return (res.id as string).replace(/-/g, '');
+  }
+
+  // 연결된 페이지 안에 Snappy 검색 DB를 보장한다.
+  // 이미 같은 DB가 있으면 재사용하고, 없으면 인라인 데이터베이스를 생성한다.
+  async ensureSearchDatabase(parentPageId: string): Promise<{ id: string; title: string; created: boolean }> {
+    const existing = await this.findSearchDatabaseOnPage(parentPageId);
+    if (existing) {
+      return { ...existing, created: false };
+    }
+
+    let res: any;
+    try {
+      res = await this.fetchApi('databases', {
+        method: 'POST',
+        body: JSON.stringify(searchDatabaseBody(parentPageId, true)),
+      });
+    } catch (error) {
+      if (!isUnsupportedButtonProperty(error)) throw error;
+
+      logger.warn('Notion button property is not creatable; retrying search DB without load-more button', {
+        parentPageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      res = await this.fetchApi('databases', {
+        method: 'POST',
+        body: JSON.stringify(searchDatabaseBody(parentPageId, false)),
+      });
+    }
+
+    return {
+      id: (res.id as string).replace(/-/g, ''),
+      title: getObjectTitle(res) || SEARCH_DATABASE_TITLE,
+      created: true,
+    };
   }
 
   // 콘텐츠 아이템을 child DB에 페이지(행)로 추가 — Notion 속도 제한 고려 직렬 처리
@@ -905,12 +940,27 @@ export class NotionClient {
     return ((data.results as any[]) || [])
       .filter((obj) => obj.parent?.type === 'workspace')
       .map((obj) => {
-        const titleProp = Object.values(obj.properties || {})
-          .find((p: any) => (p as any)?.type === 'title') as { title?: any[] } | undefined;
-        const title = (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
+        const title = getObjectTitle(obj);
         return { id: (obj.id as string).replace(/-/g, ''), title };
       })
       .filter((p) => p.title);
+  }
+
+  // 제목으로 접근 가능한 페이지를 찾는다. 셋업 중 사용자가 선택한 Snappy 페이지 식별용.
+  async findAccessiblePageByTitle(title: string): Promise<{ id: string; title: string } | null> {
+    const results = await this.searchByTitle(title);
+    if (!results) return null;
+
+    const expected = normalizeTitle(title);
+    const page = results.find((obj: any) =>
+      obj.object === 'page' && normalizeTitle(getObjectTitle(obj)).startsWith(expected)
+    );
+    if (!page?.id) return null;
+
+    return {
+      id: (page.id as string).replace(/-/g, ''),
+      title: getObjectTitle(page),
+    };
   }
 
   // 제목 쿼리로 검색 — 연결된 객체 중 해당 이름이 있는지 확인용
@@ -963,6 +1013,47 @@ export class NotionClient {
     return null;
   }
 
+  private async findSearchDatabaseOnPage(pageId: string): Promise<{ id: string; title: string } | null> {
+    const databases: Array<{ id: string; title: string }> = [];
+    let cursor: string | undefined;
+
+    do {
+      const qs = new URLSearchParams({ page_size: '100' });
+      if (cursor) qs.set('start_cursor', cursor);
+
+      const data = await this.fetchApi(`blocks/${toUuid(pageId)}/children?${qs.toString()}`, { method: 'GET' });
+      for (const block of (data.results as any[]) || []) {
+        if (block.type === 'child_database') {
+          databases.push({
+            id: (block.id as string).replace(/-/g, ''),
+            title: block.child_database?.title || '',
+          });
+        }
+      }
+
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    const exact = databases.find((db) => db.title.trim() === SEARCH_DATABASE_TITLE);
+    if (exact) return exact;
+
+    for (const db of databases) {
+      try {
+        const info = await this.fetchApi(`databases/${toUuid(db.id)}`, { method: 'GET' });
+        if (isSnappySearchDatabase(info)) {
+          return { id: db.id, title: getObjectTitle(info) || db.title || SEARCH_DATABASE_TITLE };
+        }
+      } catch (error) {
+        logger.warn('Failed to inspect child database while finding search DB', {
+          databaseId: db.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return null;
+  }
+
   private async getDatabaseParentPageId(databaseId: string): Promise<string> {
     const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
     const rawParentId: string | undefined = dbInfo.parent?.page_id;
@@ -1011,6 +1102,20 @@ function toUuid(id: string): string {
   return `${s.slice(0,8)}-${s.slice(8,12)}-${s.slice(12,16)}-${s.slice(16,20)}-${s.slice(20)}`;
 }
 
+function getObjectTitle(obj: any): string {
+  if (obj.object === 'database') {
+    return ((obj.title || []) as any[]).map((t: any) => t.plain_text).join('').trim();
+  }
+
+  const titleProp = Object.values(obj.properties || {})
+    .find((p: any) => (p as any)?.type === 'title') as { title?: any[] } | undefined;
+  return (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
+}
+
+function normalizeTitle(title: string): string {
+  return title.replace(/\s+/g, ' ').trim();
+}
+
 function statusValue(status: string): { status: { name: string } } {
   return { status: { name: status } };
 }
@@ -1024,13 +1129,69 @@ function searchEntryProperties(params: { keyword: string; platforms: Platform[];
   };
 }
 
+function searchDatabaseBody(parentPageId: string, includeLoadMoreButton: boolean): Record<string, any> {
+  const properties: Record<string, any> = {
+    '키워드': { title: {} },
+    '상태': { status: {} },
+    '매체': {
+      multi_select: {
+        options: [
+          { name: '네이버블로그', color: 'green' },
+          { name: '유튜브', color: 'red' },
+          { name: '티스토리', color: 'orange' },
+          { name: '브런치', color: 'brown' },
+        ],
+      },
+    },
+    '기간': {
+      select: {
+        options: [
+          { name: '1일', color: 'gray' },
+          { name: '1주', color: 'blue' },
+          { name: '1개월', color: 'purple' },
+          { name: '1년', color: 'pink' },
+        ],
+      },
+    },
+    '발견 콘텐츠 수': { number: { format: 'number' } },
+    '검색일시': { created_time: {} },
+  };
+
+  if (includeLoadMoreButton) {
+    properties['📄 더보기'] = { button: {} };
+  }
+
+  return {
+    parent: { page_id: toUuid(parentPageId) },
+    is_inline: true,
+    icon: { type: 'emoji', emoji: '🔍' },
+    title: [{ type: 'text', text: { content: SEARCH_DATABASE_TITLE } }],
+    properties,
+  };
+}
+
 function isContentDatabaseTitle(title: string): boolean {
   const normalized = title.trim().toLowerCase();
   return normalized.startsWith('콘텐츠') || normalized.startsWith('content');
 }
 
+function isSnappySearchDatabase(db: any): boolean {
+  const props = db.properties || {};
+  return (
+    props['키워드']?.type === 'title' &&
+    props['상태']?.type === 'status' &&
+    props['매체']?.type === 'multi_select' &&
+    props['기간']?.type === 'select'
+  );
+}
+
 function isInvalidStatusOption(error: unknown): boolean {
   return error instanceof NotionApiError && error.message.includes('Invalid status option');
+}
+
+function isUnsupportedButtonProperty(error: unknown): boolean {
+  return error instanceof NotionApiError &&
+    (error.message.includes('button') || error.message.includes('📄 더보기'));
 }
 
 // 유튜브는 JS 렌더링이 필요해 크롤 불가 → 본문 버튼 제외

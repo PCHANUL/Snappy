@@ -177,16 +177,15 @@ bash scripts/deploy.sh --help
 curl 'https://[ref].supabase.co/functions/v1/manage-user?action=verify-user&user_id=...'
 ```
 
-### 노션 연동
+### 노션 검색 DB 생성/연동
 
-OAuth 플로우에서는 먼저 Notion 연결을 완료해 토큰을 저장한 뒤 DB ID만 등록합니다.
+OAuth 플로우에서 Notion 토큰을 저장한 뒤, 연결된 Snappy 페이지에 검색 DB를 생성하거나 기존 DB를 찾아 등록합니다.
 
 ```bash
-curl -X POST 'https://[ref].supabase.co/functions/v1/manage-user?action=setup-notion' \
+curl -X POST 'https://[ref].supabase.co/functions/v1/manage-user?action=ensure-search-database' \
   -H 'Content-Type: application/json' \
   -d '{
-    "user_id": "...",
-    "notion_database_id": "..."
+    "user_id": "..."
   }'
 ```
 
