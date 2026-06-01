@@ -213,7 +213,6 @@ async function createContentDB(parentPageId) {
       '요약': { rich_text: {} },
       '키워드': { multi_select: {} },
       'SEO 적합도': { number: { format: 'number' } },
-      '읽기 시간': { number: { format: 'number' } },
       '분석 상태': {
         select: {
           options: [

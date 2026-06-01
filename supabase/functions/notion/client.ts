@@ -21,7 +21,6 @@ const ANALYSIS_PROPS = {
   summary: '요약',
   keywords: '키워드',
   seo: 'SEO 적합도',
-  readTime: '읽기 시간',
   status: '분석 상태',
 } as const;
 
@@ -253,7 +252,6 @@ export class NotionClient {
           [ANALYSIS_PROPS.summary]: { rich_text: {} },
           [ANALYSIS_PROPS.keywords]: { multi_select: {} },
           [ANALYSIS_PROPS.seo]: { number: { format: 'number' } },
-          [ANALYSIS_PROPS.readTime]: { number: { format: 'number' } },
           [ANALYSIS_PROPS.status]: {
             select: {
               options: [
@@ -406,10 +404,6 @@ export class NotionClient {
     if (analysisProps.get(ANALYSIS_PROPS.seo) === 'number' && result.seoScore !== undefined) {
       properties[ANALYSIS_PROPS.seo] = { number: result.seoScore };
     }
-    if (analysisProps.get(ANALYSIS_PROPS.readTime) === 'number' && result.readMinutes !== undefined) {
-      properties[ANALYSIS_PROPS.readTime] = { number: result.readMinutes };
-    }
-
     if (Object.keys(properties).length === 0) return;
     await this.fetchApi(`pages/${toUuid(rowId)}`, {
       method: 'PATCH',

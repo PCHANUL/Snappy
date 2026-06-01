@@ -17,7 +17,7 @@ export interface AnalysisResult {
   seoCount?: number; // 본문 내 검색어 등장 횟수 (본문 크롤 성공 시에만)
   seoScore?: number; // 0~5 밀도 기반 점수
   wordCount?: number;
-  readMinutes?: number;
+
   status: 'done' | 'failed';
 }
 
@@ -115,10 +115,7 @@ export async function analyzeContentItem(opts: {
     seoScore = seoScoreFromDensity(seoCount, fullText.length, keyword.length);
   }
 
-  // 7. 읽기 시간 추정 (분당 500자)
   const wordCount = content?.word_count || 0;
-  const charEstimate = wordCount > 0 ? wordCount * 3.5 : sourceText.length;
-  const readMinutes = charEstimate > 0 ? Math.max(1, Math.ceil(charEstimate / 500)) : undefined;
 
   return {
     summary,
@@ -127,7 +124,6 @@ export async function analyzeContentItem(opts: {
     seoCount,
     seoScore,
     wordCount: wordCount || undefined,
-    readMinutes,
     status: 'done',
   };
 }

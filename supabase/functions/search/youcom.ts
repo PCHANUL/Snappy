@@ -87,7 +87,19 @@ function normalizeItem(item: YouComWebResult, platform: Platform): ContentItem {
     snippet: item.snippets?.[0] || undefined,
     thumbnail: item.thumbnail_url || undefined,
     published_at: item.page_age || undefined,
+    author: extractTistoryAuthor(item.url, platform),
   };
+}
+
+function extractTistoryAuthor(url: string, platform: Platform): string | undefined {
+  if (platform !== 'tistory') return undefined;
+  try {
+    const host = new URL(url).hostname; // e.g. "username.tistory.com"
+    const sub = host.split('.')[0];
+    return sub && sub !== 'tistory' ? sub : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function searchTistory(
