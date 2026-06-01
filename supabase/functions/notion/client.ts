@@ -49,8 +49,6 @@ const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
 const PAGES_BASE = 'https://pchanul.github.io/Snappy';
-const ARTICLE_MARKER = '📄'; // 분석 추가 여부 판별용 callout 마커
-
 export class NotionClient {
   private pagesCreatedWithTemplate = new Set<string>();
 
@@ -302,88 +300,89 @@ export class NotionClient {
   }
 
   // 콘텐츠 행에 분석 결과(북마크+요약+키워드+SEO+메타데이터)를 추가한다.
-  // 이미 추가된 경우(bookmark 블록 또는 📄 마커 callout 존재) false 반환.
+  // 이미 추가된 경우(bookmark 블록 존재) false 반환.
   async appendContentAnalysis(pageId: string, analysis: ContentAnalysis): Promise<boolean> {
     const normalizedPageId = toUuid(pageId);
 
     const existing = await this.fetchApi(`blocks/${normalizedPageId}/children?page_size=100`, { method: 'GET' });
-    const alreadyAdded = ((existing.results as any[]) || []).some(
-      (b) => b.type === 'bookmark' ||
-        (b.type === 'callout' && b.callout?.rich_text?.[0]?.text?.content?.includes(ARTICLE_MARKER)),
-    );
+    const alreadyAdded = ((existing.results as any[]) || []).some((b) => b.type === 'bookmark');
     if (alreadyAdded) return false;
 
     const blocks: any[] = [];
 
-    // 1. 북마크
+    // 1. 북마크 (항상 상단)
     blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: analysis.url } });
-    blocks.push({ object: 'block', type: 'divider', divider: {} });
 
-    // 2. AI 요약 (📄 마커로 중복 방지 역할도 겸함)
+    // 2. AI 요약 — 헤딩 + callout 본문 + italic 출처 캡션
     if (analysis.summary) {
+      blocks.push(heading3Block('💡 요약'));
       blocks.push({
         object: 'block',
         type: 'callout',
         callout: {
-          rich_text: [{
-            type: 'text',
-            text: { content: `${ARTICLE_MARKER} 요약 (${analysis.summarySource ?? '기반'})\n${analysis.summary}` },
-          }],
-          icon: { type: 'emoji', emoji: '💡' },
+          rich_text: [{ type: 'text', text: { content: analysis.summary } }],
+          icon: { type: 'emoji', emoji: '💬' },
           color: 'gray_background',
         },
       });
+      if (analysis.summarySource) {
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{
+              type: 'text',
+              text: { content: `출처: ${analysis.summarySource}` },
+              annotations: { italic: true, color: 'gray' },
+            }],
+          },
+        });
+      }
     }
 
-    // 3. 핵심 키워드
+    // 3. 핵심 키워드 — 헤딩 + blue bold 태그 나열
     if (analysis.keywords?.length) {
-      blocks.push({
-        object: 'block',
-        type: 'callout',
-        callout: {
-          rich_text: [{ type: 'text', text: { content: `🏷️ 핵심 키워드\n${analysis.keywords.join('  ·  ')}` } }],
-          icon: { type: 'emoji', emoji: '🏷️' },
-          color: 'gray_background',
-        },
+      blocks.push(heading3Block('🏷️ 핵심 키워드'));
+      const kwParts: any[] = [];
+      analysis.keywords.forEach((kw, i) => {
+        kwParts.push({ type: 'text', text: { content: kw }, annotations: { bold: true, color: 'blue' } });
+        if (i < analysis.keywords!.length - 1) {
+          kwParts.push({ type: 'text', text: { content: '  ·  ' }, annotations: { color: 'gray' } });
+        }
       });
+      blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: kwParts } });
     }
 
-    // 4. 검색어 적합도 (keyword가 있을 때만)
+    // 4. 검색어 적합도 — 헤딩 + 횟수·별점·라벨 한 줄
     if (analysis.seoKeyword && analysis.seoCount !== undefined) {
       const filled = Math.min(5, analysis.seoScore ?? 0);
       const stars = '★'.repeat(filled) + '☆'.repeat(5 - filled);
+      const label = seoScoreLabel(analysis.seoScore ?? 0);
+      blocks.push(heading3Block('📊 검색어 적합도'));
       blocks.push({
         object: 'block',
-        type: 'callout',
-        callout: {
+        type: 'paragraph',
+        paragraph: {
           rich_text: [{
             type: 'text',
-            text: { content: `📊 검색어 적합도\n검색어 "${analysis.seoKeyword}" 본문 내 ${analysis.seoCount}회 등장  ·  ${stars}` },
+            text: { content: `"${analysis.seoKeyword}" 본문 내 ${analysis.seoCount}회  ·  ${stars} ${label}` },
           }],
-          icon: { type: 'emoji', emoji: '📊' },
-          color: 'blue_background',
         },
       });
     }
 
-    // 5. 메타데이터
+    // 5. 메타데이터 — 헤딩 + 한 줄 요약
     const metaParts: string[] = [];
     if (analysis.publishedAt) metaParts.push(`📅 ${analysis.publishedAt.slice(0, 10)}`);
     if (analysis.readMinutes) metaParts.push(`⏱ 약 ${analysis.readMinutes}분`);
     if (analysis.wordCount) metaParts.push(`📝 ${analysis.wordCount.toLocaleString()}자`);
-    if (analysis.platform) {
-      const platformName = PLATFORM_INFO[analysis.platform as Platform]?.name ?? analysis.platform;
-      metaParts.push(platformName);
-    }
+    if (analysis.platform) metaParts.push(PLATFORM_INFO[analysis.platform as Platform]?.name ?? analysis.platform);
     if (metaParts.length) {
+      blocks.push(heading3Block('📋 정보'));
       blocks.push({
         object: 'block',
-        type: 'callout',
-        callout: {
-          rich_text: [{ type: 'text', text: { content: `📋 정보\n${metaParts.join('  ·  ')}` } }],
-          icon: { type: 'emoji', emoji: '📋' },
-          color: 'gray_background',
-        },
+        type: 'paragraph',
+        paragraph: { rich_text: [{ type: 'text', text: { content: metaParts.join('  ·  ') } }] },
       });
     }
 
@@ -1037,6 +1036,19 @@ function isInvalidStatusOption(error: unknown): boolean {
 // 유튜브는 JS 렌더링이 필요해 크롤 불가 → 본문 버튼 제외
 function isCrawlablePlatform(platform: Platform): boolean {
   return platform !== 'youtube';
+}
+
+function heading3Block(text: string): any {
+  return {
+    object: 'block',
+    type: 'heading_3',
+    heading_3: { rich_text: [{ type: 'text', text: { content: text } }], is_toggleable: false },
+  };
+}
+
+function seoScoreLabel(score: number): string {
+  const labels: Record<number, string> = { 5: '적정', 4: '다소 높음', 3: '보통', 2: '과최적화 의심', 1: '낮음' };
+  return labels[score] ?? '등장 없음';
 }
 
 function sleep(ms: number): Promise<void> {
