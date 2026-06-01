@@ -209,6 +209,20 @@ async function createContentDB(parentPageId) {
       'URL': { url: {} },
       '작성자': { rich_text: {} },
       '날짜': { date: {} },
+      // 콘텐츠 분석 결과 컬럼 — 검색 후 백그라운드로 채워짐
+      '요약': { rich_text: {} },
+      '키워드': { multi_select: {} },
+      'SEO 적합도': { number: { format: 'number' } },
+      '읽기 시간': { number: { format: 'number' } },
+      '분석 상태': {
+        select: {
+          options: [
+            { name: '분석중', color: 'yellow' },
+            { name: '완료', color: 'green' },
+            { name: '실패', color: 'red' },
+          ],
+        },
+      },
     },
   });
 }

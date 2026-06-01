@@ -6,20 +6,26 @@ import { logger } from '../_shared/logger.ts';
 import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks, buildTabItemBlocks } from './blocks.ts';
 import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
 import { PLATFORM_INFO } from '../_shared/types.ts';
+import type { AnalysisResult } from '../_shared/content-analyzer.ts';
 
-export interface ContentAnalysis {
+// 검색 결과 행에 추가된 콘텐츠 — 분석 루프 대상
+export interface CreatedRow {
+  rowId: string;
   url: string;
-  summary?: string;
-  summarySource?: string;
-  keywords?: string[];
-  seoKeyword?: string;
-  seoCount?: number;
-  seoScore?: number;
-  wordCount?: number;
-  readMinutes?: number;
-  platform?: string;
-  publishedAt?: string;
+  platform: Platform;
+  title: string;
 }
+
+// 콘텐츠 분석 결과를 담는 DB 속성 이름 (템플릿/프로그램 DB 공통)
+const ANALYSIS_PROPS = {
+  summary: '요약',
+  keywords: '키워드',
+  seo: 'SEO 적합도',
+  readTime: '읽기 시간',
+  status: '분석 상태',
+} as const;
+
+const ANALYSIS_STATUS = { analyzing: '분석중', done: '완료', failed: '실패' } as const;
 
 // 내부 ID → Notion DB 옵션값 매핑 (검색 DB 행 생성 시 사용)
 const PLATFORM_TO_NOTION: Record<Platform, string> = {
@@ -49,7 +55,7 @@ const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
 const SEARCH_DATABASE_TITLE = '검색 DB';
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
-const PAGES_BASE = 'https://pchanul.github.io/Snappy';
+
 export class NotionClient {
   private pagesCreatedWithTemplate = new Set<string>();
 
@@ -243,6 +249,20 @@ export class NotionClient {
           'URL': { url: {} },
           '작성자': { rich_text: {} },
           '날짜': { date: {} },
+          // 콘텐츠 분석 결과 컬럼 — 테이블 뷰에서 정렬·필터·비교 가능
+          [ANALYSIS_PROPS.summary]: { rich_text: {} },
+          [ANALYSIS_PROPS.keywords]: { multi_select: {} },
+          [ANALYSIS_PROPS.seo]: { number: { format: 'number' } },
+          [ANALYSIS_PROPS.readTime]: { number: { format: 'number' } },
+          [ANALYSIS_PROPS.status]: {
+            select: {
+              options: [
+                { name: ANALYSIS_STATUS.analyzing, color: 'yellow' },
+                { name: ANALYSIS_STATUS.done, color: 'green' },
+                { name: ANALYSIS_STATUS.failed, color: 'red' },
+              ],
+            },
+          },
         },
       }),
     });
@@ -283,15 +303,51 @@ export class NotionClient {
     };
   }
 
+  // 콘텐츠 행(page)의 부모 DB 속성 맵 조회 — 재분석 시 분석 컬럼 확인용
+  async getRowAnalysisProps(rowId: string): Promise<Map<string, string>> {
+    try {
+      const page = await this.fetchApi(`pages/${toUuid(rowId)}`, { method: 'GET' });
+      const dbId = page.parent?.database_id as string | undefined;
+      if (!dbId) return new Map();
+      return await this.getDatabaseProperties(dbId);
+    } catch (error) {
+      logger.warn('Failed to read row parent database', {
+        rowId, error: error instanceof Error ? error.message : String(error),
+      });
+      return new Map();
+    }
+  }
+
+  // DB 속성 맵(이름 → 타입) 조회 — 분석 컬럼 존재 및 타입 검증용
+  // 타입을 함께 보는 이유: 잘못된 타입으로 PATCH하면 요청 전체가 실패하므로
+  async getDatabaseProperties(databaseId: string): Promise<Map<string, string>> {
+    try {
+      const db = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
+      const map = new Map<string, string>();
+      for (const [name, def] of Object.entries(db.properties ?? {})) {
+        map.set(name, (def as any)?.type ?? '');
+      }
+      return map;
+    } catch (error) {
+      logger.warn('Failed to read database properties', {
+        databaseId, error: error instanceof Error ? error.message : String(error),
+      });
+      return new Map();
+    }
+  }
+
   // 콘텐츠 아이템을 child DB에 페이지(행)로 추가 — Notion 속도 제한 고려 직렬 처리
-  // userId가 있으면 크롤 가능한 매체의 각 행에 "본문 가져오기" 임베드 버튼을 추가한다.
+  // analysisProps에 '분석 상태'가 있으면 각 행을 '분석중'으로 표시한다.
+  // 생성된 행 정보를 반환 — 이후 백그라운드 분석 루프의 대상이 된다.
   async addItemsToDatabase(
     databaseId: string,
     items: FlatResult[],
     onProgress?: (message: string) => Promise<void>,
-    userId?: string,
-    keyword?: string,
-  ): Promise<void> {
+    analysisProps?: Map<string, string>,
+  ): Promise<CreatedRow[]> {
+    const hasStatus = analysisProps?.get(ANALYSIS_PROPS.status) === 'select';
+    const rows: CreatedRow[] = [];
+
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const info = PLATFORM_INFO[item.platform];
@@ -302,6 +358,7 @@ export class NotionClient {
       if (item.url) properties['URL'] = { url: item.url };
       if (item.author) properties['작성자'] = { rich_text: [{ type: 'text', text: { content: item.author } }] };
       if (item.published_at) properties['날짜'] = { date: { start: item.published_at.slice(0, 10) } };
+      if (hasStatus) properties[ANALYSIS_PROPS.status] = { select: { name: ANALYSIS_STATUS.analyzing } };
 
       const body: Record<string, any> = {
         parent: { database_id: toUuid(databaseId) },
@@ -311,118 +368,94 @@ export class NotionClient {
       if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
 
       const created = await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
-
-      // 본문 가져오기 버튼 임베드 — 크롤 가능한 매체(유튜브 제외)에만
-      if (userId && item.url && isCrawlablePlatform(item.platform)) {
-        const rowId = created.id as string;
-        const embedUrl = `${PAGES_BASE}/fetch-content.html` +
-          `?user_id=${encodeURIComponent(userId)}` +
-          `&url=${encodeURIComponent(item.url)}` +
-          `&page_id=${encodeURIComponent(rowId.replace(/-/g, ''))}` +
-          (keyword ? `&keyword=${encodeURIComponent(keyword)}` : '');
-        try {
-          await this.appendBlocks(rowId, [{ object: 'block', type: 'embed', embed: { url: embedUrl } }]);
-        } catch (error) {
-          logger.warn('Failed to add fetch-content embed (non-fatal)', {
-            rowId, error: error instanceof Error ? error.message : String(error),
-          });
-        }
+      if (item.url) {
+        rows.push({ rowId: created.id as string, url: item.url, platform: item.platform, title: item.title });
       }
 
       await onProgress?.(`노션에 콘텐츠 추가 중... (${i + 1}/${items.length})`);
       if (i + 1 < items.length) await sleep(350);
     }
+
+    return rows;
   }
 
-  // 콘텐츠 행에 분석 결과(북마크+요약+키워드+SEO+메타데이터)를 추가한다.
-  // 이미 추가된 경우(bookmark 블록 존재) false 반환.
-  async appendContentAnalysis(pageId: string, analysis: ContentAnalysis): Promise<boolean> {
-    const normalizedPageId = toUuid(pageId);
+  // 콘텐츠 행의 분석 결과를 DB 속성으로 업데이트 (타입이 일치하는 속성만)
+  async updateRowAnalysis(rowId: string, result: AnalysisResult, analysisProps: Map<string, string>): Promise<void> {
+    const properties: Record<string, any> = {};
 
-    const existing = await this.fetchApi(`blocks/${normalizedPageId}/children?page_size=100`, { method: 'GET' });
-    const alreadyAdded = ((existing.results as any[]) || []).some((b) => b.type === 'bookmark');
-    if (alreadyAdded) return false;
+    if (analysisProps.get(ANALYSIS_PROPS.status) === 'select') {
+      properties[ANALYSIS_PROPS.status] = {
+        select: { name: result.status === 'done' ? ANALYSIS_STATUS.done : ANALYSIS_STATUS.failed },
+      };
+    }
+    if (analysisProps.get(ANALYSIS_PROPS.summary) === 'rich_text' && result.summary) {
+      const text = result.summarySource ? `${result.summary}\n(${result.summarySource})` : result.summary;
+      properties[ANALYSIS_PROPS.summary] = {
+        rich_text: [{ type: 'text', text: { content: text.slice(0, 1990) } }],
+      };
+    }
+    if (analysisProps.get(ANALYSIS_PROPS.keywords) === 'multi_select' && result.keywords.length) {
+      // multi_select 옵션명은 쉼표 불가 + 빈 문자열 불가 — 정리 후 최대 5개
+      const options = result.keywords
+        .slice(0, 5)
+        .map((k) => k.replace(/,/g, ' ').trim().slice(0, 100))
+        .filter((name) => name.length > 0)
+        .map((name) => ({ name }));
+      if (options.length) properties[ANALYSIS_PROPS.keywords] = { multi_select: options };
+    }
+    if (analysisProps.get(ANALYSIS_PROPS.seo) === 'number' && result.seoScore !== undefined) {
+      properties[ANALYSIS_PROPS.seo] = { number: result.seoScore };
+    }
+    if (analysisProps.get(ANALYSIS_PROPS.readTime) === 'number' && result.readMinutes !== undefined) {
+      properties[ANALYSIS_PROPS.readTime] = { number: result.readMinutes };
+    }
 
-    const blocks: any[] = [];
+    if (Object.keys(properties).length === 0) return;
+    await this.fetchApi(`pages/${toUuid(rowId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties }),
+    });
+  }
 
-    // 1. 북마크 (항상 상단)
-    blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: analysis.url } });
-
-    // 2. AI 요약 — 헤딩 + callout 본문 + italic 출처 캡션
-    if (analysis.summary) {
-      blocks.push(heading3Block('💡 요약'));
-      blocks.push({
-        object: 'block',
-        type: 'callout',
-        callout: {
-          rich_text: [{ type: 'text', text: { content: analysis.summary } }],
-          icon: { type: 'emoji', emoji: '💬' },
-          color: 'gray_background',
-        },
-      });
-      if (analysis.summarySource) {
-        blocks.push({
+  // 결과 페이지에 분석 진행 상태 callout 추가 → 생성된 block id 반환
+  async appendAnalysisStatusCallout(pageId: string, total: number): Promise<string | null> {
+    const res = await this.fetchApi(`blocks/${toUuid(pageId)}/children`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        children: [{
           object: 'block',
-          type: 'paragraph',
-          paragraph: {
-            rich_text: [{
-              type: 'text',
-              text: { content: `출처: ${analysis.summarySource}` },
-              annotations: { italic: true, color: 'gray' },
-            }],
+          type: 'callout',
+          callout: {
+            rich_text: [{ type: 'text', text: { content: `🔄 콘텐츠 분석 중... (0/${total})` } }],
+            icon: { type: 'emoji', emoji: '🔄' },
+            color: 'yellow_background',
           },
-        });
-      }
-    }
+        }],
+      }),
+    });
+    return (res.results?.[0]?.id as string) ?? null;
+  }
 
-    // 3. 핵심 키워드 — 헤딩 + blue bold 태그 나열
-    if (analysis.keywords?.length) {
-      blocks.push(heading3Block('🏷️ 핵심 키워드'));
-      const kwParts: any[] = [];
-      analysis.keywords.forEach((kw, i) => {
-        kwParts.push({ type: 'text', text: { content: kw }, annotations: { bold: true, color: 'blue' } });
-        if (i < analysis.keywords!.length - 1) {
-          kwParts.push({ type: 'text', text: { content: '  ·  ' }, annotations: { color: 'gray' } });
-        }
-      });
-      blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: kwParts } });
-    }
-
-    // 4. 검색어 적합도 — 헤딩 + 횟수·별점·라벨 한 줄
-    if (analysis.seoKeyword && analysis.seoCount !== undefined) {
-      const filled = Math.min(5, analysis.seoScore ?? 0);
-      const stars = '★'.repeat(filled) + '☆'.repeat(5 - filled);
-      const label = seoScoreLabel(analysis.seoScore ?? 0);
-      blocks.push(heading3Block('📊 검색어 적합도'));
-      blocks.push({
-        object: 'block',
-        type: 'paragraph',
-        paragraph: {
-          rich_text: [{
-            type: 'text',
-            text: { content: `"${analysis.seoKeyword}" 본문 내 ${analysis.seoCount}회  ·  ${stars} ${label}` },
-          }],
+  // 분석 진행 상태 callout 업데이트 (진행률 또는 완료)
+  async updateAnalysisStatusCallout(
+    blockId: string,
+    done: number,
+    total: number,
+    finished: boolean,
+  ): Promise<void> {
+    const content = finished
+      ? `✅ 콘텐츠 분석 완료 — 총 ${total}개 (테이블에서 요약·키워드·SEO 적합도를 확인하세요)`
+      : `🔄 콘텐츠 분석 중... (${done}/${total})`;
+    await this.fetchApi(`blocks/${toUuid(blockId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        callout: {
+          rich_text: [{ type: 'text', text: { content } }],
+          icon: { type: 'emoji', emoji: finished ? '✅' : '🔄' },
+          color: finished ? 'green_background' : 'yellow_background',
         },
-      });
-    }
-
-    // 5. 메타데이터 — 헤딩 + 한 줄 요약
-    const metaParts: string[] = [];
-    if (analysis.publishedAt) metaParts.push(`📅 ${analysis.publishedAt.slice(0, 10)}`);
-    if (analysis.readMinutes) metaParts.push(`⏱ 약 ${analysis.readMinutes}분`);
-    if (analysis.wordCount) metaParts.push(`📝 ${analysis.wordCount.toLocaleString()}자`);
-    if (analysis.platform) metaParts.push(PLATFORM_INFO[analysis.platform as Platform]?.name ?? analysis.platform);
-    if (metaParts.length) {
-      blocks.push(heading3Block('📋 정보'));
-      blocks.push({
-        object: 'block',
-        type: 'paragraph',
-        paragraph: { rich_text: [{ type: 'text', text: { content: metaParts.join('  ·  ') } }] },
-      });
-    }
-
-    await this.appendBlocks(normalizedPageId, blocks);
-    return true;
+      }),
+    });
   }
 
   // 연관 인기 키워드 callout 블록을 페이지에 추가 (키워드별 DataLab ratio 표기)
@@ -453,8 +486,7 @@ export class NotionClient {
     metadata: SearchMetadata,
     totalCount: number,
     onProgress?: (message: string) => Promise<void>,
-    userId?: string,
-  ): Promise<void> {
+  ): Promise<{ rows: CreatedRow[]; analysisProps: Map<string, string> }> {
     // 1. 속성 업데이트 (상태 → 완료)
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
       method: 'PATCH',
@@ -486,13 +518,17 @@ export class NotionClient {
       databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
     }
 
-    // 4. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지)
+    // 4. DB에 분석 컬럼이 있는지 확인 (없으면 분석 단계 스킵)
+    const analysisProps = await this.getDatabaseProperties(databaseId);
+
+    // 5. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지), 분석중 상태로 표시
     const allItems: FlatResult[] = results.flatMap(r =>
       r.items.map(item => ({ ...item, platform: r.platform }))
     );
-    await this.addItemsToDatabase(databaseId, allItems, onProgress, userId, keyword);
+    const rows = await this.addItemsToDatabase(databaseId, allItems, onProgress, analysisProps);
 
-    logger.info('Notion page updated with child database', { pageId, totalCount, databaseId });
+    logger.info('Notion page updated with child database', { pageId, totalCount, databaseId, rows: rows.length });
+    return { rows, analysisProps };
   }
 
   // 배치 서브페이지 생성 (더보기용)
@@ -1192,24 +1228,6 @@ function isInvalidStatusOption(error: unknown): boolean {
 function isUnsupportedButtonProperty(error: unknown): boolean {
   return error instanceof NotionApiError &&
     (error.message.includes('button') || error.message.includes('📄 더보기'));
-}
-
-// 유튜브는 JS 렌더링이 필요해 크롤 불가 → 본문 버튼 제외
-function isCrawlablePlatform(platform: Platform): boolean {
-  return platform !== 'youtube';
-}
-
-function heading3Block(text: string): any {
-  return {
-    object: 'block',
-    type: 'heading_3',
-    heading_3: { rich_text: [{ type: 'text', text: { content: text } }], is_toggleable: false },
-  };
-}
-
-function seoScoreLabel(score: number): string {
-  const labels: Record<number, string> = { 5: '적정', 4: '다소 높음', 3: '보통', 2: '과최적화 의심', 1: '낮음' };
-  return labels[score] ?? '등장 없음';
 }
 
 function sleep(ms: number): Promise<void> {

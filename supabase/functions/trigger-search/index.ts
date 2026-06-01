@@ -12,7 +12,6 @@ import {
   getUserAndCheckQuota,
   incrementUsage,
   logSearch,
-  crawlSearchResults,
   markSearchingStart,
   markSearchingEnd,
   updateSearchProgress,
@@ -22,6 +21,8 @@ import {
 import { extractCandidateKeywords } from '../_shared/keyword-extractor.ts';
 import { rankCandidatesByTrend } from '../_shared/naver-trends.ts';
 import type { RankedKeyword } from '../_shared/naver-trends.ts';
+import { analyzeContentItem } from '../_shared/content-analyzer.ts';
+import type { CreatedRow } from '../notion/client.ts';
 import { env } from '../_shared/env.ts';
 import type { Platform, User } from '../_shared/types.ts';
 
@@ -118,13 +119,7 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       metadata,
     );
 
-    // 4. 본문 크롤링 (백그라운드)
-    const crawlTargets = orchestratorResult.results.flatMap(r =>
-      r.items.map(item => ({ url: item.url, platform: r.platform }))
-    );
-    EdgeRuntime.waitUntil(crawlSearchResults(crawlTargets));
-
-    // 4-b. 연관 인기 키워드 추출 + DataLab 개별 ratio 랭킹 (비차단)
+    // 4. 연관 인기 키워드 추출 + DataLab 개별 ratio 랭킹 (비차단)
     // 빈도순 상위 후보를 1회 호출(최대 5그룹)로 개별 ratio 조회 후 ratio순 정렬
     let relatedKeywords: RankedKeyword[] = [];
     try {
@@ -142,14 +137,13 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     }
 
     // 5. 요약 callout + child DB(매체별 행)로 결과 표시 (상태 → 완료)
-    await notion.updatePageWithChildDatabase(
+    const { rows, analysisProps } = await notion.updatePageWithChildDatabase(
       pageId,
       request.keyword,
       orchestratorResult.results,
       metadata,
       totalFound,
       onProgress,
-      user.id,
     );
 
     // 6. 연관 인기 키워드 Notion 블록 추가
@@ -159,6 +153,22 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
       } catch (err) {
         logger.warn('Failed to append related keywords to Notion (non-fatal)', { error: String(err) });
       }
+    }
+
+    // 7. 콘텐츠 분석 — DB에 분석 컬럼이 있으면 백그라운드로 각 행 분석
+    //    검색 자체는 여기서 완료 처리(상태 해제)되고, 분석은 별도로 진행 + callout으로 안내
+    const hasAnalysisProps =
+      analysisProps.get('분석 상태') === 'select' ||
+      analysisProps.get('요약') === 'rich_text' ||
+      analysisProps.get('SEO 적합도') === 'number';
+    if (rows.length && hasAnalysisProps) {
+      let statusBlockId: string | null = null;
+      try {
+        statusBlockId = await notion.appendAnalysisStatusCallout(pageId, rows.length);
+      } catch (err) {
+        logger.warn('Failed to add analysis status callout (non-fatal)', { error: String(err) });
+      }
+      EdgeRuntime.waitUntil(analyzeRows(notion, statusBlockId, rows, request.keyword, analysisProps));
     }
 
     await incrementUsage(request.user_id);
@@ -206,9 +216,59 @@ async function processSearch(rawBody: any, user: User): Promise<void> {
     });
   } finally {
     // 검색 완료(성공/실패 무관) → DB 상태 해제 + 임베드 URL 복원
+    // (콘텐츠 분석은 별도 백그라운드로 계속 진행됨)
     await markSearchingEnd(user.id);
     try {
       await notion.setSearchEmbedStatus(user.notion_database_id, false);
     } catch { /* non-fatal */ }
+  }
+}
+
+// 각 콘텐츠 행을 분석해 DB 속성을 채운다. 진행 상태는 callout으로 갱신.
+// 동시성 3으로 제한 — 크롤/요약 지연을 흡수하면서 Notion rate limit(3/s)도 보호
+async function analyzeRows(
+  notion: NotionClient,
+  statusBlockId: string | null,
+  rows: CreatedRow[],
+  keyword: string,
+  analysisProps: Map<string, string>,
+): Promise<void> {
+  const CONCURRENCY = 3;
+  const total = rows.length;
+  let done = 0;
+
+  try {
+    for (let i = 0; i < rows.length; i += CONCURRENCY) {
+      const batch = rows.slice(i, i + CONCURRENCY);
+      await Promise.allSettled(batch.map(async (row) => {
+        try {
+          const result = await analyzeContentItem({
+            url: row.url,
+            platform: row.platform,
+            title: row.title,
+            keyword,
+          });
+          await notion.updateRowAnalysis(row.rowId, result, analysisProps);
+        } catch (err) {
+          logger.warn('Row analysis failed (non-fatal)', { url: row.url, error: String(err) });
+          await notion.updateRowAnalysis(row.rowId, { keywords: [], status: 'failed' }, analysisProps)
+            .catch(() => { /* 상태 갱신 실패는 무시 */ });
+        }
+      }));
+
+      done += batch.length;
+      if (statusBlockId) {
+        await notion.updateAnalysisStatusCallout(statusBlockId, done, total, false)
+          .catch(() => { /* 진행률 갱신 실패는 무시 */ });
+      }
+    }
+
+    if (statusBlockId) {
+      await notion.updateAnalysisStatusCallout(statusBlockId, done, total, true)
+        .catch(() => { /* 완료 표시 실패는 무시 */ });
+    }
+    logger.info('Content analysis completed', { total });
+  } catch (err) {
+    logger.error('Content analysis loop failed', err, { total, done });
   }
 }
