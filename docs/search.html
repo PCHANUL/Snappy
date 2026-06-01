@@ -232,6 +232,8 @@
       padding: 1px 5px;
     }
 
+    #form { display: flex; flex-direction: column; gap: 10px; }
+
     .disabled-overlay { opacity: 0.5; pointer-events: none; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -257,8 +259,8 @@
         </div>
       </div>
 
-      <div class="field" style="margin-top: 10px;">
-        <label class="label">매체</label>
+      <div class="field">
+        <span class="label">매체</span>
         <div class="chips" id="platforms">
           <button type="button" class="chip active" data-value="naver_blog">네이버블로그</button>
           <button type="button" class="chip active" data-value="youtube">유튜브</button>
@@ -267,7 +269,7 @@
         </div>
       </div>
 
-      <div class="field" style="margin-top: 10px;">
+      <div class="field">
         <label class="label" for="period">기간</label>
         <select id="period">
           <option value="day">1일</option>
@@ -328,6 +330,7 @@
     if (!configured) {
       btn.classList.add('unconfigured');
       form.classList.add('disabled-overlay');
+      configGuide.style.display = 'block';
     } else if (searching) {
       // URL에 ?searching=1 → 다른 기기/새 탭에서 진행 중인 검색 표시
       btn.disabled = true;
@@ -340,7 +343,7 @@
 
     // ── 버튼 클릭 ────────────────────────────────────────────────────────────
     btn.addEventListener('click', async () => {
-      if (!configured) { configGuide.style.display = 'block'; return; }
+      if (!configured) return;
       if (btn.disabled) return;
 
       const keyword   = keywordEl.value.trim();

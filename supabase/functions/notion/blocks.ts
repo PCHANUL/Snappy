@@ -11,23 +11,8 @@ export function buildResultBlocks(
   results: SearchResult[],
   metadata: SearchMetadata,
 ): NotionBlock[] {
-  const totalCount = results.reduce((sum, r) => sum + r.count, 0);
-
-  // 매체별 요약 한 줄: "📝 8개  ·  🎥 10개  ·  📚 0개  ·  ✍️ 오류"
-  const summaryParts = results.map(r => {
-    const info = PLATFORM_INFO[r.platform];
-    if (r.error) return `${info.emoji} ${info.name} ⚠️`;
-    return `${info.emoji} ${info.name} ${r.count}개`;
-  });
-
-  const blocks: NotionBlock[] = [
-    callout(
-      `🔍 "${keyword}" — ${totalCount}개 발견 | ${(metadata.duration_ms / 1000).toFixed(1)}초`,
-      '🔍',
-    ),
-    paragraph(summaryParts.join('  ·  '), 'gray'),
-    divider(),
-  ];
+  // 상단 요약은 buildSummaryBlocks와 동일 — 중복 제거
+  const blocks: NotionBlock[] = [...buildSummaryBlocks(keyword, results, metadata)];
 
   for (const result of results) {
     const info = PLATFORM_INFO[result.platform];
@@ -68,10 +53,9 @@ function buildContentItemBlocks(idx: number, item: ContentItem): NotionBlock[] {
   if (item.author) metaParts.push(`👤 ${item.author}`);
   if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
   if (metaParts.length > 0) {
-    blocks.push(paragraphIndent(metaParts.join('  •  '), 'gray'));
+    blocks.push(paragraphIndent(metaParts.join('  ·  '), 'gray'));
   }
 
-  // 썸네일 이미지 (YouTube, 일부 Tistory/Brunch)
   if (item.thumbnail) {
     blocks.push({
       object: 'block',
@@ -89,15 +73,16 @@ function buildContentItemBlocks(idx: number, item: ContentItem): NotionBlock[] {
   return blocks;
 }
 
-// === 서브페이지 방식 ===
+// === 서브페이지 / child DB 방식 ===
 
-// 페이지 상단 요약 블록 (서브페이지 방식에서 페이지 본문 상단에 추가)
+// 페이지 상단 요약 블록 — callout(검색어·총개수) + gray paragraph(매체별 개수·소요시간)
 export function buildSummaryBlocks(
   keyword: string,
   results: SearchResult[],
   metadata: SearchMetadata,
 ): NotionBlock[] {
   const totalCount = results.reduce((sum, r) => sum + r.count, 0);
+  const duration = (metadata.duration_ms / 1000).toFixed(1);
 
   const summaryParts = results.map(r => {
     const info = PLATFORM_INFO[r.platform];
@@ -106,11 +91,8 @@ export function buildSummaryBlocks(
   });
 
   return [
-    callout(
-      `🔍 "${keyword}" — ${totalCount}개 발견 | ${(metadata.duration_ms / 1000).toFixed(1)}초`,
-      '🔍',
-    ),
-    paragraph(summaryParts.join('  ·  '), 'gray'),
+    callout(`🔍 "${keyword}" — ${totalCount}개`, '🔍'),
+    paragraph(`${summaryParts.join('  ·  ')}  (${duration}초)`, 'gray'),
     divider(),
   ];
 }
@@ -118,8 +100,8 @@ export function buildSummaryBlocks(
 // 더보기 안내 callout (남은 개수 포함)
 export function buildLoadMoreCallout(remaining: number): NotionBlock {
   return callout(
-    `📄 ${remaining}개 결과가 더 있습니다 — DB에서 '📄 더보기' 버튼을 클릭하세요`,
-    '📄',
+    `⏬ ${remaining}개 결과가 더 있습니다 — '더보기' 버튼을 클릭하세요`,
+    '⏬',
   );
 }
 
@@ -133,7 +115,7 @@ export function buildTabItemBlocks(item: ContentItem): NotionBlock[] {
   if (item.author) metaParts.push(`👤 ${item.author}`);
   if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
   if (metaParts.length > 0) {
-    blocks.push(paragraph(metaParts.join('  •  '), 'gray'));
+    blocks.push(paragraph(metaParts.join('  ·  '), 'gray'));
   }
 
   return blocks;
@@ -147,7 +129,7 @@ export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
   const metaParts = [`${info.emoji} ${info.name}`];
   if (item.author) metaParts.push(`👤 ${item.author}`);
   if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
-  blocks.push(paragraph(metaParts.join('  •  '), 'gray'));
+  blocks.push(paragraph(metaParts.join('  ·  '), 'gray'));
 
   // 링크를 bookmark 블록으로 — Notion이 OG 데이터를 자동 로드
   blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: item.url } });
