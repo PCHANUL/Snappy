@@ -22,6 +22,7 @@ FUNCTIONS=(
   "pages"
   "trend-data"
   "fetch-content"
+  "geo-measure"
 )
 
 # 도움말
