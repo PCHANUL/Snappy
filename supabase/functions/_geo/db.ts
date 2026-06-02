@@ -5,6 +5,7 @@ import { getSupabase } from '../_core/db.ts';
 import { rootDomain } from '../_core/domain.ts';
 import type { Citation, GeoEngine } from './types.ts';
 import type { QuestionIntent } from './question-template.ts';
+import type { NoiseFloor } from './variability.ts';
 
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,16 @@ export interface GeoRunSave {
   answer?: string;
   citations: Citation[];
   seoSnapshots: SeoSnapshotHit[];
+  batchId?: string; // 노이즈 바닥 측정 시 N개 run을 묶는 식별자
+}
+
+export interface NoiseFloorSave {
+  batchId: string;
+  keywordId?: string;
+  engine: GeoEngine;
+  model: string;
+  question: string;
+  floor: NoiseFloor;
 }
 
 export interface RunSummary {
@@ -142,6 +153,7 @@ export async function saveGeoRun(run: GeoRunSave): Promise<string> {
       model: run.model,
       question: run.question,
       answer: run.answer ?? null,
+      batch_id: run.batchId ?? null,
     })
     .select('id')
     .single();
@@ -178,6 +190,57 @@ export async function saveGeoRun(run: GeoRunSave): Promise<string> {
   }
 
   return runId;
+}
+
+// ── 노이즈 바닥 저장·조회 ───────────────────────────────────────────────────
+
+export async function saveNoiseFloor(save: NoiseFloorSave): Promise<string> {
+  const { data, error } = await getSupabase()
+    .from('geo_noise_floors')
+    .insert({
+      batch_id: save.batchId,
+      keyword_id: save.keywordId ?? null,
+      engine: save.engine,
+      model: save.model,
+      question: save.question,
+      runs: save.floor.runs,
+      avg_jaccard: save.floor.avgJaccard,
+      avg_rbo: save.floor.avgRbo,
+      stable_domains: save.floor.stableDomains,
+      volatile_domains: save.floor.volatileDomains,
+      domain_frequency: save.floor.domainFrequency,
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(`saveNoiseFloor failed: ${error?.message}`);
+  return data.id as string;
+}
+
+export interface NoiseFloorRow {
+  id: string;
+  batch_id: string;
+  keyword_id?: string;
+  engine: string;
+  model: string;
+  question: string;
+  runs: number;
+  avg_jaccard: number;
+  avg_rbo: number;
+  stable_domains: string[];
+  volatile_domains: string[];
+  domain_frequency: Record<string, number>;
+  created_at: string;
+}
+
+export async function getNoiseFloorHistory(keywordId: string, limit = 20): Promise<NoiseFloorRow[]> {
+  const { data, error } = await getSupabase()
+    .from('geo_noise_floors')
+    .select('id, batch_id, keyword_id, engine, model, question, runs, avg_jaccard, avg_rbo, stable_domains, volatile_domains, domain_frequency, created_at')
+    .eq('keyword_id', keywordId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`getNoiseFloorHistory failed: ${error.message}`);
+  return (data ?? []) as NoiseFloorRow[];
 }
 
 // ── 타임라인 조회 ────────────────────────────────────────────────────────────

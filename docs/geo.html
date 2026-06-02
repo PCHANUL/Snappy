@@ -331,6 +331,53 @@
     .dot.both { background: #fbbf24; }
     .dot.seo_only { background: #4ade80; }
     .dot.geo_only { background: #a78bfa; }
+
+    /* 보조 버튼 (변동성 측정) */
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row #measureBtn { flex: 1; }
+    #noiseBtn {
+      padding: 9px 14px;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    #noiseBtn:hover { background: #e0e7ff; }
+    #noiseBtn:disabled { background: #f3f4f6; color: #d1d5db; border-color: #e5e7eb; cursor: default; }
+
+    /* 변동성 지표 */
+    .stability-cards { display: flex; gap: 8px; margin-bottom: 10px; }
+    .stab-card {
+      flex: 1;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stab-label { font-size: 0.66rem; color: #9ca3af; font-weight: 600; }
+    .stab-value { font-size: 1.05rem; font-weight: 800; color: #111827; margin-top: 2px; }
+    .stab-bar { height: 5px; border-radius: 999px; background: #f3f4f6; margin-top: 5px; overflow: hidden; }
+    .stab-bar-fill { height: 100%; border-radius: 999px; transition: width 0.3s; }
+    .stab-hint { font-size: 0.62rem; color: #9ca3af; margin-top: 3px; }
+
+    .domain-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .chip {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .chip.stable { background: #dcfce7; color: #166534; }
+    .chip.volatile { background: #fef3c7; color: #92400e; }
+    .chip .freq { font-size: 0.6rem; opacity: 0.7; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -358,7 +405,10 @@
         <input type="text" id="selfDomain" placeholder="example.com">
       </div>
     </div>
-    <button type="submit" id="measureBtn">측정하기</button>
+    <div class="btn-row">
+      <button type="submit" id="measureBtn">측정하기</button>
+      <button type="button" id="noiseBtn" title="같은 질문을 여러 번 호출해 AI 인용의 변동성을 측정">변동성 N회</button>
+    </div>
   </form>
 
   <div class="preview" id="preview"></div>
@@ -474,6 +524,7 @@
     const intentEl    = document.getElementById('intent');
     const selfEl      = document.getElementById('selfDomain');
     const measureBtn  = document.getElementById('measureBtn');
+    const noiseBtn    = document.getElementById('noiseBtn');
     const previewEl   = document.getElementById('preview');
     const resultEl    = document.getElementById('result');
 
@@ -773,6 +824,117 @@
         measureBtn.textContent = '측정하기';
       }
     });
+
+    // ── 변동성(노이즈 바닥) 측정 ───────────────────────────────────────────────
+
+    noiseBtn.addEventListener('click', async () => {
+      const keyword = keywordEl.value.trim();
+      if (!keyword) { keywordEl.focus(); return; }
+      if (!userId) { showEmpty('사용자 정보가 없어요. 노션 임베드에서 열어주세요.'); return; }
+
+      noiseBtn.disabled = true;
+      measureBtn.disabled = true;
+      noiseBtn.textContent = '측정 중...';
+      savedIndicator.classList.remove('show');
+      timelineSection.classList.remove('open');
+      showSkeleton(4);
+
+      const kwOpt = trackedKeywordSelect.options[trackedKeywordSelect.selectedIndex];
+      const keywordId = kwOpt?.value || undefined;
+
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-noise`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            keyword,
+            intent: intentEl.value,
+            runs: 3,
+            keyword_id: keywordId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showEmpty(data.message || '변동성 측정에 실패했어요.'); return; }
+        renderNoise(data);
+        if (data.saved && keywordId) savedIndicator.classList.add('show');
+      } catch {
+        showEmpty('변동성 측정 중 오류가 발생했어요.');
+      } finally {
+        noiseBtn.disabled = false;
+        measureBtn.disabled = false;
+        noiseBtn.textContent = '변동성 N회';
+      }
+    });
+
+    function renderNoise(data) {
+      resultEl.innerHTML = '';
+      const floor = data.floor || {};
+
+      resultEl.appendChild(sectionTitle(
+        `노이즈 바닥 (${data.successful_runs}/${data.requested_runs}회 · ${data.engine})`,
+      ));
+
+      // 안정성 카드 2개 (Jaccard / RBO)
+      const cards = document.createElement('div');
+      cards.className = 'stability-cards';
+      cards.appendChild(stabCard('집합 안정성', floor.avg_jaccard, '인용 도메인이 매번 얼마나 같은가'));
+      cards.appendChild(stabCard('순위 안정성', floor.avg_rbo, '인용 순서가 매번 얼마나 같은가'));
+      resultEl.appendChild(cards);
+
+      // 코어(항상 등장) 도메인
+      const stable = floor.stable_domains || [];
+      if (stable.length) {
+        resultEl.appendChild(sectionTitle('코어 도메인 (매 호출 등장)'));
+        resultEl.appendChild(domainChips(stable, floor.domain_frequency, 'stable'));
+      }
+
+      // 노이즈(일부만 등장) 도메인
+      const volatile = floor.volatile_domains || [];
+      if (volatile.length) {
+        resultEl.appendChild(sectionTitle('변동 도메인 (일부 호출만)'));
+        resultEl.appendChild(domainChips(volatile, floor.domain_frequency, 'volatile'));
+      }
+
+      if (!stable.length && !volatile.length) {
+        resultEl.appendChild(emptyEl('이번 측정에서 AI가 인용한 출처가 없어요.'));
+      }
+
+      if (data.notice) {
+        const n = document.createElement('div');
+        n.className = 'notice';
+        n.textContent = '⚠️ ' + data.notice;
+        resultEl.appendChild(n);
+      }
+    }
+
+    function stabCard(label, value, hint) {
+      const v = typeof value === 'number' ? value : 0;
+      const pct = Math.round(v * 100);
+      // 색: 높을수록 초록, 낮을수록 빨강
+      const color = v >= 0.7 ? '#22c55e' : v >= 0.4 ? '#f59e0b' : '#ef4444';
+      const card = document.createElement('div');
+      card.className = 'stab-card';
+      card.innerHTML =
+        `<div class="stab-label">${escapeHtml(label)}</div>` +
+        `<div class="stab-value" style="color:${color}">${pct}%</div>` +
+        `<div class="stab-bar"><div class="stab-bar-fill" style="width:${pct}%;background:${color}"></div></div>` +
+        `<div class="stab-hint">${escapeHtml(hint)}</div>`;
+      return card;
+    }
+
+    function domainChips(domains, freq, kind) {
+      const wrap = document.createElement('div');
+      wrap.className = 'domain-chips';
+      for (const d of domains) {
+        const chip = document.createElement('span');
+        chip.className = 'chip ' + kind;
+        const f = freq && freq[d] !== undefined ? Math.round(freq[d] * 100) : null;
+        chip.innerHTML = escapeHtml(d) + (f !== null ? ` <span class="freq">${f}%</span>` : '');
+        wrap.appendChild(chip);
+      }
+      return wrap;
+    }
 
     // ── 렌더링 ───────────────────────────────────────────────────────────────
 

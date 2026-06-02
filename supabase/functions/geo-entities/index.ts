@@ -20,6 +20,7 @@ import {
   listTrackedKeywords,
   deleteTrackedKeyword,
   getKeywordTimelineWithSelf,
+  getNoiseFloorHistory,
 } from '../_geo/db.ts';
 import type { GeoEntity } from '../_geo/db.ts';
 
@@ -38,6 +39,7 @@ serve(async (req) => {
       case 'list-keywords':    return await handleListKeywords(url);
       case 'delete-keyword':   return await handleDeleteKeyword(req);
       case 'timeline':         return await handleTimeline(url);
+      case 'noise-history':    return await handleNoiseHistory(url);
       default:
         throw new ValidationError(`Unknown action: ${action}`);
     }
@@ -139,6 +141,16 @@ async function handleTimeline(url: URL): Promise<Response> {
 
   const timeline = await getKeywordTimelineWithSelf(keywordId, selfDomain, limit);
   return jsonRes({ timeline });
+}
+
+// ── 노이즈 바닥 이력 ─────────────────────────────────────────────────────────
+
+async function handleNoiseHistory(url: URL): Promise<Response> {
+  const keywordId = url.searchParams.get('keyword_id')?.trim() ?? '';
+  const limit     = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') ?? '20', 10)));
+  if (!keywordId) throw new ValidationError('keyword_id required');
+  const history = await getNoiseFloorHistory(keywordId, limit);
+  return jsonRes({ history });
 }
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────────

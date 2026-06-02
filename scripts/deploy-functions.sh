@@ -24,6 +24,7 @@ FUNCTIONS=(
   "fetch-content"
   "geo-measure"
   "geo-entities"
+  "geo-noise"
 )
 
 # 도움말
