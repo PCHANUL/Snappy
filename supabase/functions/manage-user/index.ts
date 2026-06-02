@@ -537,9 +537,23 @@ async function handleSetupSearchButton(req: Request): Promise<Response> {
   const notion = new NotionClient(apiKey);
   const embedUrl = await notion.updateSearchEmbed(user.notion_database_id, user_id);
   await notion.updateTrendsEmbed(user.notion_database_id, user_id);
+  await notion.updateGeoEmbed(user.notion_database_id, user_id);
 
   logger.info('Search button embed updated', { user_id, embedUrl });
   return jsonResponse({ success: true, embed_url: embedUrl });
+}
+
+// === 네이버 자동완성 — 키워드 후보 제안 ===
+async function handleTrendSuggest(url: URL): Promise<Response> {
+  const keyword = url.searchParams.get('keyword')?.trim() || '';
+  if (!keyword) return jsonResponse({ suggestions: [] });
+  try {
+    const suggestions = await fetchNaverAutocomplete(keyword);
+    return jsonResponse({ suggestions });
+  } catch (error) {
+    logger.warn('Naver autocomplete unavailable', { error: String(error) });
+    return jsonResponse({ suggestions: [] });
+  }
 }
 
 // === 네이버 데이터랩 — 후보 키워드 검색량 트렌드 ===

@@ -21,11 +21,7 @@
       color: #374151;
       letter-spacing: -0.2px;
     }
-    .subtitle {
-      font-size: 0.7rem;
-      color: #9ca3af;
-      margin-top: 2px;
-    }
+    .subtitle { font-size: 0.7rem; color: #9ca3af; margin-top: 2px; }
 
     /* 입력 폼 */
     #form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
@@ -38,7 +34,7 @@
       color: #6b7280;
       margin-bottom: 3px;
     }
-    input, select {
+    input[type="text"], input[type="url"], select {
       width: 100%;
       padding: 7px 10px;
       border: 1px solid #e5e7eb;
@@ -49,6 +45,7 @@
       background: #fff;
     }
     input:focus, select:focus { outline: none; border-color: #6366f1; }
+    input:disabled, select:disabled { background: #f9fafb; color: #9ca3af; }
 
     #measureBtn {
       padding: 9px 14px;
@@ -73,10 +70,135 @@
       border: 1px solid #f3f4f6;
       border-radius: 8px;
       padding: 7px 10px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       display: none;
     }
     .preview b { color: #4338ca; font-weight: 600; }
+
+    /* 엔티티 추적 패널 */
+    .entity-panel {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .entity-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #f9fafb;
+      cursor: pointer;
+      user-select: none;
+    }
+    .entity-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #374151;
+    }
+    .entity-badge {
+      font-size: 0.62rem;
+      background: #e0e7ff;
+      color: #4338ca;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .entity-toggle {
+      font-size: 0.72rem;
+      color: #9ca3af;
+      transition: transform 0.15s;
+    }
+    .entity-toggle.open { transform: rotate(180deg); }
+    .entity-body {
+      padding: 10px 12px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .entity-body.open { display: flex; }
+
+    .entity-select-row { display: flex; gap: 8px; align-items: flex-end; }
+    .entity-select-row .field { flex: 1; }
+
+    .link-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.72rem;
+      color: #6366f1;
+      font-family: inherit;
+      padding: 0;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .link-btn:hover { color: #4338ca; text-decoration: underline; }
+    .link-btn.danger { color: #ef4444; }
+    .link-btn.danger:hover { color: #b91c1c; }
+
+    .entity-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* 인라인 폼 (엔티티·키워드 추가) */
+    .inline-form {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background: #f9fafb;
+      border: 1px solid #f3f4f6;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .inline-form.open { display: flex; }
+    .inline-form-row { display: flex; gap: 8px; }
+    .inline-form-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 2px;
+    }
+    .inline-save-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #6366f1;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .inline-save-btn:hover { background: #4f46e5; }
+    .inline-save-btn:disabled { background: #c7d2fe; cursor: default; }
+    .inline-cancel-btn {
+      padding: 6px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fff;
+      color: #6b7280;
+      font-size: 0.78rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .inline-form-btns { display: flex; gap: 6px; }
+
+    /* 저장 표시기 */
+    .saved-indicator {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      color: #059669;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .saved-indicator.show { display: flex; }
 
     /* 격차 매트릭스 */
     .section-title {
@@ -118,11 +240,7 @@
       border-radius: 999px;
       margin-left: 4px;
     }
-    .ranks {
-      display: flex;
-      gap: 5px;
-      flex-shrink: 0;
-    }
+    .ranks { display: flex; gap: 5px; flex-shrink: 0; }
     .badge {
       font-size: 0.66rem;
       font-weight: 600;
@@ -145,7 +263,7 @@
     .bucket-tag.seo_only { background: #dcfce7; color: #166534; }
     .bucket-tag.geo_only { background: #ede9fe; color: #6d28d9; }
 
-    /* AI 답변 인용 목록 */
+    /* AI 인용 목록 */
     .cite {
       display: flex;
       align-items: baseline;
@@ -158,6 +276,34 @@
     .cite-rank { font-size: 0.7rem; color: #c4b5fd; font-weight: 700; width: 14px; flex-shrink: 0; }
     .cite a { color: #4f46e5; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cite a:hover { text-decoration: underline; }
+
+    /* 타임라인 */
+    .timeline-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .timeline-section { margin-top: 12px; display: none; }
+    .timeline-section.open { display: block; }
+    .timeline-table { width: 100%; border-collapse: collapse; font-size: 0.74rem; }
+    .timeline-table th {
+      text-align: left;
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #9ca3af;
+      padding: 4px 6px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .timeline-table td {
+      padding: 6px 6px;
+      border-bottom: 1px solid #f9fafb;
+      color: #374151;
+    }
+    .timeline-table tr:last-child td { border-bottom: none; }
+    .timeline-table tr:hover td { background: #f9fafb; }
+    .tl-rank { font-weight: 700; color: #6d28d9; }
+    .tl-none { color: #d1d5db; }
 
     .notice {
       font-size: 0.68rem;
@@ -185,6 +331,53 @@
     .dot.both { background: #fbbf24; }
     .dot.seo_only { background: #4ade80; }
     .dot.geo_only { background: #a78bfa; }
+
+    /* 보조 버튼 (변동성 측정) */
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row #measureBtn { flex: 1; }
+    #noiseBtn {
+      padding: 9px 14px;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    #noiseBtn:hover { background: #e0e7ff; }
+    #noiseBtn:disabled { background: #f3f4f6; color: #d1d5db; border-color: #e5e7eb; cursor: default; }
+
+    /* 변동성 지표 */
+    .stability-cards { display: flex; gap: 8px; margin-bottom: 10px; }
+    .stab-card {
+      flex: 1;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stab-label { font-size: 0.66rem; color: #9ca3af; font-weight: 600; }
+    .stab-value { font-size: 1.05rem; font-weight: 800; color: #111827; margin-top: 2px; }
+    .stab-bar { height: 5px; border-radius: 999px; background: #f3f4f6; margin-top: 5px; overflow: hidden; }
+    .stab-bar-fill { height: 100%; border-radius: 999px; transition: width 0.3s; }
+    .stab-hint { font-size: 0.62rem; color: #9ca3af; margin-top: 3px; }
+
+    .domain-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+    .chip {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .chip.stable { background: #dcfce7; color: #166534; }
+    .chip.volatile { background: #fef3c7; color: #92400e; }
+    .chip .freq { font-size: 0.6rem; opacity: 0.7; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -212,27 +405,155 @@
         <input type="text" id="selfDomain" placeholder="example.com">
       </div>
     </div>
-    <button type="submit" id="measureBtn">측정하기</button>
+    <div class="btn-row">
+      <button type="submit" id="measureBtn">측정하기</button>
+      <button type="button" id="noiseBtn" title="같은 질문을 여러 번 호출해 AI 인용의 변동성을 측정">변동성 N회</button>
+    </div>
   </form>
 
   <div class="preview" id="preview"></div>
+
+  <!-- 엔티티 추적 패널 (user_id 있을 때만 표시) -->
+  <div class="entity-panel" id="entityPanel" style="display:none">
+    <div class="entity-header" id="entityHeader">
+      <div class="entity-header-left">
+        <span>📌 엔티티 추적</span>
+        <span class="entity-badge" id="trackingBadge" style="display:none">추적 중</span>
+      </div>
+      <span class="entity-toggle" id="entityToggle">▼</span>
+    </div>
+    <div class="entity-body" id="entityBody">
+      <!-- 엔티티 선택 -->
+      <div class="entity-select-row">
+        <div class="field">
+          <span class="label">엔티티</span>
+          <select id="entitySelect">
+            <option value="">선택 안 함 (1회 측정)</option>
+          </select>
+        </div>
+        <button type="button" class="link-btn" id="newEntityBtn">+ 새 엔티티</button>
+      </div>
+
+      <!-- 새 엔티티 인라인 폼 -->
+      <div class="inline-form" id="newEntityForm">
+        <div class="inline-form-title">새 엔티티 등록</div>
+        <div class="inline-form-row">
+          <div class="field">
+            <span class="label">이름</span>
+            <input type="text" id="newEntityName" placeholder="예: 강남치과의원">
+          </div>
+          <div class="field">
+            <span class="label">유형</span>
+            <select id="newEntityType">
+              <option value="brand">브랜드</option>
+              <option value="website">웹사이트</option>
+              <option value="product">제품</option>
+              <option value="person">인물</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <span class="label">내 도메인 (선택)</span>
+          <input type="text" id="newEntityDomain" placeholder="example.com">
+        </div>
+        <div class="inline-form-btns">
+          <button type="button" class="inline-save-btn" id="saveEntityBtn">등록</button>
+          <button type="button" class="inline-cancel-btn" id="cancelEntityBtn">취소</button>
+        </div>
+      </div>
+
+      <!-- 추적 키워드 선택 (엔티티 선택 시만 표시) -->
+      <div id="keywordTrackRow" style="display:none">
+        <div class="entity-select-row">
+          <div class="field">
+            <span class="label">추적 키워드</span>
+            <select id="trackedKeywordSelect">
+              <option value="">키워드 직접 입력 (저장 안 함)</option>
+            </select>
+          </div>
+          <button type="button" class="link-btn" id="newKeywordBtn">+ 키워드 추가</button>
+        </div>
+
+        <!-- 새 키워드 인라인 폼 -->
+        <div class="inline-form" id="newKeywordForm" style="margin-top:8px">
+          <div class="inline-form-title">키워드 추가</div>
+          <div class="inline-form-row">
+            <div class="field">
+              <span class="label">키워드</span>
+              <input type="text" id="newKwText" placeholder="예: 강남 임플란트">
+            </div>
+            <div class="field">
+              <span class="label">질문 의도</span>
+              <select id="newKwIntent">
+                <option value="recommend">추천형</option>
+                <option value="info">정보형</option>
+                <option value="compare">비교형</option>
+              </select>
+            </div>
+          </div>
+          <div class="inline-form-btns">
+            <button type="button" class="inline-save-btn" id="saveKeywordBtn">추가</button>
+            <button type="button" class="inline-cancel-btn" id="cancelKeywordBtn">취소</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 저장 표시기 -->
+      <div class="saved-indicator" id="savedIndicator">
+        <span>✓</span><span>이 측정이 타임라인에 저장되었어요</span>
+        <button type="button" class="link-btn" id="showTimelineBtn" style="margin-left:4px">기록 보기</button>
+      </div>
+    </div>
+  </div>
+
   <div id="result"></div>
+
+  <!-- 타임라인 (측정 후 표시) -->
+  <div class="timeline-section" id="timelineSection">
+    <div class="section-title">📈 측정 기록</div>
+    <div id="timelineContent"></div>
+  </div>
 
   <script>
     const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
     const params = new URLSearchParams(location.search);
     const userId = params.get('user_id');
 
-    const form       = document.getElementById('form');
-    const keywordEl  = document.getElementById('keyword');
-    const intentEl   = document.getElementById('intent');
-    const selfEl     = document.getElementById('selfDomain');
-    const measureBtn = document.getElementById('measureBtn');
-    const previewEl  = document.getElementById('preview');
-    const resultEl   = document.getElementById('result');
+    const form        = document.getElementById('form');
+    const keywordEl   = document.getElementById('keyword');
+    const intentEl    = document.getElementById('intent');
+    const selfEl      = document.getElementById('selfDomain');
+    const measureBtn  = document.getElementById('measureBtn');
+    const noiseBtn    = document.getElementById('noiseBtn');
+    const previewEl   = document.getElementById('preview');
+    const resultEl    = document.getElementById('result');
 
-    // URL 파라미터로 키워드 선채움
-    if (params.get('keyword')) keywordEl.value = params.get('keyword');
+    // 엔티티 패널 요소
+    const entityPanel   = document.getElementById('entityPanel');
+    const entityHeader  = document.getElementById('entityHeader');
+    const entityToggle  = document.getElementById('entityToggle');
+    const entityBody    = document.getElementById('entityBody');
+    const trackingBadge = document.getElementById('trackingBadge');
+    const entitySelect  = document.getElementById('entitySelect');
+    const newEntityBtn  = document.getElementById('newEntityBtn');
+    const newEntityForm = document.getElementById('newEntityForm');
+    const newEntityName = document.getElementById('newEntityName');
+    const newEntityType = document.getElementById('newEntityType');
+    const newEntityDomain = document.getElementById('newEntityDomain');
+    const saveEntityBtn   = document.getElementById('saveEntityBtn');
+    const cancelEntityBtn = document.getElementById('cancelEntityBtn');
+    const keywordTrackRow       = document.getElementById('keywordTrackRow');
+    const trackedKeywordSelect  = document.getElementById('trackedKeywordSelect');
+    const newKeywordBtn    = document.getElementById('newKeywordBtn');
+    const newKeywordForm   = document.getElementById('newKeywordForm');
+    const newKwText        = document.getElementById('newKwText');
+    const newKwIntent      = document.getElementById('newKwIntent');
+    const saveKeywordBtn   = document.getElementById('saveKeywordBtn');
+    const cancelKeywordBtn = document.getElementById('cancelKeywordBtn');
+    const savedIndicator  = document.getElementById('savedIndicator');
+    const showTimelineBtn = document.getElementById('showTimelineBtn');
+    const timelineSection = document.getElementById('timelineSection');
+    const timelineContent = document.getElementById('timelineContent');
 
     const QUESTION_TEMPLATES = {
       recommend: (k) => `${k} 추천해줘`,
@@ -241,17 +562,221 @@
     };
     const BUCKET_LABEL = { both: '둘 다', seo_only: 'SEO만', geo_only: 'AI만' };
 
-    // 질의문 실시간 미리보기
+    // URL 파라미터로 키워드 선채움
+    if (params.get('keyword')) keywordEl.value = params.get('keyword');
+
+    // ── 엔티티 패널 초기화 ───────────────────────────────────────────────────
+    if (userId) {
+      entityPanel.style.display = 'block';
+      loadEntities();
+    }
+
+    // 패널 토글
+    entityHeader.addEventListener('click', () => {
+      entityBody.classList.toggle('open');
+      entityToggle.classList.toggle('open');
+    });
+
+    // ── 엔티티 CRUD ─────────────────────────────────────────────────────────
+
+    async function loadEntities() {
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-entities?action=list-entities&user_id=${encodeURIComponent(userId)}`);
+        const data = await res.json();
+        const entities = data.entities || [];
+        entitySelect.innerHTML = '<option value="">선택 안 함 (1회 측정)</option>';
+        for (const e of entities) {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          opt.dataset.selfDomain = e.self_domain || '';
+          opt.textContent = e.name + (e.self_domain ? ` (${e.self_domain})` : '');
+          entitySelect.appendChild(opt);
+        }
+      } catch { /* 엔티티 로드 실패는 비치명적 */ }
+    }
+
+    entitySelect.addEventListener('change', async () => {
+      const entityId = entitySelect.value;
+      if (!entityId) {
+        keywordTrackRow.style.display = 'none';
+        trackingBadge.style.display = 'none';
+        const opt = entitySelect.options[entitySelect.selectedIndex];
+        if (opt?.dataset?.selfDomain) selfEl.value = '';
+        return;
+      }
+      // 엔티티의 self_domain을 내 도메인 입력란에 채움
+      const opt = entitySelect.options[entitySelect.selectedIndex];
+      if (opt?.dataset?.selfDomain) selfEl.value = opt.dataset.selfDomain;
+
+      keywordTrackRow.style.display = 'block';
+      await loadTrackedKeywords(entityId);
+    });
+
+    async function loadTrackedKeywords(entityId) {
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-entities?action=list-keywords&entity_id=${encodeURIComponent(entityId)}`);
+        const data = await res.json();
+        const keywords = data.keywords || [];
+        trackedKeywordSelect.innerHTML = '<option value="">키워드 직접 입력 (저장 안 함)</option>';
+        for (const k of keywords) {
+          const opt = document.createElement('option');
+          opt.value = k.id;
+          opt.dataset.keyword = k.keyword;
+          opt.dataset.intent = k.intent;
+          opt.textContent = k.keyword + ' (' + intentLabel(k.intent) + ')';
+          trackedKeywordSelect.appendChild(opt);
+        }
+      } catch { /* 키워드 로드 실패는 비치명적 */ }
+    }
+
+    trackedKeywordSelect.addEventListener('change', () => {
+      const opt = trackedKeywordSelect.options[trackedKeywordSelect.selectedIndex];
+      if (opt?.dataset?.keyword) {
+        keywordEl.value = opt.dataset.keyword;
+        intentEl.value = opt.dataset.intent || 'recommend';
+        trackingBadge.style.display = 'inline';
+        updatePreview();
+      } else {
+        trackingBadge.style.display = 'none';
+      }
+    });
+
+    // 새 엔티티 폼
+    newEntityBtn.addEventListener('click', () => {
+      newEntityForm.classList.toggle('open');
+      if (newEntityForm.classList.contains('open')) newEntityName.focus();
+    });
+    cancelEntityBtn.addEventListener('click', () => newEntityForm.classList.remove('open'));
+    saveEntityBtn.addEventListener('click', async () => {
+      const name = newEntityName.value.trim();
+      if (!name) { newEntityName.focus(); return; }
+      saveEntityBtn.disabled = true;
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-entities?action=register-entity`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            name,
+            self_domain: newEntityDomain.value.trim() || undefined,
+            type: newEntityType.value,
+          }),
+        });
+        if (!res.ok) throw new Error();
+        newEntityForm.classList.remove('open');
+        newEntityName.value = '';
+        newEntityDomain.value = '';
+        await loadEntities();
+      } catch {
+        alert('엔티티 등록에 실패했어요.');
+      } finally {
+        saveEntityBtn.disabled = false;
+      }
+    });
+
+    // 새 키워드 폼
+    newKeywordBtn.addEventListener('click', () => {
+      newKeywordForm.classList.toggle('open');
+      if (newKeywordForm.classList.contains('open')) {
+        newKwText.value = keywordEl.value;
+        newKwIntent.value = intentEl.value;
+        newKwText.focus();
+      }
+    });
+    cancelKeywordBtn.addEventListener('click', () => newKeywordForm.classList.remove('open'));
+    saveKeywordBtn.addEventListener('click', async () => {
+      const keyword = newKwText.value.trim();
+      if (!keyword) { newKwText.focus(); return; }
+      const entityId = entitySelect.value;
+      if (!entityId) return;
+      saveKeywordBtn.disabled = true;
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-entities?action=add-keyword`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            entity_id: entityId,
+            keyword,
+            intent: newKwIntent.value,
+          }),
+        });
+        if (!res.ok) throw new Error();
+        newKeywordForm.classList.remove('open');
+        newKwText.value = '';
+        await loadTrackedKeywords(entityId);
+        // 추가한 키워드 자동 선택
+        const opts = trackedKeywordSelect.options;
+        for (let i = 0; i < opts.length; i++) {
+          if (opts[i].dataset.keyword === keyword) {
+            trackedKeywordSelect.selectedIndex = i;
+            trackedKeywordSelect.dispatchEvent(new Event('change'));
+            break;
+          }
+        }
+      } catch {
+        alert('키워드 추가에 실패했어요.');
+      } finally {
+        saveKeywordBtn.disabled = false;
+      }
+    });
+
+    // ── 타임라인 ─────────────────────────────────────────────────────────────
+
+    showTimelineBtn.addEventListener('click', () => {
+      timelineSection.classList.toggle('open');
+      showTimelineBtn.textContent = timelineSection.classList.contains('open') ? '기록 닫기' : '기록 보기';
+    });
+
+    async function loadTimeline(keywordId, selfDomain) {
+      try {
+        let url = `${FUNCTION_BASE}/geo-entities?action=timeline&keyword_id=${encodeURIComponent(keywordId)}`;
+        if (selfDomain) url += `&self_domain=${encodeURIComponent(selfDomain)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        renderTimeline(data.timeline || []);
+      } catch {
+        timelineContent.innerHTML = '<div class="empty">기록을 불러올 수 없어요.</div>';
+      }
+    }
+
+    function renderTimeline(timeline) {
+      if (!timeline.length) {
+        timelineContent.innerHTML = '<div class="empty">아직 저장된 측정 기록이 없어요.</div>';
+        return;
+      }
+      const table = document.createElement('table');
+      table.className = 'timeline-table';
+      table.innerHTML = '<thead><tr><th>날짜</th><th>AI 인용</th><th>SEO 수</th><th>자기도메인 AI순위</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      for (const r of timeline) {
+        const tr = document.createElement('tr');
+        const date = new Date(r.run_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const selfRank = r.self_geo_rank !== undefined && r.self_geo_rank !== null
+          ? `<span class="tl-rank">${r.self_geo_rank}위</span>`
+          : `<span class="tl-none">–</span>`;
+        tr.innerHTML = `<td>${escapeHtml(date)}</td><td>${r.citation_count}</td><td>${r.seo_count}</td><td>${selfRank}</td>`;
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      timelineContent.innerHTML = '';
+      timelineContent.appendChild(table);
+    }
+
+    // ── 질의문 미리보기 ──────────────────────────────────────────────────────
+
     function updatePreview() {
       const k = keywordEl.value.trim();
       if (!k) { previewEl.style.display = 'none'; return; }
-      const q = QUESTION_TEMPLATES[intentEl.value](k);
+      const q = QUESTION_TEMPLATES[intentEl.value]?.(k) ?? k;
       previewEl.innerHTML = `SEO 검색어: <b>${escapeHtml(k)}</b><br>AI 질의문: <b>${escapeHtml(q)}</b>`;
       previewEl.style.display = 'block';
     }
     keywordEl.addEventListener('input', updatePreview);
     intentEl.addEventListener('change', updatePreview);
     updatePreview();
+
+    // ── 측정 실행 ────────────────────────────────────────────────────────────
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -261,7 +786,13 @@
 
       measureBtn.disabled = true;
       measureBtn.textContent = '측정 중...';
+      savedIndicator.classList.remove('show');
+      timelineSection.classList.remove('open');
       showSkeleton(5);
+
+      // 현재 선택된 추적 키워드 ID
+      const kwOpt = trackedKeywordSelect.options[trackedKeywordSelect.selectedIndex];
+      const keywordId = kwOpt?.value || undefined;
 
       try {
         const res = await fetch(`${FUNCTION_BASE}/geo-measure`, {
@@ -272,11 +803,20 @@
             keyword,
             intent: intentEl.value,
             self_domain: selfEl.value.trim() || undefined,
+            keyword_id: keywordId || undefined,
           }),
         });
         const data = await res.json();
         if (!res.ok) { showEmpty(data.message || '측정에 실패했어요.'); return; }
         render(data);
+
+        // 저장됐을 경우 표시 + 타임라인 로드
+        if (data.saved && keywordId) {
+          savedIndicator.classList.add('show');
+          const selfDomain = selfEl.value.trim() || '';
+          await loadTimeline(keywordId, selfDomain);
+          showTimelineBtn.textContent = '기록 보기';
+        }
       } catch {
         showEmpty('측정 중 오류가 발생했어요.');
       } finally {
@@ -284,6 +824,119 @@
         measureBtn.textContent = '측정하기';
       }
     });
+
+    // ── 변동성(노이즈 바닥) 측정 ───────────────────────────────────────────────
+
+    noiseBtn.addEventListener('click', async () => {
+      const keyword = keywordEl.value.trim();
+      if (!keyword) { keywordEl.focus(); return; }
+      if (!userId) { showEmpty('사용자 정보가 없어요. 노션 임베드에서 열어주세요.'); return; }
+
+      noiseBtn.disabled = true;
+      measureBtn.disabled = true;
+      noiseBtn.textContent = '측정 중...';
+      savedIndicator.classList.remove('show');
+      timelineSection.classList.remove('open');
+      showSkeleton(4);
+
+      const kwOpt = trackedKeywordSelect.options[trackedKeywordSelect.selectedIndex];
+      const keywordId = kwOpt?.value || undefined;
+
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-noise`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            keyword,
+            intent: intentEl.value,
+            runs: 3,
+            keyword_id: keywordId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showEmpty(data.message || '변동성 측정에 실패했어요.'); return; }
+        renderNoise(data);
+        if (data.saved && keywordId) savedIndicator.classList.add('show');
+      } catch {
+        showEmpty('변동성 측정 중 오류가 발생했어요.');
+      } finally {
+        noiseBtn.disabled = false;
+        measureBtn.disabled = false;
+        noiseBtn.textContent = '변동성 N회';
+      }
+    });
+
+    function renderNoise(data) {
+      resultEl.innerHTML = '';
+      const floor = data.floor || {};
+
+      resultEl.appendChild(sectionTitle(
+        `노이즈 바닥 (${data.successful_runs}/${data.requested_runs}회 · ${data.engine})`,
+      ));
+
+      // 안정성 카드 2개 (Jaccard / RBO)
+      const cards = document.createElement('div');
+      cards.className = 'stability-cards';
+      cards.appendChild(stabCard('집합 안정성', floor.avg_jaccard, '인용 도메인이 매번 얼마나 같은가'));
+      cards.appendChild(stabCard('순위 안정성', floor.avg_rbo, '인용 순서가 매번 얼마나 같은가'));
+      resultEl.appendChild(cards);
+
+      // 코어(항상 등장) 도메인
+      const stable = floor.stable_domains || [];
+      if (stable.length) {
+        resultEl.appendChild(sectionTitle('코어 도메인 (매 호출 등장)'));
+        resultEl.appendChild(domainChips(stable, floor.domain_frequency, 'stable'));
+      }
+
+      // 노이즈(일부만 등장) 도메인
+      const volatile = floor.volatile_domains || [];
+      if (volatile.length) {
+        resultEl.appendChild(sectionTitle('변동 도메인 (일부 호출만)'));
+        resultEl.appendChild(domainChips(volatile, floor.domain_frequency, 'volatile'));
+      }
+
+      if (!stable.length && !volatile.length) {
+        resultEl.appendChild(emptyEl('이번 측정에서 AI가 인용한 출처가 없어요.'));
+      }
+
+      if (data.notice) {
+        const n = document.createElement('div');
+        n.className = 'notice';
+        n.textContent = '⚠️ ' + data.notice;
+        resultEl.appendChild(n);
+      }
+    }
+
+    function stabCard(label, value, hint) {
+      const v = typeof value === 'number' ? value : 0;
+      const pct = Math.round(v * 100);
+      // 색: 높을수록 초록, 낮을수록 빨강
+      const color = v >= 0.7 ? '#22c55e' : v >= 0.4 ? '#f59e0b' : '#ef4444';
+      const card = document.createElement('div');
+      card.className = 'stab-card';
+      card.innerHTML =
+        `<div class="stab-label">${escapeHtml(label)}</div>` +
+        `<div class="stab-value" style="color:${color}">${pct}%</div>` +
+        `<div class="stab-bar"><div class="stab-bar-fill" style="width:${pct}%;background:${color}"></div></div>` +
+        `<div class="stab-hint">${escapeHtml(hint)}</div>`;
+      return card;
+    }
+
+    function domainChips(domains, freq, kind) {
+      const wrap = document.createElement('div');
+      wrap.className = 'domain-chips';
+      for (const d of domains) {
+        const chip = document.createElement('span');
+        chip.className = 'chip ' + kind;
+        const f = freq && freq[d] !== undefined ? Math.round(freq[d] * 100) : null;
+        chip.innerHTML = escapeHtml(d) + (f !== null ? ` <span class="freq">${f}%</span>` : '');
+        wrap.appendChild(chip);
+      }
+      return wrap;
+    }
+
+    // ── 렌더링 ───────────────────────────────────────────────────────────────
 
     function render(data) {
       resultEl.innerHTML = '';
@@ -320,7 +973,6 @@
     function gapRow(g) {
       const row = document.createElement('div');
       row.className = 'gap-row' + (g.isSelf ? ' self' : '');
-
       const domain = document.createElement('span');
       domain.className = 'domain';
       domain.textContent = g.rootDomain;
@@ -330,16 +982,13 @@
         tag.textContent = '내 도메인';
         domain.appendChild(tag);
       }
-
       const bucket = document.createElement('span');
       bucket.className = 'bucket-tag ' + g.bucket;
       bucket.textContent = BUCKET_LABEL[g.bucket] || g.bucket;
-
       const ranks = document.createElement('span');
       ranks.className = 'ranks';
       ranks.appendChild(badge('seo', g.seoRank !== undefined ? `SEO ${g.seoRank}위` : null));
       ranks.appendChild(badge('geo', g.geoRank !== undefined ? `AI ${g.geoRank}위` : null));
-
       row.appendChild(domain);
       row.appendChild(bucket);
       row.appendChild(ranks);
@@ -404,8 +1053,12 @@
       }
     }
 
+    function intentLabel(intent) {
+      return { recommend: '추천형', info: '정보형', compare: '비교형' }[intent] || intent;
+    }
+
     function escapeHtml(s) {
-      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
   </script>
 </body>
