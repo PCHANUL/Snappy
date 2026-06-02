@@ -888,35 +888,6 @@ export class NotionClient {
     }
   }
 
-  // 노션 DB 부모 페이지의 geo.html 임베드 블록 추가/업데이트 (SEO vs AI 측정)
-  async updateGeoEmbed(databaseId: string, userId: string): Promise<void> {
-    try {
-      const parentPageId = await this.getDatabaseParentPageId(databaseId);
-      const newUrl = `https://pchanul.github.io/Snappy/geo.html?user_id=${userId}&page_id=${parentPageId}`;
-      const embed = await this.findEmbedInPage(parentPageId, 'geo.html');
-
-      if (embed) {
-        if (embed.currentUrl === newUrl) return;
-        await this.fetchApi(`blocks/${embed.blockId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ embed: { url: newUrl } }),
-        });
-      } else {
-        await this.appendBlocks(parentPageId, [{
-          object: 'block',
-          type: 'embed',
-          embed: { url: newUrl },
-        }]);
-      }
-
-      logger.info('Geo embed updated', { userId, parentPageId });
-    } catch (error) {
-      logger.warn('Failed to update geo embed (non-fatal)', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
   // 노션 DB 부모 페이지의 search.html 임베드 블록 URL을 user_id + page_id 포함 URL로 교체
   async updateSearchEmbed(databaseId: string, userId: string): Promise<string> {
     try {

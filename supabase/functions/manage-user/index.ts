@@ -537,7 +537,6 @@ async function handleSetupSearchButton(req: Request): Promise<Response> {
   const notion = new NotionClient(apiKey);
   const embedUrl = await notion.updateSearchEmbed(user.notion_database_id, user_id);
   await notion.updateTrendsEmbed(user.notion_database_id, user_id);
-  await notion.updateGeoEmbed(user.notion_database_id, user_id);
 
   logger.info('Search button embed updated', { user_id, embedUrl });
   return jsonResponse({ success: true, embed_url: embedUrl });
