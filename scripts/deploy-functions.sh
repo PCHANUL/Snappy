@@ -23,6 +23,7 @@ FUNCTIONS=(
   "trend-data"
   "fetch-content"
   "geo-measure"
+  "geo-entities"
 )
 
 # 도움말
