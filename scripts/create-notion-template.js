@@ -44,6 +44,7 @@ const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.
 const SETUP_URL      = `${PAGES_BASE}/`;
 const SEARCH_URL     = `${PAGES_BASE}/search.html`;
 const TRENDS_URL     = `${PAGES_BASE}/trends.html`;
+const GEO_URL        = `${PAGES_BASE}/geo.html`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
@@ -232,6 +233,9 @@ function blocksMain() {
   return [
     b.embed(SEARCH_URL),
     b.embed(TRENDS_URL),
+    b.h2('🔍 SEO vs AI 측정'),
+    b.p('검색 노출과 AI 인용을 나란히 비교하고, 추적할 엔티티·키워드를 등록해 변화를 기록하세요.'),
+    b.embed(GEO_URL),
   ];
 }
 
