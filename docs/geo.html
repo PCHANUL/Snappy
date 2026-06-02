@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snappy SEO vs AI 측정</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: transparent;
+      padding: 14px 16px;
+      color: #111827;
+    }
+
+    .header { margin-bottom: 12px; }
+    .title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #374151;
+      letter-spacing: -0.2px;
+    }
+    .subtitle {
+      font-size: 0.7rem;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+
+    /* 입력 폼 */
+    #form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; }
+    .field { flex: 1; }
+    .label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 3px;
+    }
+    input, select {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      color: #111827;
+      background: #fff;
+    }
+    input:focus, select:focus { outline: none; border-color: #6366f1; }
+
+    #measureBtn {
+      padding: 9px 14px;
+      border: none;
+      border-radius: 8px;
+      background: #111827;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #measureBtn:hover { background: #374151; }
+    #measureBtn:disabled { background: #d1d5db; cursor: default; }
+
+    /* 질의문 미리보기 */
+    .preview {
+      font-size: 0.72rem;
+      color: #6b7280;
+      background: #f9fafb;
+      border: 1px solid #f3f4f6;
+      border-radius: 8px;
+      padding: 7px 10px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .preview b { color: #4338ca; font-weight: 600; }
+
+    /* 격차 매트릭스 */
+    .section-title {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #374151;
+      margin: 14px 0 7px;
+    }
+    .gap-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      transition: background 0.12s;
+    }
+    .gap-row:hover { background: #f9fafb; }
+    .gap-row.self {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+    }
+    .gap-row.self:hover { background: #e0e7ff; }
+
+    .domain {
+      flex: 1;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #111827;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .self-tag {
+      font-size: 0.62rem;
+      font-weight: 700;
+      color: #4338ca;
+      background: #e0e7ff;
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-left: 4px;
+    }
+    .ranks {
+      display: flex;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .badge {
+      font-size: 0.66rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .badge.seo { background: #dcfce7; color: #166534; }
+    .badge.geo { background: #ede9fe; color: #6d28d9; }
+    .badge.none { background: #f3f4f6; color: #d1d5db; }
+
+    .bucket-tag {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .bucket-tag.both { background: #fef3c7; color: #92400e; }
+    .bucket-tag.seo_only { background: #dcfce7; color: #166534; }
+    .bucket-tag.geo_only { background: #ede9fe; color: #6d28d9; }
+
+    /* AI 답변 인용 목록 */
+    .cite {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 5px 8px;
+      font-size: 0.8rem;
+      border-radius: 6px;
+    }
+    .cite:hover { background: #f9fafb; }
+    .cite-rank { font-size: 0.7rem; color: #c4b5fd; font-weight: 700; width: 14px; flex-shrink: 0; }
+    .cite a { color: #4f46e5; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cite a:hover { text-decoration: underline; }
+
+    .notice {
+      font-size: 0.68rem;
+      color: #9ca3af;
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid #f3f4f6;
+      line-height: 1.5;
+    }
+
+    .empty { text-align: center; color: #9ca3af; padding: 20px 0; font-size: 0.8rem; }
+    .skeleton {
+      height: 36px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #f3f4f6 25%, #e9eaf0 50%, #f3f4f6 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      margin-bottom: 4px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .legend { display: flex; gap: 10px; font-size: 0.66rem; color: #9ca3af; margin-bottom: 4px; }
+    .legend span { display: inline-flex; align-items: center; gap: 3px; }
+    .dot { width: 8px; height: 8px; border-radius: 2px; }
+    .dot.both { background: #fbbf24; }
+    .dot.seo_only { background: #4ade80; }
+    .dot.geo_only { background: #a78bfa; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">🔍 SEO vs AI 측정</div>
+    <div class="subtitle">키워드 하나로 검색 노출과 AI 인용을 나란히 비교해요</div>
+  </div>
+
+  <form id="form" autocomplete="off">
+    <div class="field">
+      <span class="label">키워드</span>
+      <input type="text" id="keyword" placeholder="예: 강남 치과 임플란트" required>
+    </div>
+    <div class="row">
+      <div class="field">
+        <span class="label">AI 질문 의도</span>
+        <select id="intent">
+          <option value="recommend">추천형</option>
+          <option value="info">정보형</option>
+          <option value="compare">비교형</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="label">내 도메인 (선택)</span>
+        <input type="text" id="selfDomain" placeholder="example.com">
+      </div>
+    </div>
+    <button type="submit" id="measureBtn">측정하기</button>
+  </form>
+
+  <div class="preview" id="preview"></div>
+  <div id="result"></div>
+
+  <script>
+    const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
+    const params = new URLSearchParams(location.search);
+    const userId = params.get('user_id');
+
+    const form       = document.getElementById('form');
+    const keywordEl  = document.getElementById('keyword');
+    const intentEl   = document.getElementById('intent');
+    const selfEl     = document.getElementById('selfDomain');
+    const measureBtn = document.getElementById('measureBtn');
+    const previewEl  = document.getElementById('preview');
+    const resultEl   = document.getElementById('result');
+
+    // URL 파라미터로 키워드 선채움
+    if (params.get('keyword')) keywordEl.value = params.get('keyword');
+
+    const QUESTION_TEMPLATES = {
+      recommend: (k) => `${k} 추천해줘`,
+      info: (k) => `${k}에 대해 알려줘`,
+      compare: (k) => `${k} 비교해줘`,
+    };
+    const BUCKET_LABEL = { both: '둘 다', seo_only: 'SEO만', geo_only: 'AI만' };
+
+    // 질의문 실시간 미리보기
+    function updatePreview() {
+      const k = keywordEl.value.trim();
+      if (!k) { previewEl.style.display = 'none'; return; }
+      const q = QUESTION_TEMPLATES[intentEl.value](k);
+      previewEl.innerHTML = `SEO 검색어: <b>${escapeHtml(k)}</b><br>AI 질의문: <b>${escapeHtml(q)}</b>`;
+      previewEl.style.display = 'block';
+    }
+    keywordEl.addEventListener('input', updatePreview);
+    intentEl.addEventListener('change', updatePreview);
+    updatePreview();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const keyword = keywordEl.value.trim();
+      if (!keyword) return;
+      if (!userId) { showEmpty('사용자 정보가 없어요. 노션 임베드에서 열어주세요.'); return; }
+
+      measureBtn.disabled = true;
+      measureBtn.textContent = '측정 중...';
+      showSkeleton(5);
+
+      try {
+        const res = await fetch(`${FUNCTION_BASE}/geo-measure`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            keyword,
+            intent: intentEl.value,
+            self_domain: selfEl.value.trim() || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showEmpty(data.message || '측정에 실패했어요.'); return; }
+        render(data);
+      } catch {
+        showEmpty('측정 중 오류가 발생했어요.');
+      } finally {
+        measureBtn.disabled = false;
+        measureBtn.textContent = '측정하기';
+      }
+    });
+
+    function render(data) {
+      resultEl.innerHTML = '';
+
+      // 격차 매트릭스
+      const gap = data.gap || [];
+      if (gap.length) {
+        resultEl.appendChild(sectionTitle('격차 매트릭스'));
+        resultEl.appendChild(legend());
+        gap.forEach((g) => resultEl.appendChild(gapRow(g)));
+      } else {
+        resultEl.appendChild(emptyEl('비교할 도메인이 없어요.'));
+      }
+
+      // AI 인용 목록
+      const geo = data.geo || {};
+      if (geo.available && geo.citations?.length) {
+        resultEl.appendChild(sectionTitle(`AI 인용 (${geo.engine} · ${geo.citations.length}개)`));
+        geo.citations.forEach((c) => resultEl.appendChild(citeRow(c)));
+      } else if (geo.available) {
+        resultEl.appendChild(sectionTitle('AI 인용'));
+        resultEl.appendChild(emptyEl('이번 응답에서 AI가 인용한 출처가 없어요.'));
+      }
+
+      // 스냅샷 경고
+      if (data.notice) {
+        const n = document.createElement('div');
+        n.className = 'notice';
+        n.textContent = '⚠️ ' + data.notice;
+        resultEl.appendChild(n);
+      }
+    }
+
+    function gapRow(g) {
+      const row = document.createElement('div');
+      row.className = 'gap-row' + (g.isSelf ? ' self' : '');
+
+      const domain = document.createElement('span');
+      domain.className = 'domain';
+      domain.textContent = g.rootDomain;
+      if (g.isSelf) {
+        const tag = document.createElement('span');
+        tag.className = 'self-tag';
+        tag.textContent = '내 도메인';
+        domain.appendChild(tag);
+      }
+
+      const bucket = document.createElement('span');
+      bucket.className = 'bucket-tag ' + g.bucket;
+      bucket.textContent = BUCKET_LABEL[g.bucket] || g.bucket;
+
+      const ranks = document.createElement('span');
+      ranks.className = 'ranks';
+      ranks.appendChild(badge('seo', g.seoRank !== undefined ? `SEO ${g.seoRank}위` : null));
+      ranks.appendChild(badge('geo', g.geoRank !== undefined ? `AI ${g.geoRank}위` : null));
+
+      row.appendChild(domain);
+      row.appendChild(bucket);
+      row.appendChild(ranks);
+      return row;
+    }
+
+    function badge(kind, text) {
+      const b = document.createElement('span');
+      if (text) { b.className = 'badge ' + kind; b.textContent = text; }
+      else { b.className = 'badge none'; b.textContent = '–'; }
+      return b;
+    }
+
+    function citeRow(c) {
+      const row = document.createElement('div');
+      row.className = 'cite';
+      const rank = document.createElement('span');
+      rank.className = 'cite-rank';
+      rank.textContent = c.rank;
+      const a = document.createElement('a');
+      a.href = c.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = c.title || c.rootDomain || c.url;
+      row.appendChild(rank);
+      row.appendChild(a);
+      return row;
+    }
+
+    function sectionTitle(text) {
+      const el = document.createElement('div');
+      el.className = 'section-title';
+      el.textContent = text;
+      return el;
+    }
+
+    function legend() {
+      const el = document.createElement('div');
+      el.className = 'legend';
+      el.innerHTML =
+        '<span><span class="dot both"></span>둘 다</span>' +
+        '<span><span class="dot seo_only"></span>SEO만</span>' +
+        '<span><span class="dot geo_only"></span>AI만</span>';
+      return el;
+    }
+
+    function emptyEl(msg) {
+      const el = document.createElement('div');
+      el.className = 'empty';
+      el.textContent = msg;
+      return el;
+    }
+
+    function showEmpty(msg) { resultEl.innerHTML = ''; resultEl.appendChild(emptyEl(msg)); }
+
+    function showSkeleton(n) {
+      resultEl.innerHTML = '';
+      for (let i = 0; i < n; i++) {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton';
+        resultEl.appendChild(sk);
+      }
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+  </script>
+</body>
+</html>
