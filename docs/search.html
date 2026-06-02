@@ -125,23 +125,6 @@
       border: 1px solid #fecaca;
     }
 
-    /* ── GEO 측정 링크 ── */
-    #geoLink {
-      display: none;
-      width: 100%;
-      padding: 9px 14px;
-      border-radius: 8px;
-      background: #eef2ff;
-      border: 1px solid #c7d2fe;
-      color: #4338ca;
-      font-size: 0.82rem;
-      font-weight: 600;
-      text-align: center;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    #geoLink:hover { background: #e0e7ff; }
-
     /* ── 설정 안내 (파라미터 없을 때) ── */
     .config-guide {
       width: 100%;
@@ -299,7 +282,6 @@
 
     <button id="searchBtn">🚀 검색하기</button>
     <div id="status"></div>
-    <a id="geoLink" target="_blank" rel="noopener">🔍 이 키워드 AI 인용 측정하기 →</a>
     <div id="relatedSection" style="display:none">
       <div class="related-label">📊 연관 인기 키워드</div>
       <div class="chips" id="relatedChips"></div>
@@ -324,13 +306,11 @@
     const btn         = document.getElementById('searchBtn');
     const status      = document.getElementById('status');
     const configGuide = document.getElementById('configGuide');
-    const geoLink     = document.getElementById('geoLink');
     const form        = document.getElementById('form');
     const keywordEl   = document.getElementById('keyword');
     const periodEl    = document.getElementById('period');
     const chipsEl     = document.getElementById('platforms');
 
-    const GEO_BASE = 'https://pchanul.github.io/Snappy/geo.html';
 
     const configured = !!(userId && pageId);
 
@@ -453,7 +433,6 @@
             } else {
               status.className = 'accepted';
               status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
-              showGeoLink(keywordEl.value.trim());
               showKeywordTrend(keywordEl.value.trim());
               if (data.related?.keywords?.length) showRelatedKeywords(data.related);
             }
@@ -476,14 +455,6 @@
       btn.classList.remove('searching');
       btn.innerHTML = '🚀 검색하기';
       form.classList.remove('disabled-overlay');
-    }
-
-    function showGeoLink(keyword) {
-      if (!keyword || !userId) return;
-      const qs = new URLSearchParams({ keyword, user_id: userId });
-      if (pageId) qs.set('page_id', pageId);
-      geoLink.href = `${GEO_BASE}?${qs.toString()}`;
-      geoLink.style.display = 'block';
     }
 
     // 페이지 로드 시 한 번 즉시 상태 확인 — URL 파라미터가 스테일할 수 있으므로 API가 기준
