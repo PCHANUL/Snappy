@@ -62,6 +62,39 @@
     #measureBtn:hover { background: #374151; }
     #measureBtn:disabled { background: #d1d5db; cursor: default; }
 
+    /* 키워드 표시 배지 */
+    .kw-display {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #3730a3;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .kw-display::before { content: '🔍'; flex-shrink: 0; }
+
+    /* 키워드 없을 때 안내 */
+    .no-keyword-guide {
+      padding: 18px 14px;
+      background: #f9fafb;
+      border: 1px dashed #d1d5db;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      color: #6b7280;
+      text-align: center;
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+    .no-keyword-guide strong { color: #374151; }
+
     /* 질의문 미리보기 */
     .preview {
       font-size: 0.72rem;
@@ -383,15 +416,13 @@
 <body>
   <div class="header">
     <div class="title">🔍 SEO vs AI 측정</div>
-    <div class="subtitle">키워드 하나로 검색 노출과 AI 인용을 나란히 비교해요</div>
+    <div class="subtitle">검색한 키워드의 AI 인용을 측정하고 엔티티를 추적해요</div>
   </div>
 
-  <form id="form" autocomplete="off">
-    <div class="field">
-      <span class="label">키워드</span>
-      <input type="text" id="keyword" placeholder="예: 강남 치과 임플란트" required>
-    </div>
-    <div class="row">
+  <!-- 키워드가 URL 파라미터로 전달된 경우에만 표시 -->
+  <div id="measureSection" style="display:none">
+    <div class="kw-display" id="kwDisplay"></div>
+    <div class="row" style="margin-top:8px; margin-bottom:8px">
       <div class="field">
         <span class="label">AI 질문 의도</span>
         <select id="intent">
@@ -406,10 +437,16 @@
       </div>
     </div>
     <div class="btn-row">
-      <button type="submit" id="measureBtn">측정하기</button>
+      <button type="button" id="measureBtn">측정하기</button>
       <button type="button" id="noiseBtn" title="같은 질문을 여러 번 호출해 AI 인용의 변동성을 측정">변동성 N회</button>
     </div>
-  </form>
+  </div>
+
+  <!-- 키워드 없을 때 안내 -->
+  <div id="noKeywordGuide" class="no-keyword-guide" style="display:none">
+    search.html에서 키워드를 검색한 후<br>
+    <strong>AI 인용 측정하기 →</strong> 버튼으로 열어주세요.
+  </div>
 
   <div class="preview" id="preview"></div>
 
@@ -516,17 +553,19 @@
 
   <script>
     const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
-    const params = new URLSearchParams(location.search);
-    const userId = params.get('user_id');
+    const params  = new URLSearchParams(location.search);
+    const userId  = params.get('user_id');
+    const keyword = (params.get('keyword') || '').trim();  // 항상 URL 파라미터에서
 
-    const form        = document.getElementById('form');
-    const keywordEl   = document.getElementById('keyword');
-    const intentEl    = document.getElementById('intent');
-    const selfEl      = document.getElementById('selfDomain');
-    const measureBtn  = document.getElementById('measureBtn');
-    const noiseBtn    = document.getElementById('noiseBtn');
-    const previewEl   = document.getElementById('preview');
-    const resultEl    = document.getElementById('result');
+    const measureSection  = document.getElementById('measureSection');
+    const noKeywordGuide  = document.getElementById('noKeywordGuide');
+    const kwDisplay       = document.getElementById('kwDisplay');
+    const intentEl        = document.getElementById('intent');
+    const selfEl          = document.getElementById('selfDomain');
+    const measureBtn      = document.getElementById('measureBtn');
+    const noiseBtn        = document.getElementById('noiseBtn');
+    const previewEl       = document.getElementById('preview');
+    const resultEl        = document.getElementById('result');
 
     // 엔티티 패널 요소
     const entityPanel   = document.getElementById('entityPanel');
@@ -562,8 +601,14 @@
     };
     const BUCKET_LABEL = { both: '둘 다', seo_only: 'SEO만', geo_only: 'AI만' };
 
-    // URL 파라미터로 키워드 선채움
-    if (params.get('keyword')) keywordEl.value = params.get('keyword');
+    // ── 키워드 유무에 따른 초기 UI ───────────────────────────────────────────
+    if (keyword) {
+      kwDisplay.textContent = keyword;
+      measureSection.style.display = 'block';
+      updatePreview();
+    } else {
+      noKeywordGuide.style.display = 'block';
+    }
 
     // ── 엔티티 패널 초기화 ───────────────────────────────────────────────────
     if (userId) {
@@ -632,7 +677,6 @@
     trackedKeywordSelect.addEventListener('change', () => {
       const opt = trackedKeywordSelect.options[trackedKeywordSelect.selectedIndex];
       if (opt?.dataset?.keyword) {
-        keywordEl.value = opt.dataset.keyword;
         intentEl.value = opt.dataset.intent || 'recommend';
         trackingBadge.style.display = 'inline';
         updatePreview();
@@ -678,15 +722,15 @@
     newKeywordBtn.addEventListener('click', () => {
       newKeywordForm.classList.toggle('open');
       if (newKeywordForm.classList.contains('open')) {
-        newKwText.value = keywordEl.value;
+        newKwText.value = keyword;   // URL 파라미터 keyword를 기본값으로
         newKwIntent.value = intentEl.value;
         newKwText.focus();
       }
     });
     cancelKeywordBtn.addEventListener('click', () => newKeywordForm.classList.remove('open'));
     saveKeywordBtn.addEventListener('click', async () => {
-      const keyword = newKwText.value.trim();
-      if (!keyword) { newKwText.focus(); return; }
+      const newKw = newKwText.value.trim();
+      if (!newKw) { newKwText.focus(); return; }
       const entityId = entitySelect.value;
       if (!entityId) return;
       saveKeywordBtn.disabled = true;
@@ -697,7 +741,7 @@
           body: JSON.stringify({
             user_id: userId,
             entity_id: entityId,
-            keyword,
+            keyword: newKw,
             intent: newKwIntent.value,
           }),
         });
@@ -708,7 +752,7 @@
         // 추가한 키워드 자동 선택
         const opts = trackedKeywordSelect.options;
         for (let i = 0; i < opts.length; i++) {
-          if (opts[i].dataset.keyword === keyword) {
+          if (opts[i].dataset.keyword === newKw) {
             trackedKeywordSelect.selectedIndex = i;
             trackedKeywordSelect.dispatchEvent(new Event('change'));
             break;
@@ -766,21 +810,16 @@
     // ── 질의문 미리보기 ──────────────────────────────────────────────────────
 
     function updatePreview() {
-      const k = keywordEl.value.trim();
-      if (!k) { previewEl.style.display = 'none'; return; }
-      const q = QUESTION_TEMPLATES[intentEl.value]?.(k) ?? k;
-      previewEl.innerHTML = `SEO 검색어: <b>${escapeHtml(k)}</b><br>AI 질의문: <b>${escapeHtml(q)}</b>`;
+      if (!keyword) { previewEl.style.display = 'none'; return; }
+      const q = QUESTION_TEMPLATES[intentEl.value]?.(keyword) ?? keyword;
+      previewEl.innerHTML = `SEO 검색어: <b>${escapeHtml(keyword)}</b><br>AI 질의문: <b>${escapeHtml(q)}</b>`;
       previewEl.style.display = 'block';
     }
-    keywordEl.addEventListener('input', updatePreview);
     intentEl.addEventListener('change', updatePreview);
-    updatePreview();
 
     // ── 측정 실행 ────────────────────────────────────────────────────────────
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const keyword = keywordEl.value.trim();
+    measureBtn.addEventListener('click', async () => {
       if (!keyword) return;
       if (!userId) { showEmpty('사용자 정보가 없어요. 노션 임베드에서 열어주세요.'); return; }
 
@@ -828,8 +867,7 @@
     // ── 변동성(노이즈 바닥) 측정 ───────────────────────────────────────────────
 
     noiseBtn.addEventListener('click', async () => {
-      const keyword = keywordEl.value.trim();
-      if (!keyword) { keywordEl.focus(); return; }
+      if (!keyword) return;
       if (!userId) { showEmpty('사용자 정보가 없어요. 노션 임베드에서 열어주세요.'); return; }
 
       noiseBtn.disabled = true;
