@@ -40,7 +40,7 @@ Deno.test('searchTistory: 정상 응답 파싱', async () => {
   };
 
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     const results = await searchTistory('비건 디저트', 5, 'month');
 
     // 응답 파싱 검증
@@ -77,7 +77,7 @@ Deno.test('searchBrunch: 도메인이 brunch.co.kr로 설정됨', async () => {
   };
 
   try {
-    const { searchBrunch } = await import('../search/youcom.ts');
+    const { searchBrunch } = await import('../_search/youcom.ts');
     await searchBrunch('테스트', 5, 'week');
     assert(capturedUrl.includes('brunch.co.kr'), `include_domains에 brunch.co.kr 포함 필요: ${capturedUrl}`);
   } finally {
@@ -94,7 +94,7 @@ Deno.test('searchTistory: results.web 없으면 빈 배열 반환', async () => 
     );
 
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     const results = await searchTistory('테스트', 5, 'month');
     assertEquals(results.length, 0);
   } finally {
@@ -120,7 +120,7 @@ Deno.test('searchTistory: 도메인 필터링 — tistory.com이 아닌 URL 제�
     new Response(JSON.stringify(mockResponse), { status: 200 });
 
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     const results = await searchTistory('테스트', 10, 'month');
 
     // tistory.com 도메인만 포함되어야 함
@@ -141,7 +141,7 @@ Deno.test('searchTistory: API 오류 시 ExternalApiError 발생', async () => {
   globalThis.fetch = async () =>
     new Response('{"error":"unauthorized"}', { status: 401 });
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     let threw = false;
     try {
       await searchTistory('test', 5, 'month');
@@ -163,7 +163,7 @@ Deno.test('searchTistory: X-API-KEY 헤더 전송', async () => {
     return new Response(JSON.stringify({ results: { web: [] }, metadata: {} }), { status: 200 });
   };
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     await searchTistory('test', 5, 'month');
     assert('x-api-key' in capturedHeaders, 'X-API-KEY 헤더 필요');
   } finally {
@@ -179,7 +179,7 @@ Deno.test('searchTistory: count, freshness, country 파라미터 포함', async 
     return new Response(JSON.stringify({ results: { web: [] }, metadata: {} }), { status: 200 });
   };
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     await searchTistory('test', 7, 'week');
     assert(capturedUrl.includes('count=7'), `count=7 필요: ${capturedUrl}`);
     assert(capturedUrl.includes('freshness=week'), `freshness=week 필요: ${capturedUrl}`);
@@ -201,7 +201,7 @@ Deno.test('searchTistory: count보다 많은 결과 → count로 제한 (도메�
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ results: { web: mockResults }, metadata: {} }), { status: 200 });
   try {
-    const { searchTistory } = await import('../search/youcom.ts');
+    const { searchTistory } = await import('../_search/youcom.ts');
     const results = await searchTistory('test', 5, 'month');
     assertEquals(results.length, 5, `count=5이면 5개로 제한: 실제 ${results.length}개`);
   } finally {
@@ -220,7 +220,7 @@ Deno.test('searchBrunch: count보다 많은 결과 → count로 제한', async (
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ results: { web: mockResults }, metadata: {} }), { status: 200 });
   try {
-    const { searchBrunch } = await import('../search/youcom.ts');
+    const { searchBrunch } = await import('../_search/youcom.ts');
     const results = await searchBrunch('test', 3, 'month');
     assertEquals(results.length, 3, `count=3이면 3개로 제한: 실제 ${results.length}개`);
   } finally {
@@ -245,7 +245,7 @@ Deno.test('searchBrunch: 도메인 필터링 — brunch.co.kr이 아닌 URL 제�
     new Response(JSON.stringify(mockResponse), { status: 200 });
 
   try {
-    const { searchBrunch } = await import('../search/youcom.ts');
+    const { searchBrunch } = await import('../_search/youcom.ts');
     const results = await searchBrunch('테스트', 10, 'month');
 
     for (const item of results) {

@@ -65,7 +65,7 @@ Deno.test('searchYouTube: 정상 응답 파싱', async () => {
     });
 
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     const results = await searchYouTube('비건 디저트', 5, 'month');
 
     assertEquals(results.length, 1);
@@ -86,7 +86,7 @@ Deno.test('searchYouTube: 빈 결과 처리', async () => {
     new Response(JSON.stringify({ items: [], pageInfo: { totalResults: 0 } }), { status: 200 });
 
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     const results = await searchYouTube('없는키워드xyz', 5, 'day');
     assertEquals(results.length, 0);
   } finally {
@@ -99,7 +99,7 @@ Deno.test('searchYouTube: API 오류 시 ExternalApiError 발생', async () => {
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ error: { code: 403, message: 'quotaExceeded' } }), { status: 403 });
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     let threw = false;
     try {
       await searchYouTube('test', 5, 'month');
@@ -119,7 +119,7 @@ Deno.test('searchYouTube: items 필드 없으면 빈 배열 반환 (방어 처�
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ pageInfo: { totalResults: 0 } }), { status: 200 });
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     const results = await searchYouTube('test', 5, 'month');
     assertEquals(results.length, 0);
   } finally {
@@ -135,7 +135,7 @@ Deno.test('searchYouTube: publishedAfter, regionCode, type=video 파라미터 �
     return new Response(JSON.stringify({ items: [], pageInfo: {} }), { status: 200 });
   };
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     await searchYouTube('test', 5, 'month');
     assert(capturedUrl.includes('publishedAfter='), `publishedAfter 파라미터 필요: ${capturedUrl}`);
     assert(capturedUrl.includes('regionCode=KR'), `regionCode=KR 필요: ${capturedUrl}`);
@@ -154,7 +154,7 @@ Deno.test('searchYouTube: maxResults 파라미터 반영', async () => {
     return new Response(JSON.stringify({ items: [], pageInfo: {} }), { status: 200 });
   };
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     await searchYouTube('test', 7, 'month');
     assert(capturedUrl.includes('maxResults=7'), `maxResults=7 필요: ${capturedUrl}`);
   } finally {
@@ -186,7 +186,7 @@ Deno.test('searchYouTube: 썸네일 우선순위 (high > medium > default)', asy
     new Response(JSON.stringify(mockResponse), { status: 200 });
 
   try {
-    const { searchYouTube } = await import('../search/youtube.ts');
+    const { searchYouTube } = await import('../_search/youtube.ts');
     const results = await searchYouTube('test', 5, 'month');
     assertEquals(results[0].thumbnail, 'https://img/medium.jpg'); // medium 사용
   } finally {
