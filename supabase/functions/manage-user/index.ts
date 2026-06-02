@@ -7,22 +7,22 @@
 //   GET  /functions/v1/manage-user?action=usage&user_id=...
 //
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { decryptNotionKey } from '../_shared/crypto.ts';
-import { getSupabase } from '../_shared/db.ts';
-import { env } from '../_shared/env.ts';
-import { logger } from '../_shared/logger.ts';
-import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
-import { fetchNaverAutocomplete } from '../_shared/naver-autocomplete.ts';
-import { fetchGoogleDailyTrends, fetchGoogleRelatedQueries } from '../_shared/google-trends.ts';
+import { decryptNotionKey } from '../_core/crypto.ts';
+import { getSupabase } from '../_core/db.ts';
+import { env } from '../_core/env.ts';
+import { logger } from '../_core/logger.ts';
+import { fetchNaverTrendTopics } from '../_trends/naver-trends.ts';
+import { fetchNaverAutocomplete } from '../_trends/naver-autocomplete.ts';
+import { fetchGoogleDailyTrends, fetchGoogleRelatedQueries } from '../_trends/google-trends.ts';
 import {
   AuthError,
   corsHeaders,
   errorToResponse,
   ValidationError,
-} from '../_shared/errors.ts';
-import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
-import type { SubscriptionTier } from '../_shared/types.ts';
-import { NotionClient } from '../notion/client.ts';
+} from '../_core/errors.ts';
+import { DAILY_QUOTAS, getEffectiveTier } from '../_core/types.ts';
+import type { SubscriptionTier } from '../_core/types.ts';
+import { NotionClient } from '../_notion/client.ts';
 
 const EXPECTED_TEMPLATE_PAGE_NAME = (Deno.env.get('TEMPLATE_PAGE_NAME') || '트렌드 콘텐츠 발견기').trim();
 

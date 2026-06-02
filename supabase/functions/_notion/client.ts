@@ -1,12 +1,12 @@
 // 노션 API 클라이언트
 // 사용자별 노션 API 키로 인증하여 사용자 워크스페이스의 페이지 업데이트
 
-import { NotionApiError } from '../_shared/errors.ts';
-import { logger } from '../_shared/logger.ts';
+import { NotionApiError } from '../_core/errors.ts';
+import { logger } from '../_core/logger.ts';
 import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks, buildTabItemBlocks } from './blocks.ts';
-import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_shared/types.ts';
-import { PLATFORM_INFO } from '../_shared/types.ts';
-import type { AnalysisResult } from '../_shared/content-analyzer.ts';
+import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_core/types.ts';
+import { PLATFORM_INFO } from '../_core/types.ts';
+import type { AnalysisResult } from '../_analysis/content-analyzer.ts';
 
 // 검색 결과 행에 추가된 콘텐츠 — 분석 루프 대상
 export interface CreatedRow {

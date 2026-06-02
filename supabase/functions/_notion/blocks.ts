@@ -1,8 +1,8 @@
 // 노션 페이지에 추가할 블록 생성
 // 매체별 결과를 toggle 블록으로 묶어 페이지를 깔끔하게 유지
 
-import { PLATFORM_INFO } from '../_shared/types.ts';
-import type { ContentItem, FlatResult, SearchResult, SearchMetadata } from '../_shared/types.ts';
+import { PLATFORM_INFO } from '../_core/types.ts';
+import type { ContentItem, FlatResult, SearchResult, SearchMetadata } from '../_core/types.ts';
 
 type NotionBlock = Record<string, any>;
 

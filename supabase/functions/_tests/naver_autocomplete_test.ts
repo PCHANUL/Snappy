@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { fetchNaverAutocomplete } from '../_shared/naver-autocomplete.ts';
+import { fetchNaverAutocomplete } from '../_trends/naver-autocomplete.ts';
 
 Deno.test('fetchNaverAutocomplete extracts keywords and drops the seed/dupes', async () => {
   const originalFetch = globalThis.fetch;

@@ -1,10 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { encryptNotionKey } from '../_shared/crypto.ts';
-import { getSupabase } from '../_shared/db.ts';
-import { env } from '../_shared/env.ts';
-import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
-import { logger } from '../_shared/logger.ts';
-import { NotionClient } from '../notion/client.ts';
+import { encryptNotionKey } from '../_core/crypto.ts';
+import { getSupabase } from '../_core/db.ts';
+import { env } from '../_core/env.ts';
+import { corsHeaders, errorToResponse, ValidationError } from '../_core/errors.ts';
+import { logger } from '../_core/logger.ts';
+import { NotionClient } from '../_notion/client.ts';
 
 const SETUP_PAGE = (Deno.env.get('SETUP_PAGE_URL') || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '/');
 const NOTION_VERSION = '2022-06-28';

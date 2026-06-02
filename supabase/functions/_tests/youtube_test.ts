@@ -1,6 +1,6 @@
 import './setup.ts';
 import { assertEquals, assert } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { getPublishedAfter } from '../search/youtube.ts';
+import { getPublishedAfter } from '../_search/youtube.ts';
 
 // ── getPublishedAfter ─────────────────────────────────────────────────────────
 

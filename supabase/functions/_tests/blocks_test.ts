@@ -4,8 +4,8 @@ import {
   buildSummaryBlocks,
   buildLoadMoreCallout,
   buildSubPageBlocks,
-} from '../notion/blocks.ts';
-import type { SearchResult, FlatResult, SearchMetadata } from '../_shared/types.ts';
+} from '../_notion/blocks.ts';
+import type { SearchResult, FlatResult, SearchMetadata } from '../_core/types.ts';
 
 const META: SearchMetadata = { duration_ms: 1500, cost_usd: 0.01 };
 

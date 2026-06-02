@@ -6,7 +6,7 @@ import {
   ExternalApiError,
   NotionApiError,
   errorToResponse,
-} from '../_shared/errors.ts';
+} from '../_core/errors.ts';
 
 // ── 에러 클래스 ───────────────────────────────────────────────────────────────
 

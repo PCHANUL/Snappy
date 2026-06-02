@@ -1,10 +1,10 @@
 // YouTube Data API v3 검색 모듈
 // 무료, 일 10,000 units (검색 1회 = 100 units → 일 100회 가능)
 
-import { env } from '../_shared/env.ts';
-import { ExternalApiError } from '../_shared/errors.ts';
-import { logger } from '../_shared/logger.ts';
-import type { ContentItem, Period } from '../_shared/types.ts';
+import { env } from '../_core/env.ts';
+import { ExternalApiError } from '../_core/errors.ts';
+import { logger } from '../_core/logger.ts';
+import type { ContentItem, Period } from '../_core/types.ts';
 
 interface YouTubeSearchItem {
   id: { videoId: string };

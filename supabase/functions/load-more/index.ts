@@ -5,11 +5,11 @@
 // Body: { user_id, notion_page_id }
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { NotionClient } from '../notion/client.ts';
-import { logger } from '../_shared/logger.ts';
-import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
-import { decryptNotionKey } from '../_shared/crypto.ts';
-import { getSupabase, getNextBatch } from '../_shared/db.ts';
+import { NotionClient } from '../_notion/client.ts';
+import { logger } from '../_core/logger.ts';
+import { corsHeaders, errorToResponse, ValidationError } from '../_core/errors.ts';
+import { decryptNotionKey } from '../_core/crypto.ts';
+import { getSupabase, getNextBatch } from '../_core/db.ts';
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<any>): void };
 

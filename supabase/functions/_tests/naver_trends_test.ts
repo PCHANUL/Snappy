@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
+import { fetchNaverTrendTopics } from '../_trends/naver-trends.ts';
 
 Deno.test('fetchNaverTrendTopics: Naver DataLab response sorted by trend score', async () => {
   const originalFetch = globalThis.fetch;

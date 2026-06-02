@@ -2,10 +2,10 @@
 // 회당 $0.005, 티스토리 + 브런치 담당
 // 신규 가입 시 $100 크레딧
 
-import { env } from '../_shared/env.ts';
-import { ExternalApiError } from '../_shared/errors.ts';
-import { logger } from '../_shared/logger.ts';
-import type { ContentItem, Period, Platform } from '../_shared/types.ts';
+import { env } from '../_core/env.ts';
+import { ExternalApiError } from '../_core/errors.ts';
+import { logger } from '../_core/logger.ts';
+import type { ContentItem, Period, Platform } from '../_core/types.ts';
 
 interface YouComWebResult {
   url: string;

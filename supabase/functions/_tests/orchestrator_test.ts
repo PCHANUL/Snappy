@@ -1,7 +1,7 @@
 import './setup.ts';
 import { assertEquals, assert } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { deduplicateResults, searchAllPlatforms } from '../search/orchestrator.ts';
-import type { SearchResult } from '../_shared/types.ts';
+import { deduplicateResults, searchAllPlatforms } from '../_search/orchestrator.ts';
+import type { SearchResult } from '../_core/types.ts';
 
 function makeResult(platform: string, urls: string[]): SearchResult {
   return {

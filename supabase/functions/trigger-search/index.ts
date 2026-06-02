@@ -2,11 +2,11 @@
 // 흐름: user_id 검증 → 즉시 202 → 백그라운드에서 검색 DB에 행 생성 + 검색
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { searchAllPlatforms } from '../search/orchestrator.ts';
-import { NotionClient } from '../notion/client.ts';
-import { logger } from '../_shared/logger.ts';
-import { AppError, corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
-import { validateSearchRequest } from '../_shared/validator.ts';
+import { searchAllPlatforms } from '../_search/orchestrator.ts';
+import { NotionClient } from '../_notion/client.ts';
+import { logger } from '../_core/logger.ts';
+import { AppError, corsHeaders, errorToResponse, ValidationError } from '../_core/errors.ts';
+import { validateSearchRequest } from '../_core/validator.ts';
 import {
   saveSearchResults,
   getUserAndCheckQuota,
@@ -17,14 +17,14 @@ import {
   updateSearchProgress,
   setSearchError,
   setRelatedKeywords,
-} from '../_shared/db.ts';
-import { extractCandidateKeywords } from '../_shared/keyword-extractor.ts';
-import { rankCandidatesByTrend } from '../_shared/naver-trends.ts';
-import type { RankedKeyword } from '../_shared/naver-trends.ts';
-import { analyzeContentItem } from '../_shared/content-analyzer.ts';
-import type { CreatedRow } from '../notion/client.ts';
-import { env } from '../_shared/env.ts';
-import type { Platform, User } from '../_shared/types.ts';
+} from '../_core/db.ts';
+import { extractCandidateKeywords } from '../_analysis/keyword-extractor.ts';
+import { rankCandidatesByTrend } from '../_trends/naver-trends.ts';
+import type { RankedKeyword } from '../_trends/naver-trends.ts';
+import { analyzeContentItem } from '../_analysis/content-analyzer.ts';
+import type { CreatedRow } from '../_notion/client.ts';
+import { env } from '../_core/env.ts';
+import type { Platform, User } from '../_core/types.ts';
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<any>): void };
 

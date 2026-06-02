@@ -2,10 +2,10 @@
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { decryptNotionKey } from './crypto.ts';
-import { env } from '../_shared/env.ts';
-import { AuthError, QuotaExceededError, ValidationError } from '../_shared/errors.ts';
-import { DAILY_QUOTAS, getEffectiveTier } from '../_shared/types.ts';
-import type { FlatResult, Platform, SearchMetadata, SearchResult, SubscriptionTier, User } from '../_shared/types.ts';
+import { env } from './env.ts';
+import { AuthError, QuotaExceededError, ValidationError } from './errors.ts';
+import { DAILY_QUOTAS, getEffectiveTier } from './types.ts';
+import type { FlatResult, Platform, SearchMetadata, SearchResult, SubscriptionTier, User } from './types.ts';
 
 let _client: SupabaseClient | null = null;
 

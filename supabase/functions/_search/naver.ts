@@ -1,10 +1,10 @@
 // 네이버 검색 API 모듈
 // 무료, 일 25,000회 한도
 
-import { env } from '../_shared/env.ts';
-import { ExternalApiError } from '../_shared/errors.ts';
-import { logger } from '../_shared/logger.ts';
-import type { ContentItem, Period } from '../_shared/types.ts';
+import { env } from '../_core/env.ts';
+import { ExternalApiError } from '../_core/errors.ts';
+import { logger } from '../_core/logger.ts';
+import type { ContentItem, Period } from '../_core/types.ts';
 
 interface NaverBlogItem {
   title: string;

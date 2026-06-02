@@ -2,13 +2,13 @@
 // content_items 조회 → (필요 시) 크롤링 → AI 요약 + 키워드 + SEO + 읽기시간
 // 검색 백그라운드 루프(trigger-search)와 온디맨드(fetch-content)에서 공유
 
-import { getSupabase } from './db.ts';
-import { crawlUrl } from './crawler.ts';
+import { getSupabase } from '../_core/db.ts';
+import { crawlUrl } from '../_crawl/crawler.ts';
 import { summarizeContent } from './anthropic.ts';
 import { extractCandidateKeywords } from './keyword-extractor.ts';
-import { env } from './env.ts';
-import { logger } from './logger.ts';
-import type { SearchResult, Platform } from './types.ts';
+import { env } from '../_core/env.ts';
+import { logger } from '../_core/logger.ts';
+import type { SearchResult, Platform } from '../_core/types.ts';
 
 export interface AnalysisResult {
   summary?: string;

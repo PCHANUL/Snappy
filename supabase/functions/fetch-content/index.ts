@@ -8,12 +8,12 @@
 //   4. 행 속성 업데이트
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { getSupabase } from '../_shared/db.ts';
-import { decryptNotionKey } from '../_shared/crypto.ts';
-import { NotionClient } from '../notion/client.ts';
-import { logger } from '../_shared/logger.ts';
-import { corsHeaders, errorToResponse, ValidationError, AuthError } from '../_shared/errors.ts';
-import { analyzeContentItem } from '../_shared/content-analyzer.ts';
+import { getSupabase } from '../_core/db.ts';
+import { decryptNotionKey } from '../_core/crypto.ts';
+import { NotionClient } from '../_notion/client.ts';
+import { logger } from '../_core/logger.ts';
+import { corsHeaders, errorToResponse, ValidationError, AuthError } from '../_core/errors.ts';
+import { analyzeContentItem } from '../_analysis/content-analyzer.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

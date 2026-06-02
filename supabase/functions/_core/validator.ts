@@ -1,8 +1,8 @@
 // 들어오는 요청 검증
 // 노션 웹훅 페이로드를 SearchRequest 타입으로 변환
 
-import { ValidationError } from '../_shared/errors.ts';
-import type { Platform, Period, SearchRequest } from '../_shared/types.ts';
+import { ValidationError } from './errors.ts';
+import type { Platform, Period, SearchRequest } from './types.ts';
 
 const VALID_PLATFORMS: Platform[] = ['naver_blog', 'youtube', 'tistory', 'brunch'];
 const VALID_PERIODS: Period[] = ['day', 'week', 'month', 'year'];

@@ -1,7 +1,7 @@
 import './setup.ts';
 import { assertEquals, assertArrayIncludes } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { stripHtml, parseNaverDate, filterByPeriod } from '../search/naver.ts';
-import type { ContentItem } from '../_shared/types.ts';
+import { stripHtml, parseNaverDate, filterByPeriod } from '../_search/naver.ts';
+import type { ContentItem } from '../_core/types.ts';
 
 // ── stripHtml ─────────────────────────────────────────────────────────────────
 

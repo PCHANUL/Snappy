@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { getEffectiveTier, DAILY_QUOTAS, PLATFORM_INFO } from '../_shared/types.ts';
+import { getEffectiveTier, DAILY_QUOTAS, PLATFORM_INFO } from '../_core/types.ts';
 
 // ── getEffectiveTier ──────────────────────────────────────────────────────────
 

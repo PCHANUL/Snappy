@@ -1,11 +1,11 @@
 // 매체별 검색을 병렬 실행하는 오케스트레이터
 // 한 매체 실패해도 다른 매체 결과는 정상 반환
 
-import { logger } from '../_shared/logger.ts';
+import { logger } from '../_core/logger.ts';
 import { searchNaverBlog } from './naver.ts';
 import { searchYouTube } from './youtube.ts';
 import { searchTistory, searchBrunch } from './youcom.ts';
-import type { Platform, Period, SearchResult, ContentItem } from '../_shared/types.ts';
+import type { Platform, Period, SearchResult, ContentItem } from '../_core/types.ts';
 
 // 플랫폼별 검색 함수 매핑
 type SearcherFn = (keyword: string, count: number, period: Period) => Promise<ContentItem[]>;

@@ -1,7 +1,7 @@
 // 검색 결과 제목/설명에서 연관 키워드 후보 추출
 // 한국어 파티클 제거 + 불용어 필터 + 빈도 기반 정렬
 
-import type { SearchResult } from './types.ts';
+import type { SearchResult } from '../_core/types.ts';
 
 const STOPWORDS = new Set([
   // 한국어 일반 명사 (단독으로는 키워드 가치 없음)

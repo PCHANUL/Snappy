@@ -1,6 +1,6 @@
 import './setup.ts';
 import { assertEquals, assert } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { encryptNotionKey, decryptNotionKey } from '../_shared/crypto.ts';
+import { encryptNotionKey, decryptNotionKey } from '../_core/crypto.ts';
 
 Deno.test('encryptNotionKey: v1:iv:ciphertext 형식 반환', async () => {
   const result = await encryptNotionKey('test-api-key');

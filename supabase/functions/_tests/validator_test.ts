@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { validateMinimalRequest, validateSearchRequest } from '../_shared/validator.ts';
+import { validateMinimalRequest, validateSearchRequest } from '../_core/validator.ts';
 
 // ── validateMinimalRequest ────────────────────────────────────────────────────
 

@@ -1,9 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, errorToResponse, ValidationError } from '../_shared/errors.ts';
-import { env } from '../_shared/env.ts';
-import { logger } from '../_shared/logger.ts';
-import { fetchNaverTrendTopics } from '../_shared/naver-trends.ts';
-import { fetchGoogleInterestOverTime } from '../_shared/google-trends.ts';
+import { corsHeaders, errorToResponse, ValidationError } from '../_core/errors.ts';
+import { env } from '../_core/env.ts';
+import { logger } from '../_core/logger.ts';
+import { fetchNaverTrendTopics } from '../_trends/naver-trends.ts';
+import { fetchGoogleInterestOverTime } from '../_trends/google-trends.ts';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
