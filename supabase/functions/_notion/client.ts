@@ -32,6 +32,7 @@ const PLATFORM_TO_NOTION: Record<Platform, string> = {
   youtube: '유튜브',
   tistory: '티스토리',
   brunch: '브런치',
+  instagram: '인스타그램',
 };
 
 const PERIOD_TO_NOTION: Record<Period, string> = {
