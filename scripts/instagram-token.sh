@@ -45,12 +45,25 @@ if [ -z "$APP_ID" ]; then
   read -p "App ID: " APP_ID
 fi
 if [ -z "$APP_SECRET" ]; then
-  read -p "App Secret: " APP_SECRET
-fi
-if [ -z "$SHORT_TOKEN" ]; then
+  read -s -p "App Secret: " APP_SECRET
   echo ""
-  log_detail "Graph API Explorer(https://developers.facebook.com/tools/explorer)에서"
-  log_detail "단기 User Token을 생성해 붙여넣으세요."
+fi
+
+# ── 단기 토큰 발급 안내 ──────────────────────────────────────────────────────
+if [ -z "$SHORT_TOKEN" ]; then
+  PERMISSIONS="instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement"
+  EXPLORER_URL="https://developers.facebook.com/tools/explorer/?app_id=${APP_ID}&scope=${PERMISSIONS}"
+
+  log_step "0/3 단기 토큰 발급"
+  echo ""
+  echo "  아래 URL을 브라우저에서 열어 단기 User Token을 발급하세요."
+  echo ""
+  echo "  ${BOLD}${BLUE}${EXPLORER_URL}${NC}"
+  echo ""
+  log_detail "1) 위 URL 접속 → 우측 상단 앱이 '${APP_ID}'인지 확인"
+  log_detail "2) 'Generate Access Token' 클릭 → 인스타 연결 Facebook 계정으로 승인"
+  log_detail "3) 발급된 토큰을 복사해 아래에 붙여넣기"
+  echo ""
   read -p "단기 토큰(short-lived token): " SHORT_TOKEN
 fi
 
