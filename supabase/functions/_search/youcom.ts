@@ -36,9 +36,11 @@ async function searchYouCom(
   count: number = 10,
   period: Period = 'month',
 ): Promise<ContentItem[]> {
+  // 관련성 필터 후 count개를 채우기 위해 여유분 확보
+  const fetchCount = Math.min(count * 3, 50);
   const url = `https://ydc-index.io/v1/search` +
     `?query=${encodeURIComponent(keyword)}` +
-    `&count=${count}` +
+    `&count=${fetchCount}` +
     `&freshness=${period}` +
     `&country=KR` +
     `&language=KO` +
@@ -61,21 +63,50 @@ async function searchYouCom(
   const data: YouComSearchResponse = await response.json();
   const webResults = data.results?.web || [];
 
-  // include_domains 파라미터가 API에서 무시될 수 있으므로 클라이언트 측에서도 필터링
-  const filtered = webResults.filter((item) =>
+  // 1. 도메인 필터 — include_domains가 API에서 무시될 수 있으므로 클라이언트에서도 강제
+  const domainFiltered = webResults.filter((item) =>
     domains.some((domain) => item.url.includes(domain))
   );
 
-  const items = filtered.slice(0, count).map((item) => normalizeItem(item, platform));
+  // 2. 키워드 관련성 점수 정렬 — 제목·설명·스니펫에 키워드 단어가 많을수록 상위
+  const words = keyword.toLowerCase().split(/\s+/).filter(Boolean);
+  const scored = domainFiltered.map((item) => ({
+    item,
+    score: relevanceScore(item, words),
+  }));
+  scored.sort((a, b) => b.score - a.score);
+
+  // 3. 관련성 0점(키워드 단어가 하나도 없음) 제거 — 단, 전부 0이면 원본 순서 그대로
+  const relevant = scored.filter((s) => s.score > 0);
+  const finalPool = relevant.length > 0 ? relevant : scored;
+
+  const items = finalPool.slice(0, count).map((s) => normalizeItem(s.item, platform));
 
   logger.info('You.com search completed', {
     keyword,
     platform,
-    found: items.length,
+    fetched: webResults.length,
+    afterDomainFilter: domainFiltered.length,
+    afterRelevanceFilter: relevant.length,
+    returned: items.length,
     latency: data.metadata?.latency,
   });
 
   return items;
+}
+
+// 제목·설명·스니펫에서 키워드 단어가 등장한 횟수를 반환 (제목 가중치 2배)
+function relevanceScore(item: YouComWebResult, words: string[]): number {
+  const title = (item.title ?? '').toLowerCase();
+  const desc = (item.description ?? '').toLowerCase();
+  const snippets = (item.snippets ?? []).join(' ').toLowerCase();
+  let score = 0;
+  for (const word of words) {
+    if (title.includes(word)) score += 2;
+    if (desc.includes(word)) score += 1;
+    if (snippets.includes(word)) score += 1;
+  }
+  return score;
 }
 
 function normalizeItem(item: YouComWebResult, platform: Platform): ContentItem {
