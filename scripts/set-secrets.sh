@@ -50,6 +50,9 @@ fi
 if [ -n "${INSTAGRAM_BUSINESS_ACCOUNT_ID:-}" ]; then
   SECRETS_TO_SET+=("INSTAGRAM_BUSINESS_ACCOUNT_ID")
 fi
+if [ -n "${INSTAGRAM_APP_SECRET:-}" ]; then
+  SECRETS_TO_SET+=("INSTAGRAM_APP_SECRET")
+fi
 
 log_info "등록할 시크릿: ${#SECRETS_TO_SET[@]}개"
 for var in "${SECRETS_TO_SET[@]}"; do

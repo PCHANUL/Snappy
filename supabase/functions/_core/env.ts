@@ -45,6 +45,7 @@ export const env = {
   instagram: {
     accessToken: optional('INSTAGRAM_ACCESS_TOKEN', ''),
     businessAccountId: optional('INSTAGRAM_BUSINESS_ACCOUNT_ID', ''),
+    appSecret: optional('INSTAGRAM_APP_SECRET', ''),
   },
   notion: {
     clientId: optional('NOTION_CLIENT_ID', ''),

@@ -5,7 +5,8 @@
 #   1. 장기 사용자 액세스 토큰(60일)으로 교환
 #   2. 연결된 Facebook 페이지 조회
 #   3. 페이지에 연결된 Instagram 비즈니스 계정 ID 조회
-# 결과로 INSTAGRAM_ACCESS_TOKEN / INSTAGRAM_BUSINESS_ACCOUNT_ID 를 출력하고
+#      (앱 설정에서 Require App Secret이 켜진 경우 appsecret_proof 자동 포함)
+# 결과로 INSTAGRAM_ACCESS_TOKEN / INSTAGRAM_BUSINESS_ACCOUNT_ID / INSTAGRAM_APP_SECRET 를 출력하고
 # 원하면 .env.local 에 기록한다.
 #
 # 사전 준비 (이게 안 되어 있으면 발급해도 동작하지 않음):
@@ -31,6 +32,7 @@ cd "$PROJECT_ROOT"
 
 require_command curl "apt install curl"
 require_command jq "apt install jq"
+require_command openssl "brew install openssl"
 
 GRAPH="https://graph.facebook.com/v21.0"
 
@@ -70,14 +72,78 @@ check_error() {
   fi
 }
 
+appsecret_proof() {
+  local token="$1"
+  printf '%s' "$token" | openssl dgst -sha256 -hmac "$APP_SECRET" | awk '{print $NF}'
+}
+
+print_token_diagnostics() {
+  local token="$1"
+  local proof="$2"
+  local me_resp
+  local perms_resp
+  local missing
+
+  log_step "진단: Facebook 사용자/권한 확인"
+
+  me_resp=$(curl -sG "$GRAPH/me" \
+    --data-urlencode "fields=id,name" \
+    --data-urlencode "access_token=$token" \
+    --data-urlencode "appsecret_proof=$proof")
+
+  if echo "$me_resp" | jq -e '.error' >/dev/null 2>&1; then
+    log_warn "토큰 사용자 정보를 읽지 못했습니다."
+    echo "$me_resp" | jq -r '.error | "   [\(.code)] \(.message)"' >&2
+  else
+    log_detail "토큰 사용자: $(echo "$me_resp" | jq -r '.name // "unknown"') ($(echo "$me_resp" | jq -r '.id // "unknown"'))"
+  fi
+
+  perms_resp=$(curl -sG "$GRAPH/me/permissions" \
+    --data-urlencode "access_token=$token" \
+    --data-urlencode "appsecret_proof=$proof")
+
+  if echo "$perms_resp" | jq -e '.error' >/dev/null 2>&1; then
+    log_warn "토큰 권한 목록을 읽지 못했습니다."
+    echo "$perms_resp" | jq -r '.error | "   [\(.code)] \(.message)"' >&2
+    return
+  fi
+
+  log_detail "승인된 권한:"
+  echo "$perms_resp" | jq -r '
+    [.data[] | select(.status == "granted") | .permission] as $granted
+    | if ($granted | length) == 0 then
+        "   - 없음"
+      else
+        $granted[] | "   - " + .
+      end
+  '
+
+  missing=$(echo "$perms_resp" | jq -r '
+    [.data[] | select(.status == "granted") | .permission] as $granted
+    | ["instagram_basic", "pages_show_list"] - $granted
+    | .[]
+  ')
+  if [ -n "$missing" ]; then
+    log_warn "필수 권한이 누락되었습니다."
+    echo "$missing" | sed 's/^/   - /'
+  fi
+}
+
 # ── 1. 단기 → 장기 토큰(60일) 교환 ───────────────────────────────────────────
 log_step "1/3 장기 토큰(60일) 교환 중"
+
+SHORT_APPSECRET_PROOF="$(appsecret_proof "$SHORT_TOKEN")"
+if [ -z "$SHORT_APPSECRET_PROOF" ]; then
+  log_error "단기 토큰 appsecret_proof 생성에 실패했습니다."
+  exit 1
+fi
 
 exchange_resp=$(curl -sG "$GRAPH/oauth/access_token" \
   --data-urlencode "grant_type=fb_exchange_token" \
   --data-urlencode "client_id=$APP_ID" \
   --data-urlencode "client_secret=$APP_SECRET" \
-  --data-urlencode "fb_exchange_token=$SHORT_TOKEN")
+  --data-urlencode "fb_exchange_token=$SHORT_TOKEN" \
+  --data-urlencode "appsecret_proof=$SHORT_APPSECRET_PROOF")
 
 check_error "$exchange_resp" "장기 토큰 교환"
 
@@ -91,18 +157,30 @@ fi
 expire_days=$(( EXPIRES_IN / 86400 ))
 log_success "장기 토큰 발급 완료 (약 ${expire_days}일 유효)"
 
+APPSECRET_PROOF="$(appsecret_proof "$LONG_TOKEN")"
+if [ -z "$APPSECRET_PROOF" ]; then
+  log_error "appsecret_proof 생성에 실패했습니다."
+  exit 1
+fi
+
 # ── 2. 연결된 Facebook 페이지 조회 ──────────────────────────────────────────
 log_step "2/3 연결된 Facebook 페이지 조회 중"
 
 pages_resp=$(curl -sG "$GRAPH/me/accounts" \
-  --data-urlencode "access_token=$LONG_TOKEN")
+  --data-urlencode "access_token=$LONG_TOKEN" \
+  --data-urlencode "appsecret_proof=$APPSECRET_PROOF")
 
 check_error "$pages_resp" "페이지 목록 조회"
 
 page_count=$(echo "$pages_resp" | jq '.data | length')
 if [ "$page_count" -eq 0 ]; then
+  print_token_diagnostics "$LONG_TOKEN" "$APPSECRET_PROOF"
   log_error "연결된 Facebook 페이지가 없습니다."
-  log_detail "인스타 비즈니스 계정을 Facebook 페이지에 먼저 연결하세요."
+  log_detail "체크리스트:"
+  log_detail "1) 토큰을 발급한 Facebook 사용자가 해당 Page에서 Task 권한을 갖고 있는지 확인"
+  log_detail "2) Graph API Explorer에서 instagram_basic, pages_show_list 권한을 승인했는지 확인"
+  log_detail "3) Instagram 계정이 Business/Creator이고 Facebook Page에 연결되어 있는지 확인"
+  log_detail "4) 앱이 Development Mode라면 이 Facebook 사용자가 앱 역할(Admin/Developer/Tester)에 포함되어 있는지 확인"
   exit 1
 fi
 
@@ -127,7 +205,8 @@ log_step "3/3 인스타그램 비즈니스 계정 ID 조회 중"
 
 ig_resp=$(curl -sG "$GRAPH/$PAGE_ID" \
   --data-urlencode "fields=instagram_business_account{id,username}" \
-  --data-urlencode "access_token=$LONG_TOKEN")
+  --data-urlencode "access_token=$LONG_TOKEN" \
+  --data-urlencode "appsecret_proof=$APPSECRET_PROOF")
 
 check_error "$ig_resp" "인스타 계정 조회"
 
@@ -147,6 +226,7 @@ log_step "발급 완료"
 echo ""
 echo "INSTAGRAM_ACCESS_TOKEN=$LONG_TOKEN"
 echo "INSTAGRAM_BUSINESS_ACCOUNT_ID=$BUSINESS_ACCOUNT_ID"
+echo "INSTAGRAM_APP_SECRET=$APP_SECRET"
 echo ""
 log_warn "이 장기 토큰은 약 ${expire_days}일 후 만료됩니다. 만료 전 재발급하세요."
 
@@ -157,12 +237,13 @@ if confirm ".env.local 에 기록하시겠습니까?" "Y"; then
   touch "$ENV_FILE"
   # 기존 항목 제거 후 추가 (중복 방지)
   if [ -s "$ENV_FILE" ]; then
-    grep -v -E '^(INSTAGRAM_ACCESS_TOKEN|INSTAGRAM_BUSINESS_ACCOUNT_ID)=' "$ENV_FILE" > "$ENV_FILE.tmp" || true
+    grep -v -E '^(INSTAGRAM_ACCESS_TOKEN|INSTAGRAM_BUSINESS_ACCOUNT_ID|INSTAGRAM_APP_SECRET)=' "$ENV_FILE" > "$ENV_FILE.tmp" || true
     mv "$ENV_FILE.tmp" "$ENV_FILE"
   fi
   {
     echo "INSTAGRAM_ACCESS_TOKEN=$LONG_TOKEN"
     echo "INSTAGRAM_BUSINESS_ACCOUNT_ID=$BUSINESS_ACCOUNT_ID"
+    echo "INSTAGRAM_APP_SECRET=$APP_SECRET"
   } >> "$ENV_FILE"
   log_success ".env.local 업데이트 완료"
   log_detail "Supabase 반영: bash scripts/set-secrets.sh"

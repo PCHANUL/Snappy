@@ -2,6 +2,7 @@
 //
 // 키워드 → 해시태그 변환 후 top_media(인기) 또는 recent_media(최신) 조회.
 // 인증: 장기 사용자 액세스 토큰 (60일, 갱신 필요) + Instagram Business 계정 ID.
+// 앱에서 Require App Secret이 켜져 있으면 INSTAGRAM_APP_SECRET으로 appsecret_proof를 붙인다.
 // 제약: 동일 계정으로 7일 내 고유 해시태그 검색 30회 한도 (Meta 정책).
 
 import { env } from '../_core/env.ts';
@@ -35,15 +36,18 @@ export async function searchInstagram(
   count: number = 10,
   period: Period = 'month',
 ): Promise<ContentItem[]> {
-  const { accessToken, businessAccountId } = env.instagram;
+  const { accessToken, businessAccountId, appSecret } = env.instagram;
   if (!accessToken || !businessAccountId) {
     throw new ExternalApiError('Instagram', 'credentials not configured (INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_BUSINESS_ACCOUNT_ID)');
   }
+  const appsecretProof = appSecret
+    ? await createAppSecretProof(accessToken, appSecret)
+    : '';
 
   const hashtag = toHashtag(keyword);
   logger.info('Instagram search started', { keyword, hashtag, period });
 
-  const hashtagId = await getHashtagId(hashtag, businessAccountId, accessToken);
+  const hashtagId = await getHashtagId(hashtag, businessAccountId, accessToken, appsecretProof);
   if (!hashtagId) {
     logger.info('Instagram: hashtag not found', { hashtag });
     return [];
@@ -51,7 +55,7 @@ export async function searchInstagram(
 
   // day/week는 최신 게시물, month/year는 인기 게시물
   const edge = (period === 'day' || period === 'week') ? 'recent_media' : 'top_media';
-  const posts = await getMedia(hashtagId, edge, businessAccountId, accessToken);
+  const posts = await getMedia(hashtagId, edge, businessAccountId, accessToken, appsecretProof);
 
   const since = periodToDate(period);
   const filtered = since
@@ -70,11 +74,15 @@ async function getHashtagId(
   hashtag: string,
   accountId: string,
   token: string,
+  appsecretProof: string,
 ): Promise<string | null> {
-  const url = `${GRAPH_API}/ig-hashtag-search` +
-    `?user_id=${accountId}` +
-    `&q=${encodeURIComponent(hashtag)}` +
-    `&access_token=${token}`;
+  const params = new URLSearchParams({
+    user_id: accountId,
+    q: hashtag,
+    access_token: token,
+  });
+  if (appsecretProof) params.set('appsecret_proof', appsecretProof);
+  const url = `${GRAPH_API}/ig-hashtag-search?${params.toString()}`;
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -90,11 +98,15 @@ async function getMedia(
   edge: 'top_media' | 'recent_media',
   accountId: string,
   token: string,
+  appsecretProof: string,
 ): Promise<IgMediaItem[]> {
-  const url = `${GRAPH_API}/${hashtagId}/${edge}` +
-    `?user_id=${accountId}` +
-    `&fields=${MEDIA_FIELDS}` +
-    `&access_token=${token}`;
+  const params = new URLSearchParams({
+    user_id: accountId,
+    fields: MEDIA_FIELDS,
+    access_token: token,
+  });
+  if (appsecretProof) params.set('appsecret_proof', appsecretProof);
+  const url = `${GRAPH_API}/${hashtagId}/${edge}?${params.toString()}`;
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -103,6 +115,21 @@ async function getMedia(
   }
   const data: IgMediaResponse = await res.json();
   return data.data ?? [];
+}
+
+async function createAppSecretProof(token: string, appSecret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(appSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(token));
+  return Array.from(new Uint8Array(signature))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 function normalizePost(post: IgMediaItem): ContentItem {
