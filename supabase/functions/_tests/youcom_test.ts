@@ -18,8 +18,8 @@ Deno.test('searchTistory: 정상 응답 파싱', async () => {
         },
         {
           url: 'https://other.tistory.com/456',
-          title: '다른 글',
-          description: '',
+          title: '비건 식단 가이드',  // 키워드 "비건" 포함 → 관련성 필터 통과
+          description: '비건 디저트 외 식단 정보',
           snippets: [],
           thumbnail_url: null,
           page_age: null,
@@ -43,8 +43,9 @@ Deno.test('searchTistory: 정상 응답 파싱', async () => {
     const { searchTistory } = await import('../_search/youcom.ts');
     const results = await searchTistory('비건 디저트', 5, 'month');
 
-    // 응답 파싱 검증
+    // 관련성 필터를 통과한 항목만 반환
     assertEquals(results.length, 2);
+    // 점수가 높은 항목이 첫 번째 (제목에 두 단어 모두 포함)
     assertEquals(results[0].title, '비건 디저트 레시피');
     assertEquals(results[0].url, 'https://myblog.tistory.com/123');
     assertEquals(results[0].description, '맛있는 디저트 만들기');
@@ -60,6 +61,56 @@ Deno.test('searchTistory: 정상 응답 파싱', async () => {
     // 요청 URL 검증
     assert(capturedUrl.includes('tistory.com'), `include_domains에 tistory.com 포함 필요: ${capturedUrl}`);
     assert(capturedUrl.includes('비건'), `query에 키워드 포함 필요: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchTistory: 관련성 필터 — 키워드 없는 항목 제거', async () => {
+  const mockResponse = {
+    results: {
+      web: [
+        { url: 'https://a.tistory.com/1', title: '비건 디저트 맛집', description: '비건 카페', snippets: [] },
+        { url: 'https://b.tistory.com/2', title: '관련없는 글', description: '전혀 다른 내용', snippets: [] },
+        { url: 'https://c.tistory.com/3', title: '디저트 추천', description: '달콤한 디저트', snippets: [] },
+      ],
+    },
+    metadata: {},
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify(mockResponse), { status: 200 });
+
+  try {
+    const { searchTistory } = await import('../_search/youcom.ts');
+    const results = await searchTistory('비건 디저트', 10, 'month');
+
+    // 키워드("비건" 또는 "디저트") 없는 항목은 제외
+    assertEquals(results.length, 2);
+    assert(results.every(r => r.url !== 'https://b.tistory.com/2'), '무관 항목이 포함되면 안 됨');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchTistory: 관련성 필터 — 전부 0점이면 폴백(원본 순서 유지)', async () => {
+  // 키워드가 영어라 한국어 타이틀과 매칭 안 됨 → 전부 0점 → 폴백
+  const mockResults = Array.from({ length: 3 }, (_, i) => ({
+    url: `https://blog${i}.tistory.com/${i}`,
+    title: `한국어 글 ${i}`,
+    description: '',
+    snippets: [],
+  }));
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ results: { web: mockResults }, metadata: {} }), { status: 200 });
+
+  try {
+    const { searchTistory } = await import('../_search/youcom.ts');
+    const results = await searchTistory('abc', 3, 'month');
+    // 폴백: 전부 반환 (필터 없이)
+    assertEquals(results.length, 3);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -181,7 +232,8 @@ Deno.test('searchTistory: count, freshness, country 파라미터 포함', async 
   try {
     const { searchTistory } = await import('../_search/youcom.ts');
     await searchTistory('test', 7, 'week');
-    assert(capturedUrl.includes('count=7'), `count=7 필요: ${capturedUrl}`);
+    // 관련성 필터용 여유분: count*3=21 을 요청
+    assert(capturedUrl.includes('count=21'), `여유분 포함 count=21 필요: ${capturedUrl}`);
     assert(capturedUrl.includes('freshness=week'), `freshness=week 필요: ${capturedUrl}`);
     assert(capturedUrl.includes('country=KR'), `country=KR 필요: ${capturedUrl}`);
   } finally {
