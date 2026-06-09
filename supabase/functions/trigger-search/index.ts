@@ -42,8 +42,9 @@ serve(async (req) => {
     if (!user_id) throw new ValidationError('user_id is required', '사용자 정보가 누락되었습니다.');
 
     const user = await getUserAndCheckQuota(user_id);
+    await markSearchingStart(user.id);
 
-    EdgeRuntime.waitUntil(processSearch(body, user));
+    EdgeRuntime.waitUntil(processSearch(body, user, { searchingAlreadyMarked: true }));
 
     return new Response(
       JSON.stringify({ status: 'accepted', message: '검색을 시작합니다.' }),
@@ -55,14 +56,20 @@ serve(async (req) => {
   }
 });
 
-async function processSearch(rawBody: any, user: User): Promise<void> {
+async function processSearch(
+  rawBody: any,
+  user: User,
+  opts: { searchingAlreadyMarked?: boolean } = {},
+): Promise<void> {
   const notion = new NotionClient(user.notion_api_key);
   const startTime = Date.now();
 
   const keyword = (rawBody.keyword as string | undefined)?.trim() || '';
   const platforms: Platform[] = Array.isArray(rawBody.platforms) ? rawBody.platforms : [];
 
-  await markSearchingStart(user.id);
+  if (!opts.searchingAlreadyMarked) {
+    await markSearchingStart(user.id);
+  }
 
   // 진행 메시지를 DB에 기록 — 폴링 응답에 포함되어 임베드 UI에 표시됨
   const onProgress = (message: string) => updateSearchProgress(user.id, message);
