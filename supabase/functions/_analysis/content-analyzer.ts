@@ -45,7 +45,7 @@ export async function analyzeContentItem(opts: {
   // ('skip' 상태였던 유튜브도 API 방식으로 재시도)
   if (!fullText) {
     try {
-      const result = await crawlUrl(url, platform, { youtubeApiKey: env.youtube.apiKey });
+      const result  = await crawlUrl(url, platform, { youtubeApiKey: env.youtube.apiKey });
       if (result.status === 'done' && result.full_text) {
         fullText = result.full_text;
         await getSupabase()
