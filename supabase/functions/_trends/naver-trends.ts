@@ -24,7 +24,7 @@ const DEFAULT_TREND_KEYWORDS = [
   '숏폼',
   '유튜브',
   '블로그',
-  '인스타그램',
+  '커머스',
 ];
 
 export async function fetchNaverTrendTopics(

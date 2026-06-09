@@ -5,7 +5,6 @@ import { logger } from '../_core/logger.ts';
 import { searchNaverBlog } from './naver.ts';
 import { searchYouTube } from './youtube.ts';
 import { searchTistory, searchBrunch } from './youcom.ts';
-import { searchInstagram } from './instagram.ts';
 import type { Platform, Period, SearchResult, ContentItem } from '../_core/types.ts';
 
 // 플랫폼별 검색 함수 매핑
@@ -16,7 +15,6 @@ const searchers: Record<Platform, SearcherFn> = {
   youtube: searchYouTube,
   tistory: searchTistory,
   brunch: searchBrunch,
-  instagram: searchInstagram,
 };
 
 const PLATFORM_TIMEOUT_MS = 10_000;
@@ -35,7 +33,6 @@ const COST_PER_SEARCH: Record<Platform, number> = {
   youtube: 0,
   tistory: 0.005,
   brunch: 0.005,
-  instagram: 0,
 };
 
 export interface OrchestratorResult {
