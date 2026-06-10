@@ -774,11 +774,20 @@ export class NotionClient {
   }
 
   private async waitForTemplateContentDatabase(pageId: string): Promise<string | null> {
-    for (let i = 0; i < 12; i++) {
+    const attempts = 30;
+    const delayMs = 1000;
+
+    for (let i = 0; i < attempts; i++) {
       const databaseId = await this.findContentDatabase(pageId);
       if (databaseId) return databaseId;
-      await sleep(500);
+      await sleep(delayMs);
     }
+
+    logger.warn('Timed out waiting for template content database', {
+      pageId,
+      attempts,
+      delayMs,
+    });
     return null;
   }
 

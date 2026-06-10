@@ -373,6 +373,7 @@
       form.classList.add('disabled-overlay');
       status.className = 'searching';
       status.textContent = '검색을 요청하고 있어요...';
+      activeSearch = true;
 
       try {
         // 2. 임베드 URL에 ?searching=1 추가 (다른 기기/새 탭 차단용)
@@ -403,6 +404,8 @@
         startPolling();
 
       } catch (err) {
+        activeSearch = false;
+        stopPolling();
         resetButton();
         status.className = 'error';
         status.textContent = err.message;
@@ -411,8 +414,17 @@
 
     // ── 완료 폴링 ────────────────────────────────────────────────────────────
     let pollTimer = null;
+    let activeSearch = false;
+
+    function stopPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+    }
 
     function startPolling() {
+      activeSearch = true;
+      stopPolling();
+
       let attempts = 0;
       const MAX = 120; // 120 × 1s = 최대 2분
 
@@ -425,7 +437,8 @@
           if (!res.ok) return;
           const data = await res.json();
           if (!data.searching) {
-            clearInterval(pollTimer);
+            stopPolling();
+            activeSearch = false;
             resetButton();
             if (data.error) {
               status.className = 'error';
@@ -442,7 +455,8 @@
         } catch { /* 일시적 네트워크 오류 무시 */ }
 
         if (attempts >= MAX) {
-          clearInterval(pollTimer);
+          stopPolling();
+          activeSearch = false;
           resetButton();
           status.className = 'error';
           status.textContent = '시간이 초과됐어요. 노션을 직접 확인해주세요.';
@@ -471,6 +485,8 @@
         }
       } catch { /* 네트워크 오류 → isSearching = false 유지 */ }
 
+      if (activeSearch) return;
+
       if (isSearching && !pollTimer) {
         btn.disabled = true;
         btn.classList.add('searching');
@@ -480,8 +496,7 @@
         status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
         startPolling();
       } else if (!isSearching) {
-        clearInterval(pollTimer);
-        pollTimer = null;
+        stopPolling();
         resetButton();
         if (lastError) {
           status.className = 'error';

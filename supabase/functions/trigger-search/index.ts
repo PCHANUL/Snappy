@@ -153,6 +153,10 @@ async function processSearch(
       onProgress,
     );
 
+    if (totalFound > 0 && rows.length === 0) {
+      throw new Error('No content rows were created in Notion');
+    }
+
     // 6. 연관 인기 키워드 Notion 블록 추가
     if (relatedKeywords.length) {
       try {
