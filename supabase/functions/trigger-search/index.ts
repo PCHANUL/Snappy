@@ -167,7 +167,7 @@ async function processSearch(
     const hasAnalysisProps =
       analysisProps.get('분석 상태') === 'select' ||
       analysisProps.get('요약') === 'rich_text' ||
-      analysisProps.get('SEO 적합도') === 'number';
+      analysisProps.get('키워드') === 'multi_select';
     if (rows.length && hasAnalysisProps) {
       let statusBlockId: string | null = null;
       try {

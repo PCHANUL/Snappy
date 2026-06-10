@@ -1,10 +1,10 @@
 // 콘텐츠 재분석 Edge Function
-// 특정 콘텐츠 행(page_id)을 다시 분석해 DB 속성(요약/키워드/SEO/읽기시간/상태)을 갱신한다.
+// 특정 콘텐츠 행(page_id)을 다시 분석해 DB 속성(요약/키워드/상태)을 갱신한다.
 //
 // POST { user_id, url, page_id, keyword }
 //   1. Notion API 키 복호화
 //   2. 행의 부모 DB 분석 컬럼 확인
-//   3. 공통 분석기로 크롤/요약/키워드/SEO 산출
+//   3. 공통 분석기로 크롤/요약/키워드 산출
 //   4. 행 속성 업데이트
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';

@@ -1,5 +1,5 @@
 // 콘텐츠 분석 공통 로직
-// content_items 조회 → (필요 시) 크롤링 → AI 요약 + 키워드 + SEO + 읽기시간
+// content_items 조회 → (필요 시) 크롤링 → AI 요약 + 키워드
 // 검색 백그라운드 루프(trigger-search)와 온디맨드(fetch-content)에서 공유
 
 import { getSupabase } from '../_core/db.ts';
@@ -14,8 +14,6 @@ export interface AnalysisResult {
   summary?: string;
   summarySource?: string; // 본문 기반 / 설명 기반 / 제목 기반
   keywords: string[];
-  seoCount?: number; // 본문 내 검색어 등장 횟수 (본문 크롤 성공 시에만)
-  seoScore?: number; // 0~5 밀도 기반 점수
   wordCount?: number;
 
   status: 'done' | 'failed';
@@ -108,47 +106,13 @@ export async function analyzeContentItem(opts: {
     logger.warn('Keyword extraction failed (non-fatal)', { url, error: String(err) });
   }
 
-  // 6. 검색어 적합도 — 본문 크롤 성공 시에만 (스니펫/제목은 밀도 측정 무의미)
-  let seoCount: number | undefined;
-  let seoScore: number | undefined;
-  if (keyword && fullText) {
-    seoCount = countOccurrences(fullText, keyword);
-    seoScore = seoScoreFromDensity(seoCount, fullText.length, keyword.length);
-  }
-
   const wordCount = content?.word_count || 0;
 
   return {
     summary,
     summarySource: summary ? summarySource : undefined,
     keywords,
-    seoCount,
-    seoScore,
     wordCount: wordCount || undefined,
     status: 'done',
   };
-}
-
-function countOccurrences(text: string, keyword: string): number {
-  const lower = text.toLowerCase();
-  const kw = keyword.toLowerCase();
-  let count = 0;
-  let idx = 0;
-  while ((idx = lower.indexOf(kw, idx)) !== -1) {
-    count++;
-    idx += kw.length;
-  }
-  return count;
-}
-
-// 키워드 밀도(등장 글자수 / 전체 글자수) 기반 점수.
-// 너무 낮으면 주제 적합도 부족, 너무 높으면 키워드 스터핑(과최적화)으로 감점.
-function seoScoreFromDensity(count: number, textLength: number, keywordLength = 1): number {
-  if (count === 0 || textLength === 0) return 0;
-  const pct = ((count * Math.max(1, keywordLength)) / textLength) * 100;
-  if (pct < 0.3) return 1;
-  if (pct < 0.8) return 3;
-  if (pct <= 2.5) return 5;
-  if (pct <= 4) return 4;
-  return 2;
 }

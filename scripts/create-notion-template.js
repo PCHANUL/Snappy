@@ -212,7 +212,6 @@ async function createContentDB(parentPageId) {
       // 콘텐츠 분석 결과 컬럼 — 검색 후 백그라운드로 채워짐
       '요약': { rich_text: {} },
       '키워드': { multi_select: {} },
-      'SEO 적합도': { number: { format: 'number' } },
       '분석 상태': {
         select: {
           options: [

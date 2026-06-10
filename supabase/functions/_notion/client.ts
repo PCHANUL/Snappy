@@ -20,7 +20,6 @@ export interface CreatedRow {
 const ANALYSIS_PROPS = {
   summary: '요약',
   keywords: '키워드',
-  seo: 'SEO 적합도',
   status: '분석 상태',
 } as const;
 
@@ -251,7 +250,6 @@ export class NotionClient {
           // 콘텐츠 분석 결과 컬럼 — 테이블 뷰에서 정렬·필터·비교 가능
           [ANALYSIS_PROPS.summary]: { rich_text: {} },
           [ANALYSIS_PROPS.keywords]: { multi_select: {} },
-          [ANALYSIS_PROPS.seo]: { number: { format: 'number' } },
           [ANALYSIS_PROPS.status]: {
             select: {
               options: [
@@ -401,9 +399,6 @@ export class NotionClient {
         .map((name) => ({ name }));
       if (options.length) properties[ANALYSIS_PROPS.keywords] = { multi_select: options };
     }
-    if (analysisProps.get(ANALYSIS_PROPS.seo) === 'number' && result.seoScore !== undefined) {
-      properties[ANALYSIS_PROPS.seo] = { number: result.seoScore };
-    }
     if (Object.keys(properties).length === 0) return;
     await this.fetchApi(`pages/${toUuid(rowId)}`, {
       method: 'PATCH',
@@ -438,7 +433,7 @@ export class NotionClient {
     finished: boolean,
   ): Promise<void> {
     const content = finished
-      ? `✅ 콘텐츠 분석 완료 — 총 ${total}개 (테이블에서 요약·키워드·SEO 적합도를 확인하세요)`
+      ? `✅ 콘텐츠 분석 완료 — 총 ${total}개 (테이블에서 요약·키워드를 확인하세요)`
       : `🔄 콘텐츠 분석 중... (${done}/${total})`;
     await this.fetchApi(`blocks/${toUuid(blockId)}`, {
       method: 'PATCH',
@@ -769,6 +764,7 @@ export class NotionClient {
     if (existing) {
       this.pagesCreatedWithTemplate.delete(normalizedPageId);
       await this.renameContentDatabase(existing, keyword);
+      await this.removeDeprecatedContentDatabaseProperties(existing);
       logger.info('Using content database from template', { pageId, databaseId: existing });
       return existing.replace(/-/g, '');
     }
@@ -822,6 +818,27 @@ export class NotionClient {
       });
     } catch (error) {
       logger.warn('Failed to rename template content database', {
+        databaseId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async removeDeprecatedContentDatabaseProperties(databaseId: string): Promise<void> {
+    try {
+      const props = await this.getDatabaseProperties(databaseId);
+      if (!props.has('SEO 적합도')) return;
+
+      await this.fetchApi(`databases/${toUuid(databaseId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          properties: {
+            'SEO 적합도': null,
+          },
+        }),
+      });
+    } catch (error) {
+      logger.warn('Failed to remove deprecated content database properties', {
         databaseId,
         error: error instanceof Error ? error.message : String(error),
       });
