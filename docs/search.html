@@ -33,7 +33,7 @@
       color: #4b5563;
       letter-spacing: -0.2px;
     }
-    #keyword, #period {
+    #keyword {
       width: 100%;
       padding: 11px 14px;
       border: 1px solid #d1d5db;
@@ -44,10 +44,58 @@
       background: #fff;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
-    #keyword:focus, #period:focus {
+    #keyword:focus {
       outline: none;
       border-color: #6366f1;
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 10px;
+      align-items: start;
+    }
+
+    .label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+
+    .segment-btn {
+      min-width: 0;
+      min-height: 34px;
+      padding: 7px 6px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: #64748b;
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+      white-space: nowrap;
+    }
+
+    .segment-btn:hover { color: #334155; background: #fff; }
+    .segment-btn.active {
+      background: #111827;
+      border-color: #111827;
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
     }
 
     /* ── 매체 칩 ── */
@@ -70,6 +118,47 @@
       border-color: #6366f1;
       color: #4338ca;
     }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .platform-chip {
+      min-width: 0;
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      line-height: 1.2;
+    }
+
+    .platform-chip::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #cbd5e1;
+      flex: 0 0 auto;
+    }
+
+    .platform-chip.active::before { background: #6366f1; }
+
+    .mini-action {
+      border: 0;
+      background: transparent;
+      color: #6366f1;
+      font-size: 0.74rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0 2px;
+    }
+    .mini-action:hover { color: #4338ca; }
 
     /* ── 버튼 ── */
     #searchBtn {
@@ -171,22 +260,6 @@
     }
     .suggest-item .ico { font-size: 0.78rem; color: #9ca3af; flex-shrink: 0; }
 
-    /* ── 트렌드 칩 ── */
-    #trendsSection { margin-bottom: 4px; }
-    .trend-chip {
-      padding: 6px 12px;
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      border-radius: 999px;
-      color: #9a3412;
-      font-size: 0.82rem;
-      font-weight: 600;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .trend-chip:hover { background: #ffedd5; border-color: #fb923c; }
-
     /* ── 키워드 트렌드 ── */
     #keywordTrend {
       padding: 10px 14px;
@@ -241,6 +314,13 @@
       align-items: start;
     }
 
+    @media (max-width: 430px) {
+      body { padding: 12px; }
+      .filter-grid { grid-template-columns: 1fr; }
+      .search-row { grid-template-columns: 1fr; }
+      #searchBtn { width: 100%; }
+    }
+
     .disabled-overlay { opacity: 0.5; pointer-events: none; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -252,20 +332,31 @@
 </head>
 <body>
   <div class="wrap">
-    <div id="trendsSection" style="display:none">
-      <div class="label">🔥 오늘의 트렌드</div>
-      <div class="chips" id="trendChips" style="margin-top:6px"></div>
-    </div>
-
     <div id="form">
-      <div class="field">
-        <label class="label" for="period">기간</label>
-        <select id="period">
-          <option value="day">1일</option>
-          <option value="week">1주</option>
-          <option value="month" selected>1개월</option>
-          <option value="year">1년</option>
-        </select>
+      <div class="filter-grid">
+        <div class="field">
+          <span class="label" id="periodLabel">기간</span>
+          <div class="segmented" id="periods" role="radiogroup" aria-labelledby="periodLabel">
+            <button type="button" class="segment-btn" data-value="day" role="radio" aria-checked="false">1일</button>
+            <button type="button" class="segment-btn" data-value="week" role="radio" aria-checked="false">1주</button>
+            <button type="button" class="segment-btn active" data-value="month" role="radio" aria-checked="true">1개월</button>
+            <button type="button" class="segment-btn" data-value="year" role="radio" aria-checked="false">1년</button>
+          </div>
+          <input id="period" type="hidden" value="month">
+        </div>
+
+        <div class="field">
+          <div class="label-row">
+            <span class="label" id="platformsLabel">매체</span>
+            <button type="button" class="mini-action" id="allPlatformsBtn">전체</button>
+          </div>
+          <div class="platform-grid" id="platforms" aria-labelledby="platformsLabel">
+            <button type="button" class="chip platform-chip active" data-value="naver_blog" aria-pressed="true">네이버</button>
+            <button type="button" class="chip platform-chip active" data-value="youtube" aria-pressed="true">유튜브</button>
+            <button type="button" class="chip platform-chip active" data-value="tistory" aria-pressed="true">티스토리</button>
+            <button type="button" class="chip platform-chip active" data-value="brunch" aria-pressed="true">브런치</button>
+          </div>
+        </div>
       </div>
 
       <div class="field">
@@ -295,6 +386,8 @@
 
   <script>
     const FUNCTION_BASE = 'https://mmnwbkbipjnmsvtyohjg.supabase.co/functions/v1';
+    const STATUS_POLL_INTERVAL_MS = 1000;
+    const STATUS_SETTLE_MS = 5000;
 
     const params         = new URLSearchParams(location.search);
     const userId         = params.get('user_id');
@@ -308,22 +401,44 @@
     const form        = document.getElementById('form');
     const keywordEl   = document.getElementById('keyword');
     const periodEl    = document.getElementById('period');
+    const periodBtns  = [...document.querySelectorAll('#periods .segment-btn')];
     const chipsEl     = document.getElementById('platforms');
+    const allPlatformsBtn = document.getElementById('allPlatformsBtn');
 
 
     const configured = !!(userId && pageId);
 
     if (presetKeyword) keywordEl.value = presetKeyword;
 
-    // ── 매체 선택: UI가 없으면 전체 매체를 기본 검색 대상으로 사용 ──────────────
-    chipsEl?.addEventListener('click', (e) => {
+    // ── 기간/매체 선택 ──────────────────────────────────────────────────────
+    function setPeriod(value) {
+      periodEl.value = value;
+      periodBtns.forEach((button) => {
+        const active = button.dataset.value === value;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-checked', String(active));
+      });
+    }
+
+    periodBtns.forEach((button) => {
+      button.addEventListener('click', () => setPeriod(button.dataset.value));
+    });
+
+    chipsEl.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if (!chip) return;
       chip.classList.toggle('active');
+      chip.setAttribute('aria-pressed', String(chip.classList.contains('active')));
+    });
+
+    allPlatformsBtn.addEventListener('click', () => {
+      chipsEl.querySelectorAll('.chip').forEach((chip) => {
+        chip.classList.add('active');
+        chip.setAttribute('aria-pressed', 'true');
+      });
     });
 
     function selectedPlatforms() {
-      if (!chipsEl) return ['naver_blog', 'youtube', 'tistory', 'brunch'];
       return [...chipsEl.querySelectorAll('.chip.active')].map((c) => c.dataset.value);
     }
 
@@ -386,10 +501,7 @@
       activeSearch = true;
 
       try {
-        // 2. 임베드 URL에 ?searching=1 추가 (다른 기기/새 탭 차단용)
-        await setEmbedSearching(true);
-
-        // 3. 검색 트리거
+        // 2. 검색 트리거 — DB 검색 상태가 먼저 잡힌 뒤 임베드 URL을 갱신한다.
         const res = await fetch(FUNCTION_BASE + '/trigger-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -405,7 +517,8 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.userMessage || data.message || '검색 요청에 실패했습니다.');
 
-        // 202 수신 — 폴링으로 완료 감지
+        // 202 수신 — 다른 기기/새 탭 차단용 URL 갱신 후 폴링으로 완료 감지
+        setEmbedSearching(true);
         status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
         startPolling();
 
@@ -428,11 +541,14 @@
       pollTimer = null;
     }
 
-    function startPolling() {
+    function startPolling(options = {}) {
       activeSearch = true;
       stopPolling();
 
       let attempts = 0;
+      let sawSearching = false;
+      const startedAt = Date.now();
+      const minWaitMs = options.minWaitMs ?? STATUS_SETTLE_MS;
       const MAX = 120; // 120 × 1s = 최대 2분
 
       pollTimer = setInterval(async () => {
@@ -443,7 +559,13 @@
           );
           if (!res.ok) return;
           const data = await res.json();
-          if (!data.searching) {
+          if (data.searching) {
+            sawSearching = true;
+            if (data.message) status.textContent = data.message;
+          } else if (!sawSearching && Date.now() - startedAt < minWaitMs) {
+            status.className = 'searching';
+            status.textContent = '검색 상태를 확인하고 있어요...';
+          } else {
             stopPolling();
             activeSearch = false;
             resetButton();
@@ -456,8 +578,7 @@
               showKeywordTrend(keywordEl.value.trim());
               if (data.related?.keywords?.length) showRelatedKeywords(data.related);
             }
-          } else if (data.message) {
-            status.textContent = data.message;
+            return;
           }
         } catch { /* 일시적 네트워크 오류 무시 */ }
 
@@ -468,7 +589,7 @@
           status.className = 'error';
           status.textContent = '시간이 초과됐어요. 노션을 직접 확인해주세요.';
         }
-      }, 1000);
+      }, STATUS_POLL_INTERVAL_MS);
     }
 
     function resetButton() {
@@ -482,13 +603,11 @@
     // API 실패 시 검색중 아님으로 간주(fail-safe) — UI가 영구 잠금되는 것 방지
     if (configured) (async () => {
       let isSearching = false;
-      let lastError = null;
       try {
         const res = await fetch(`${FUNCTION_BASE}/manage-user?action=get-search-status&user_id=${userId}`);
         if (res.ok) {
           const data = await res.json();
           isSearching = !!data.searching;
-          lastError = data.error ?? null;
         }
       } catch { /* 네트워크 오류 → isSearching = false 유지 */ }
 
@@ -505,12 +624,14 @@
       } else if (!isSearching) {
         stopPolling();
         resetButton();
-        if (lastError) {
-          status.className = 'error';
-          status.textContent = lastError;
-        } else if (searching) {
-          status.className = '';
-          status.textContent = '';
+        if (searching) {
+          btn.disabled = true;
+          btn.classList.add('searching');
+          btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+          form.classList.add('disabled-overlay');
+          status.className = 'searching';
+          status.textContent = '검색 상태를 확인하고 있어요...';
+          startPolling({ minWaitMs: STATUS_SETTLE_MS });
         }
       }
     })();
@@ -597,31 +718,6 @@
 
     keywordEl.addEventListener('blur', () => setTimeout(closeSuggest, 120));
 
-    // ── 트렌드 ──────────────────────────────────────────────────────────────
-    async function loadDailyTrends() {
-      try {
-        const res = await fetch(`${FUNCTION_BASE}/manage-user?action=trend-daily`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.topics?.length) return;
-
-        const section = document.getElementById('trendsSection');
-        const chips = document.getElementById('trendChips');
-        data.topics.slice(0, 8).forEach((t) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'trend-chip';
-          btn.textContent = t.keyword;
-          btn.addEventListener('click', () => {
-            keywordEl.value = t.keyword;
-            keywordEl.focus();
-          });
-          chips.appendChild(btn);
-        });
-        section.style.display = 'block';
-      } catch { /* 트렌드 로딩 실패는 무시 */ }
-    }
-
     async function showKeywordTrend(keyword) {
       if (!keyword) return;
       try {
@@ -673,8 +769,6 @@
       const chars = '▁▂▃▄▅▆▇█';
       return values.slice(-12).map((v) => chars[Math.round((v - min) / range * 7)]).join('');
     }
-
-    if (configured) loadDailyTrends();
   </script>
 </body>
 </html>
