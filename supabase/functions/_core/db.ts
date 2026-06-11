@@ -3,7 +3,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import { decryptNotionKey } from './crypto.ts';
 import { env } from './env.ts';
-import { AuthError, QuotaExceededError, ValidationError } from './errors.ts';
+import { AppError, AuthError, QuotaExceededError, ValidationError } from './errors.ts';
 import { DAILY_QUOTAS, getEffectiveTier } from './types.ts';
 import type { FlatResult, Platform, SearchMetadata, SearchResult, SubscriptionTier, User } from './types.ts';
 
@@ -181,8 +181,6 @@ export async function saveSearchResults(
     r.items.map(item => ({ ...item, platform: r.platform }))
   );
 
-  if (flatResults.length === 0) return;
-
   // 1. 검색 이벤트 INSERT
   const { data: sr, error: srErr } = await getSupabase()
     .from('search_results')
@@ -200,9 +198,10 @@ export async function saveSearchResults(
     .single();
 
   if (srErr || !sr) {
-    console.error('Failed to insert search_result', srErr);
-    return;
+    throwSearchResultSaveError('Failed to insert search_result', srErr ?? 'No search_result row returned');
   }
+
+  if (flatResults.length === 0) return;
 
   // 2. content_items 배치 upsert (RPC — search_count 증가 + keywords 누적)
   const { data: contentItems, error: ciErr } = await getSupabase()
@@ -212,8 +211,7 @@ export async function saveSearchResults(
     });
 
   if (ciErr || !contentItems) {
-    console.error('Failed to upsert content_items', ciErr);
-    return;
+    throwSearchResultSaveError('Failed to upsert content_items', ciErr ?? 'No content_items rows returned');
   }
 
   // 3. junction INSERT (search_result_id + content_item_id + rank)
@@ -229,11 +227,36 @@ export async function saveSearchResults(
     }))
     .filter(r => r.content_item_id != null);
 
+  if (junctionRows.length !== flatResults.length) {
+    throwSearchResultSaveError(
+      'Failed to match content_items for every search result',
+      `matched ${junctionRows.length}/${flatResults.length}`,
+    );
+  }
+
   const { error: jiErr } = await getSupabase()
     .from('search_result_items')
     .insert(junctionRows);
 
-  if (jiErr) console.error('Failed to insert search_result_items', jiErr);
+  if (jiErr) {
+    throwSearchResultSaveError('Failed to insert search_result_items', jiErr);
+  }
+}
+
+function throwSearchResultSaveError(context: string, error: unknown): never {
+  const detail = typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? error.message
+      : JSON.stringify(error) ?? String(error);
+
+  console.error(context, error);
+  throw new AppError(
+    `${context}: ${detail}`,
+    'SEARCH_RESULT_SAVE_ERROR',
+    500,
+    '검색 결과 저장에 실패했습니다. 잠시 후 다시 시도해주세요.',
+  );
 }
 
 // ── 더보기 페이지네이션 ───────────────────────────────────────────────────────

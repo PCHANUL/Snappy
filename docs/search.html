@@ -22,7 +22,7 @@
       flex-direction: column;
       gap: 12px;
       width: 100%;
-      max-width: 360px;
+      max-width: 520px;
     }
 
     /* ── 입력 필드 ── */
@@ -73,14 +73,14 @@
 
     /* ── 버튼 ── */
     #searchBtn {
-      width: 100%;
-      padding: 14px 20px;
-      margin-top: 4px;
+      width: 116px;
+      min-height: 43px;
+      padding: 11px 14px;
       background: #6366f1;
       color: #fff;
       border: none;
-      border-radius: 12px;
-      font-size: 1rem;
+      border-radius: 10px;
+      font-size: 0.92rem;
       font-weight: 700;
       cursor: pointer;
       display: flex;
@@ -89,6 +89,7 @@
       gap: 8px;
       transition: background 0.15s, transform 0.1s;
       letter-spacing: -0.2px;
+      white-space: nowrap;
     }
     #searchBtn:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
     #searchBtn:active:not(:disabled) { transform: translateY(0); }
@@ -233,6 +234,12 @@
     }
 
     #form { display: flex; flex-direction: column; gap: 10px; }
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 116px;
+      gap: 8px;
+      align-items: start;
+    }
 
     .disabled-overlay { opacity: 0.5; pointer-events: none; }
 
@@ -252,24 +259,6 @@
 
     <div id="form">
       <div class="field">
-        <label class="label" for="keyword">키워드</label>
-        <div class="kw-wrap">
-          <input id="keyword" type="text" placeholder="검색할 단어 (예: 비건 디저트)" maxlength="100" autocomplete="off">
-          <div id="suggest" class="suggest"></div>
-        </div>
-      </div>
-
-      <div class="field">
-        <span class="label">매체</span>
-        <div class="chips" id="platforms">
-          <button type="button" class="chip active" data-value="naver_blog">네이버블로그</button>
-          <button type="button" class="chip active" data-value="youtube">유튜브</button>
-          <button type="button" class="chip active" data-value="tistory">티스토리</button>
-          <button type="button" class="chip active" data-value="brunch">브런치</button>
-        </div>
-      </div>
-
-      <div class="field">
         <label class="label" for="period">기간</label>
         <select id="period">
           <option value="day">1일</option>
@@ -278,9 +267,19 @@
           <option value="year">1년</option>
         </select>
       </div>
+
+      <div class="field">
+        <label class="label" for="keyword">키워드</label>
+        <div class="search-row">
+          <div class="kw-wrap">
+            <input id="keyword" type="text" placeholder="검색할 단어 (예: 비건 디저트)" maxlength="100" autocomplete="off">
+            <div id="suggest" class="suggest"></div>
+          </div>
+          <button id="searchBtn" type="button">검색하기</button>
+        </div>
+      </div>
     </div>
 
-    <button id="searchBtn">🚀 검색하기</button>
     <div id="status"></div>
     <div id="relatedSection" style="display:none">
       <div class="related-label">📊 연관 인기 키워드</div>
@@ -316,15 +315,26 @@
 
     if (presetKeyword) keywordEl.value = presetKeyword;
 
-    // ── 매체 칩 토글 ──────────────────────────────────────────────────────────
-    chipsEl.addEventListener('click', (e) => {
+    // ── 매체 선택: UI가 없으면 전체 매체를 기본 검색 대상으로 사용 ──────────────
+    chipsEl?.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if (!chip) return;
       chip.classList.toggle('active');
     });
 
     function selectedPlatforms() {
+      if (!chipsEl) return ['naver_blog', 'youtube', 'tistory', 'brunch'];
       return [...chipsEl.querySelectorAll('.chip.active')].map((c) => c.dataset.value);
+    }
+
+    async function setEmbedSearching(searching) {
+      try {
+        await fetch(FUNCTION_BASE + '/manage-user?action=set-search-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, searching }),
+        });
+      } catch { /* 임베드 URL 상태 갱신 실패는 검색 자체를 막지 않음 */ }
     }
 
     // ── 초기 상태 렌더링 ─────────────────────────────────────────────────────
@@ -377,11 +387,7 @@
 
       try {
         // 2. 임베드 URL에 ?searching=1 추가 (다른 기기/새 탭 차단용)
-        await fetch(FUNCTION_BASE + '/manage-user?action=set-search-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, searching: true }),
-        });
+        await setEmbedSearching(true);
 
         // 3. 검색 트리거
         const res = await fetch(FUNCTION_BASE + '/trigger-search', {
@@ -404,6 +410,7 @@
         startPolling();
 
       } catch (err) {
+        await setEmbedSearching(false);
         activeSearch = false;
         stopPolling();
         resetButton();
@@ -467,7 +474,7 @@
     function resetButton() {
       btn.disabled = false;
       btn.classList.remove('searching');
-      btn.innerHTML = '🚀 검색하기';
+      btn.innerHTML = '검색하기';
       form.classList.remove('disabled-overlay');
     }
 
@@ -502,8 +509,8 @@
           status.className = 'error';
           status.textContent = lastError;
         } else if (searching) {
-          status.className = 'accepted';
-          status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
+          status.className = '';
+          status.textContent = '';
         }
       }
     })();
