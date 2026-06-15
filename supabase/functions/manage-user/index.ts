@@ -536,7 +536,7 @@ async function handleSetupSearchButton(req: Request): Promise<Response> {
   const apiKey = await decryptNotionKey(user.notion_api_key_encrypted);
   const notion = new NotionClient(apiKey);
   const embedUrl = await notion.updateSearchEmbed(user.notion_database_id, user_id);
-  await notion.updateTrendsEmbed(user.notion_database_id, user_id);
+  await notion.removeTrendsEmbed(user.notion_database_id);
 
   logger.info('Search button embed updated', { user_id, embedUrl });
   return jsonResponse({ success: true, embed_url: embedUrl });

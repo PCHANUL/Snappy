@@ -885,30 +885,22 @@ export class NotionClient {
     return await response.json();
   }
 
-  // 노션 DB 부모 페이지의 trends.html 임베드 블록 추가/업데이트
-  async updateTrendsEmbed(databaseId: string, userId: string): Promise<void> {
+  // 노션 DB 부모 페이지의 trends.html 임베드 블록 제거
+  async removeTrendsEmbed(databaseId: string): Promise<void> {
     try {
       const parentPageId = await this.getDatabaseParentPageId(databaseId);
-      const newUrl = `https://pchanul.github.io/Snappy/trends.html?user_id=${userId}&page_id=${parentPageId}`;
-      const embed = await this.findEmbedInPage(parentPageId, 'trends.html');
+      const embeds = await this.findEmbedsInPage(parentPageId, 'trends.html');
 
-      if (embed) {
-        if (embed.currentUrl === newUrl) return;
-        await this.fetchApi(`blocks/${embed.blockId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ embed: { url: newUrl } }),
-        });
-      } else {
-        await this.appendBlocks(parentPageId, [{
-          object: 'block',
-          type: 'embed',
-          embed: { url: newUrl },
-        }]);
+      for (const embed of embeds) {
+        await this.fetchApi(`blocks/${embed.blockId}`, { method: 'DELETE' });
+        await sleep(250);
       }
 
-      logger.info('Trends embed updated', { userId, parentPageId });
+      if (embeds.length) {
+        logger.info('Trends embeds removed', { parentPageId, count: embeds.length });
+      }
     } catch (error) {
-      logger.warn('Failed to update trends embed (non-fatal)', {
+      logger.warn('Failed to remove trends embed (non-fatal)', {
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1127,23 +1119,31 @@ export class NotionClient {
     parentPageId: string,
     urlFragment: string,
   ): Promise<{ blockId: string; currentUrl: string } | null> {
+    return (await this.findEmbedsInPage(parentPageId, urlFragment))[0] ?? null;
+  }
+
+  private async findEmbedsInPage(
+    parentPageId: string,
+    urlFragment: string,
+  ): Promise<Array<{ blockId: string; currentUrl: string }>> {
+    const embeds: Array<{ blockId: string; currentUrl: string }> = [];
     let cursor: string | undefined;
     do {
       const qs = new URLSearchParams({ page_size: '100' });
       if (cursor) qs.set('start_cursor', cursor);
 
       const data = await this.fetchApi(`blocks/${parentPageId}/children?${qs.toString()}`, { method: 'GET' });
-      const block = (data.results as any[]).find(
+      const blocks = ((data.results as any[]) || []).filter(
         (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes(urlFragment),
       );
-      if (block) {
-        return { blockId: block.id, currentUrl: block.embed.url as string };
+      for (const block of blocks) {
+        embeds.push({ blockId: block.id, currentUrl: block.embed.url as string });
       }
 
       cursor = data.has_more ? data.next_cursor : undefined;
     } while (cursor);
 
-    return null;
+    return embeds;
   }
 
   private async findSearchEmbedInPage(

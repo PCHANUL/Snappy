@@ -207,7 +207,7 @@ export async function saveSearchResults(
   const { data: contentItems, error: ciErr } = await getSupabase()
     .rpc('upsert_content_items', {
       p_keyword: keyword,
-      p_items: JSON.stringify(flatResults),
+      p_items: flatResults,
     });
 
   if (ciErr || !contentItems) {

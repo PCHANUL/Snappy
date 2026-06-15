@@ -43,7 +43,6 @@ const SUPABASE_ANON  = process.env.SUPABASE_ANON_KEY || '';
 const PAGES_BASE     = (process.env.GITHUB_PAGES_URL || 'https://pchanul.github.io/Snappy/').replace(/\/+$/, '');
 const SETUP_URL      = `${PAGES_BASE}/`;
 const SEARCH_URL     = `${PAGES_BASE}/search.html`;
-const TRENDS_URL     = `${PAGES_BASE}/trends.html`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
@@ -230,7 +229,6 @@ async function createContentDB(parentPageId) {
 function blocksMain() {
   return [
     b.embed(SEARCH_URL),
-    b.embed(TRENDS_URL),
   ];
 }
 
