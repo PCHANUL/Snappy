@@ -15,6 +15,7 @@ export interface AnalysisResult {
   summarySource?: string; // 본문 기반 / 설명 기반 / 제목 기반
   keywords: string[];
   wordCount?: number;
+  sourceText?: string;
 
   status: 'done' | 'failed';
 }
@@ -35,6 +36,7 @@ export async function analyzeContentItem(opts: {
     .maybeSingle();
 
   let fullText = content?.full_text ?? '';
+  let wordCount = content?.word_count || 0;
   const platform = content?.platform ?? opts.platform;
   const description = content?.description ?? '';
   const title = content?.title ?? opts.title ?? '';
@@ -43,14 +45,15 @@ export async function analyzeContentItem(opts: {
   // ('skip' 상태였던 유튜브도 API 방식으로 재시도)
   if (!fullText) {
     try {
-      const result  = await crawlUrl(url, platform, { youtubeApiKey: env.youtube.apiKey });
+      const result = await crawlUrl(url, platform, { youtubeApiKey: env.youtube.apiKey });
       if (result.status === 'done' && result.full_text) {
         fullText = result.full_text;
+        wordCount = result.word_count ?? countWords(result.full_text);
         await getSupabase()
           .from('content_items')
           .update({
             full_text: result.full_text,
-            word_count: result.word_count ?? 0,
+            word_count: wordCount,
             crawl_status: 'done',
             crawled_at: new Date().toISOString(),
           })
@@ -106,13 +109,16 @@ export async function analyzeContentItem(opts: {
     logger.warn('Keyword extraction failed (non-fatal)', { url, error: String(err) });
   }
 
-  const wordCount = content?.word_count || 0;
-
   return {
     summary,
     summarySource: summary ? summarySource : undefined,
     keywords,
     wordCount: wordCount || undefined,
+    sourceText: sourceText.slice(0, 6000),
     status: 'done',
   };
+}
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
 }

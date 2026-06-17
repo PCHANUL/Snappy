@@ -406,6 +406,14 @@ export class NotionClient {
     });
   }
 
+  // 콘텐츠 행(page) 본문에 분석 결과와 크롤링/검색 텍스트를 정리해 추가한다.
+  // DB 속성에는 짧은 요약/태그를, 페이지 본문에는 사람이 읽기 쉬운 분석 노트를 남긴다.
+  async appendRowAnalysisContent(rowId: string, result: AnalysisResult): Promise<void> {
+    const blocks = buildRowAnalysisBlocks(result);
+    if (blocks.length === 0) return;
+    await this.appendBlocks(toUuid(rowId), blocks);
+  }
+
   // 결과 페이지에 분석 진행 상태 callout 추가 → 생성된 block id 반환
   async appendAnalysisStatusCallout(pageId: string, total: number): Promise<string | null> {
     const res = await this.fetchApi(`blocks/${toUuid(pageId)}/children`, {
@@ -1183,6 +1191,107 @@ function searchEntryProperties(params: { keyword: string; platforms: Platform[];
     '매체': { multi_select: params.platforms.map((p) => ({ name: PLATFORM_TO_NOTION[p] })) },
     '기간': { select: { name: PERIOD_TO_NOTION[params.period] } },
   };
+}
+
+function buildRowAnalysisBlocks(result: AnalysisResult): any[] {
+  const blocks: any[] = [
+    dividerBlock(),
+    heading3Block('AI 분석 노트'),
+  ];
+
+  if (result.status === 'failed') {
+    blocks.push(calloutBlock(
+      '콘텐츠 분석에 실패했습니다. URL 접근 또는 본문 추출이 제한되었을 수 있습니다.',
+      '⚠️',
+      'red_background',
+    ));
+    return blocks;
+  }
+
+  if (result.summary) {
+    const source = result.summarySource ? ` (${result.summarySource})` : '';
+    blocks.push(calloutBlock(`요약${source}\n${result.summary}`, '🧠', 'blue_background'));
+  } else {
+    blocks.push(calloutBlock(
+      'AI 요약을 생성하지 못했습니다. 아래 원문/설명 기반 텍스트를 참고하세요.',
+      'ℹ️',
+      'gray_background',
+    ));
+  }
+
+  const meta: string[] = [];
+  if (result.keywords.length) meta.push(`키워드: ${result.keywords.join(', ')}`);
+  if (result.wordCount) meta.push(`본문 단어 수: ${result.wordCount}`);
+  if (meta.length) blocks.push(paragraphBlock(meta.join(' · '), 'gray'));
+
+  if (result.sourceText) {
+    const sourceLabel = result.summarySource?.replace(' 기반', '') || '분석';
+    blocks.push(toggleBlock(
+      `${sourceLabel} 텍스트`,
+      splitText(result.sourceText, 1800).map((chunk) => paragraphBlock(chunk)),
+    ));
+  }
+
+  return blocks;
+}
+
+function splitText(text: string, maxLength: number): string[] {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+
+  const chunks: string[] = [];
+  for (let i = 0; i < normalized.length; i += maxLength) {
+    chunks.push(normalized.slice(i, i + maxLength));
+  }
+  return chunks;
+}
+
+function heading3Block(text: string): any {
+  return {
+    object: 'block',
+    type: 'heading_3',
+    heading_3: { rich_text: [{ type: 'text', text: { content: text } }] },
+  };
+}
+
+function paragraphBlock(text: string, color = 'default'): any {
+  return {
+    object: 'block',
+    type: 'paragraph',
+    paragraph: {
+      rich_text: [{ type: 'text', text: { content: text.slice(0, 2000) } }],
+      color,
+    },
+  };
+}
+
+function calloutBlock(text: string, emoji: string, color: string): any {
+  return {
+    object: 'block',
+    type: 'callout',
+    callout: {
+      rich_text: [{ type: 'text', text: { content: text.slice(0, 2000) } }],
+      icon: { type: 'emoji', emoji },
+      color,
+    },
+  };
+}
+
+function toggleBlock(title: string, children: any[]): any {
+  return {
+    object: 'block',
+    type: 'toggle',
+    toggle: {
+      rich_text: [{ type: 'text', text: { content: title } }],
+      children: children.length
+        ? children
+        : [paragraphBlock('본문 텍스트가 없습니다.', 'gray')],
+    },
+  };
+}
+
+function dividerBlock(): any {
+  return { object: 'block', type: 'divider', divider: {} };
 }
 
 function searchDatabaseBody(parentPageId: string, includeLoadMoreButton: boolean): Record<string, any> {
