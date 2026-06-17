@@ -260,6 +260,13 @@ async function analyzeRows(
             keyword,
           });
           await notion.updateRowAnalysis(row.rowId, result, analysisProps);
+          await notion.appendRowAnalysisContent(row.rowId, result)
+            .catch((appendError) => {
+              logger.warn('Failed to append row analysis content (non-fatal)', {
+                url: row.url,
+                error: String(appendError),
+              });
+            });
         } catch (err) {
           logger.warn('Row analysis failed (non-fatal)', { url: row.url, error: String(err) });
           await notion.updateRowAnalysis(row.rowId, { keywords: [], status: 'failed' }, analysisProps)
