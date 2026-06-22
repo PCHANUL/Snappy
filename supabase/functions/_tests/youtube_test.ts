@@ -193,3 +193,38 @@ Deno.test('searchYouTube: 썸네일 우선순위 (high > medium > default)', asy
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test('searchYouTube: shorts 옵션이면 숏츠 URL과 플랫폼으로 변환', async () => {
+  const mockResponse = {
+    items: [{
+      id: { videoId: 'short1' },
+      snippet: {
+        title: '짧은 영상',
+        description: 'shorts desc',
+        channelTitle: 'short channel',
+        publishedAt: '2024-04-01T00:00:00Z',
+        thumbnails: { default: { url: 'https://img.youtube.com/vi/short1/default.jpg' } },
+      },
+    }],
+    pageInfo: { totalResults: 1 },
+  };
+
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify(mockResponse), { status: 200 });
+  };
+
+  try {
+    const { searchYouTube } = await import('../_search/youtube.ts');
+    const results = await searchYouTube('비건 디저트', 5, 'week', { shorts: true });
+
+    assert(capturedUrl.includes('videoDuration=short'), `숏츠 검색은 short 동영상 필터 필요: ${capturedUrl}`);
+    assert(capturedUrl.includes(encodeURIComponent('비건 디저트 #shorts')), `#shorts 검색어 필요: ${capturedUrl}`);
+    assertEquals(results[0].platform, 'youtube_shorts');
+    assertEquals(results[0].url, 'https://www.youtube.com/shorts/short1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

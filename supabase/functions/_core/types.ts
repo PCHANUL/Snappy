@@ -1,7 +1,7 @@
 // 공통 타입 정의
 // 모든 모듈이 공유하는 타입. 변경 시 전체 영향.
 
-export type Platform = 'naver_blog' | 'youtube' | 'tistory' | 'brunch';
+export type Platform = 'naver_blog' | 'youtube' | 'youtube_shorts' | 'tistory' | 'brunch';
 export type Period = 'day' | 'week' | 'month' | 'year';
 export type SearchStatus = '대기' | '검색중' | '완료' | '실패';
 export type SubscriptionTier = 'free' | 'light' | 'standard' | 'premium';
@@ -56,6 +56,7 @@ export interface SearchMetadata {
 export const PLATFORM_INFO: Record<Platform, { name: string; emoji: string }> = {
   naver_blog: { name: '네이버 블로그', emoji: '📝' },
   youtube: { name: '유튜브', emoji: '🎥' },
+  youtube_shorts: { name: '유튜브 숏츠', emoji: '📱' },
   tistory: { name: '티스토리', emoji: '📚' },
   brunch: { name: '브런치', emoji: '✍️' },
 };

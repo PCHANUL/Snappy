@@ -56,13 +56,8 @@ function buildContentItemBlocks(idx: number, item: ContentItem): NotionBlock[] {
     blocks.push(paragraphIndent(metaParts.join('  ·  '), 'gray'));
   }
 
-  if (item.thumbnail) {
-    blocks.push({
-      object: 'block',
-      type: 'image',
-      image: { type: 'external', external: { url: item.thumbnail } },
-    });
-  }
+  const mediaBlock = buildMediaBlock(item);
+  if (mediaBlock) blocks.push(mediaBlock);
 
   const desc = item.snippet || item.description;
   if (desc) {
@@ -109,7 +104,8 @@ export function buildLoadMoreCallout(remaining: number): NotionBlock {
 export function buildTabItemBlocks(item: ContentItem): NotionBlock[] {
   const blocks: NotionBlock[] = [];
 
-  blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: item.url } });
+  const mediaBlock = buildMediaBlock(item);
+  blocks.push(mediaBlock ?? { object: 'block', type: 'bookmark', bookmark: { url: item.url } });
 
   const metaParts: string[] = [];
   if (item.author) metaParts.push(`👤 ${item.author}`);
@@ -131,8 +127,9 @@ export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
   if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
   blocks.push(paragraph(metaParts.join('  ·  '), 'gray'));
 
-  // 링크를 bookmark 블록으로 — Notion이 OG 데이터를 자동 로드
-  blocks.push({ object: 'block', type: 'bookmark', bookmark: { url: item.url } });
+  // 숏츠는 영상 블록으로 임베딩하고, 그 외 링크는 bookmark 블록으로 — Notion이 OG 데이터를 자동 로드
+  const mediaBlock = buildMediaBlock(item);
+  blocks.push(mediaBlock ?? { object: 'block', type: 'bookmark', bookmark: { url: item.url } });
 
   const desc = item.snippet || item.description;
   if (desc) {
@@ -144,6 +141,26 @@ export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
 }
 
 // === Helper 함수들 ===
+
+function buildMediaBlock(item: ContentItem): NotionBlock | null {
+  if (item.platform === 'youtube_shorts') {
+    return {
+      object: 'block',
+      type: 'video',
+      video: { type: 'external', external: { url: item.url } },
+    };
+  }
+
+  if (item.thumbnail) {
+    return {
+      object: 'block',
+      type: 'image',
+      image: { type: 'external', external: { url: item.thumbnail } },
+    };
+  }
+
+  return null;
+}
 
 function toggle(title: string, children: NotionBlock[]): NotionBlock {
   return {
