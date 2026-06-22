@@ -28,7 +28,7 @@ const SELECTORS: Record<string, string[]> = {
 };
 
 export async function crawlUrl(url: string, platform: string, options?: CrawlOptions): Promise<CrawlResult> {
-  if (platform === 'youtube') {
+  if (platform === 'youtube' || platform === 'youtube_shorts') {
     return fetchYouTubeContent(url, options?.youtubeApiKey);
   }
 
@@ -110,6 +110,8 @@ function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);
     if (u.hostname === 'youtu.be') return u.pathname.slice(1) || null;
+    const shortsMatch = u.pathname.match(/^\/shorts\/([^/?#]+)/);
+    if (shortsMatch) return shortsMatch[1];
     return u.searchParams.get('v');
   } catch {
     return null;

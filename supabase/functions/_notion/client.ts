@@ -29,6 +29,7 @@ const ANALYSIS_STATUS = { analyzing: '분석중', done: '완료', failed: '실�
 const PLATFORM_TO_NOTION: Record<Platform, string> = {
   naver_blog: '네이버블로그',
   youtube: '유튜브',
+  youtube_shorts: '유튜브숏츠',
   tistory: '티스토리',
   brunch: '브런치',
 };
@@ -239,6 +240,7 @@ export class NotionClient {
               options: [
                 { name: '네이버블로그', color: 'green' },
                 { name: '유튜브', color: 'red' },
+                { name: '유튜브숏츠', color: 'pink' },
                 { name: '티스토리', color: 'orange' },
                 { name: '브런치', color: 'purple' },
               ],
@@ -1303,6 +1305,7 @@ function searchDatabaseBody(parentPageId: string, includeLoadMoreButton: boolean
         options: [
           { name: '네이버블로그', color: 'green' },
           { name: '유튜브', color: 'red' },
+          { name: '유튜브숏츠', color: 'pink' },
           { name: '티스토리', color: 'orange' },
           { name: '브런치', color: 'brown' },
         ],

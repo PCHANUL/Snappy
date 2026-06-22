@@ -26,17 +26,24 @@ interface YouTubeSearchResponse {
   pageInfo: { totalResults: number; resultsPerPage: number };
 }
 
+export interface YouTubeSearchOptions {
+  shorts?: boolean;
+}
+
 export async function searchYouTube(
   keyword: string,
   count: number = 10,
   period: Period = 'month',
+  options: YouTubeSearchOptions = {},
 ): Promise<ContentItem[]> {
   const publishedAfter = getPublishedAfter(period);
 
+  const query = options.shorts ? `${keyword} #shorts` : keyword;
   const url = `https://www.googleapis.com/youtube/v3/search` +
     `?part=snippet` +
-    `&q=${encodeURIComponent(keyword)}` +
+    `&q=${encodeURIComponent(query)}` +
     `&type=video` +
+    `&videoDuration=${options.shorts ? 'short' : 'any'}` +
     `&maxResults=${count}` +
     `&regionCode=KR` +
     `&relevanceLanguage=ko` +
@@ -44,7 +51,7 @@ export async function searchYouTube(
     `&order=relevance` +
     `&key=${env.youtube.apiKey}`;
 
-  logger.info('YouTube search started', { keyword, count, period });
+  logger.info('YouTube search started', { keyword, count, period, shorts: options.shorts ?? false });
 
   const response = await fetch(url);
 
@@ -55,18 +62,20 @@ export async function searchYouTube(
 
   const data: YouTubeSearchResponse = await response.json();
 
-  const items = (data.items ?? []).map(normalizeItem);
+  const items = (data.items ?? []).map((item) => normalizeItem(item, options.shorts ?? false));
 
   logger.info('YouTube search completed', { keyword, found: items.length });
   return items;
 }
 
-function normalizeItem(item: YouTubeSearchItem): ContentItem {
+function normalizeItem(item: YouTubeSearchItem, shorts: boolean): ContentItem {
   const thumbnails = item.snippet.thumbnails;
   return {
-    platform: 'youtube',
+    platform: shorts ? 'youtube_shorts' : 'youtube',
     title: item.snippet.title,
-    url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+    url: shorts
+      ? `https://www.youtube.com/shorts/${item.id.videoId}`
+      : `https://www.youtube.com/watch?v=${item.id.videoId}`,
     description: item.snippet.description,
     author: item.snippet.channelTitle,
     thumbnail: thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url,

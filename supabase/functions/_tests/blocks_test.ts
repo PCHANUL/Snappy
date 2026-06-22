@@ -4,6 +4,7 @@ import {
   buildSummaryBlocks,
   buildLoadMoreCallout,
   buildSubPageBlocks,
+  buildTabItemBlocks,
 } from '../_notion/blocks.ts';
 import type { SearchResult, FlatResult, SearchMetadata } from '../_core/types.ts';
 
@@ -78,6 +79,14 @@ Deno.test('buildResultBlocks: 썸네일 있는 아이템 → image 블록 포함
   assertEquals(images[0].image.external.url, item.thumbnail);
 });
 
+Deno.test('buildResultBlocks: 유튜브 숏츠 아이템 → video 블록으로 임베딩', () => {
+  const item = makeItem('youtube_shorts', { url: 'https://www.youtube.com/shorts/abc123' });
+  const blocks = buildResultBlocks('test', [makeResult('youtube_shorts', [item])], META);
+  const videos = blocks.filter(b => b.type === 'video');
+  assertEquals(videos.length, 1, '숏츠는 video 블록이어야 함');
+  assertEquals(videos[0].video.external.url, item.url);
+});
+
 Deno.test('buildResultBlocks: 썸네일 없는 아이템 → image 블록 없음', () => {
   const item = makeItem('naver_blog'); // thumbnail 없음
   const blocks = buildResultBlocks('test', [makeResult('naver_blog', [item])], META);
@@ -146,10 +155,18 @@ Deno.test('buildLoadMoreCallout: 남은 개수 텍스트에 포함', () => {
   assert(block.callout.rich_text[0].text.content.includes('7'), '남은 개수 7 포함');
 });
 
-Deno.test('buildLoadMoreCallout: 📄 이모지 포함', () => {
+Deno.test('buildLoadMoreCallout: ⏬ 이모지 포함', () => {
   const block = buildLoadMoreCallout(3);
   const text = block.callout.rich_text[0].text.content;
-  assert(text.startsWith('📄'), '📄로 시작');
+  assert(text.startsWith('⏬'), '⏬로 시작');
+});
+
+Deno.test('buildTabItemBlocks: 유튜브 숏츠 아이템 → bookmark 대신 video 블록', () => {
+  const item = makeItem('youtube_shorts', { url: 'https://www.youtube.com/shorts/tab123' });
+  const blocks = buildTabItemBlocks(item);
+  assertEquals(blocks[0].type, 'video');
+  assertEquals(blocks[0].video.external.url, item.url);
+  assertEquals(blocks.filter(b => b.type === 'bookmark').length, 0);
 });
 
 // ── buildSubPageBlocks ────────────────────────────────────────────────────────
@@ -166,6 +183,14 @@ Deno.test('buildSubPageBlocks: bookmark 블록 포함 + 올바른 URL', () => {
   const bookmarks = blocks.filter(b => b.type === 'bookmark');
   assert(bookmarks.length > 0, 'bookmark 존재');
   assertEquals(bookmarks[0].bookmark.url, item.url);
+});
+
+Deno.test('buildSubPageBlocks: 유튜브 숏츠 아이템 → video 블록으로 임베딩', () => {
+  const item = makeItem('youtube_shorts', { url: 'https://www.youtube.com/shorts/sub123' });
+  const blocks = buildSubPageBlocks(item);
+  const videos = blocks.filter(b => b.type === 'video');
+  assertEquals(videos.length, 1, '서브페이지에서도 숏츠 video 블록 필요');
+  assertEquals(videos[0].video.external.url, item.url);
 });
 
 Deno.test('buildSubPageBlocks: author + published_at → 첫 paragraph에 포함', () => {

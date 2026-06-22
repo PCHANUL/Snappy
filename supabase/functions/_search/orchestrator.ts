@@ -14,6 +14,7 @@ type SearcherFn = (keyword: string, count: number, period: Period) => Promise<Co
 const searchers: Record<Platform, SearcherFn> = {
   naver_blog: searchNaverBlog,
   youtube: searchYouTube,
+  youtube_shorts: (keyword, count, period) => searchYouTube(keyword, count, period, { shorts: true }),
   tistory: searchTistory,
   brunch: searchBrunch,
 };
@@ -38,6 +39,7 @@ function sleep(ms: number): Promise<void> {
 const COST_PER_SEARCH: Record<Platform, number> = {
   naver_blog: 0,
   youtube: 0,
+  youtube_shorts: 0,
   tistory: 0.005,
   brunch: 0.005,
 };
