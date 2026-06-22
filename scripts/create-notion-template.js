@@ -171,6 +171,7 @@ async function createSearchDB(parentPageId) {
       '매체':          { multi_select: { options: [
         { name: '네이버블로그', color: 'green'  },
         { name: '유튜브',       color: 'red'    },
+        { name: '유튜브숏츠', color: 'pink' },
         { name: '티스토리',     color: 'orange' },
         { name: '브런치',       color: 'brown'  },
       ]}},
@@ -200,6 +201,7 @@ async function createContentDB(parentPageId) {
           options: [
             { name: '네이버블로그', color: 'green' },
             { name: '유튜브', color: 'red' },
+            { name: '유튜브숏츠', color: 'pink' },
             { name: '티스토리', color: 'orange' },
             { name: '브런치', color: 'purple' },
           ],
@@ -228,6 +230,8 @@ async function createContentDB(parentPageId) {
 
 function blocksMain() {
   return [
+    b.toggle('📖 시작하기', blocksSijak()),
+    b.divider(),
     b.embed(SEARCH_URL),
   ];
 }
@@ -336,7 +340,7 @@ function blocksFaq() {
     ]),
     b.toggle('검색 완료 메시지가 보이는데 결과가 없어요', [
       b.p('검색 결과 저장과 Notion 페이지 업데이트가 순차적으로 진행됩니다. 잠시 기다린 뒤 검색 DB 행을 다시 열어보세요.'),
-      b.p('계속 비어 있다면 검색이 실패 상태로 기록되었는지 확인하고, 시작하기 페이지의 셋업 과정을 다시 실행하세요.'),
+      b.p('계속 비어 있다면 검색이 실패 상태로 기록되었는지 확인하고, 메인 페이지의 시작하기 펼치기에서 셋업 과정을 다시 실행하세요.'),
     ]),
     b.toggle('노션이 너무 느려요', [
       b.p('검색 결과가 누적되면 페이지가 느려질 수 있습니다.'),
@@ -376,7 +380,7 @@ function blocksSeoljeong() {
       b.bullet('Notion 연결 권한을 다시 승인해야 할 때'),
       b.bullet('복제한 페이지를 바꿨을 때'),
       b.bullet('검색 DB를 삭제했거나 다른 DB로 바꾸고 싶을 때'),
-      b.p('시작하기 페이지의 셋업 마법사를 다시 실행하세요.'),
+      b.p('메인 페이지의 시작하기 펼치기에서 셋업 마법사를 다시 실행하세요.'),
     ]),
     b.toggle('연동 해제', [
       b.num('Notion 설정의 연결 또는 내 통합 관리 화면으로 이동'),
@@ -420,15 +424,7 @@ async function main() {
 
   await sleep(300);
 
-  // 3. 시작하기 서브페이지 (셋업 + 문제해결)
-  process.stdout.write('📖 시작하기 페이지 생성 중...');
-  const sijakPage = await createPage(mainPage.id, '시작하기', '📖');
-  await appendBlocks(sijakPage.id, blocksSijak());
-  console.log(` ✅`);
-
-  await sleep(300);
-
-  // 4. FAQ 페이지
+  // 3. FAQ 페이지
   process.stdout.write('❓ FAQ 페이지 생성 중...');
   const faqPage = await createPage(mainPage.id, '자주 묻는 질문', '❓');
   await appendBlocks(faqPage.id, blocksFaq());
@@ -436,7 +432,7 @@ async function main() {
 
   await sleep(300);
 
-  // 5. 설정 페이지
+  // 4. 설정 페이지
   process.stdout.write('⚙️  설정 페이지 생성 중...');
   const seoljeongPage = await createPage(mainPage.id, '설정', '⚙️');
   await appendBlocks(seoljeongPage.id, blocksSeoljeong());
@@ -444,7 +440,7 @@ async function main() {
 
   await sleep(300);
 
-  // 6. 설정 하위 검색 결과 템플릿 페이지 + 콘텐츠 DB
+  // 5. 설정 하위 검색 결과 템플릿 페이지 + 콘텐츠 DB
   process.stdout.write('📚 콘텐츠 DB 템플릿 페이지 생성 중...');
   const templateSearchPage = await createPage(seoljeongPage.id, SEARCH_TEMPLATE_PAGE_TITLE, '📄');
   await sleep(300);
