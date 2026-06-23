@@ -67,6 +67,7 @@ function guessPlatform(url: string): string {
   if (url.includes('tistory.')) return 'tistory';
   if (url.includes('brunch.')) return 'brunch';
   if (url.includes('youtube.') || url.includes('youtu.be')) return 'youtube';
+  if (url.includes('tiktok.')) return 'tiktok';
   return 'naver_blog';
 }
 

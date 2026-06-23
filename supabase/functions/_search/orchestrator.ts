@@ -5,7 +5,7 @@ import { logger } from '../_core/logger.ts';
 import { ExternalApiError } from '../_core/errors.ts';
 import { searchNaverBlog } from './naver.ts';
 import { searchYouTube } from './youtube.ts';
-import { searchTistory, searchBrunch } from './youcom.ts';
+import { searchTistory, searchBrunch, searchTikTok } from './youcom.ts';
 import type { Platform, Period, SearchResult, ContentItem } from '../_core/types.ts';
 
 // 플랫폼별 검색 함수 매핑
@@ -17,6 +17,7 @@ const searchers: Record<Platform, SearcherFn> = {
   youtube_shorts: (keyword, count, period) => searchYouTube(keyword, count, period, { shorts: true }),
   tistory: searchTistory,
   brunch: searchBrunch,
+  tiktok: searchTikTok,
 };
 
 const PLATFORM_TIMEOUT_MS = 25_000;
@@ -42,6 +43,7 @@ const COST_PER_SEARCH: Record<Platform, number> = {
   youtube_shorts: 0,
   tistory: 0.005,
   brunch: 0.005,
+  tiktok: 0.005,
 };
 
 export interface OrchestratorResult {

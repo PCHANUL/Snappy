@@ -296,7 +296,9 @@ await test('URL 형식: watch?v=videoId', () => {
 section('You.com 도메인 필터링 (수정 후)');
 
 function searchYouComMock(webResults, domains, platform, count) {
-  const filtered = webResults.filter(item => domains.some(domain => item.url.includes(domain)));
+  const filtered = webResults
+    .filter(item => domains.some(domain => item.url.includes(domain)))
+    .filter(item => platform !== 'tiktok' || isTikTokContentUrl(item.url));
   // Bug fix: .slice(0, count) 추가
   return filtered.slice(0, count).map(item => ({
     platform,
@@ -307,6 +309,16 @@ function searchYouComMock(webResults, domains, platform, count) {
     thumbnail: item.thumbnail_url || undefined,
     published_at: item.page_age || undefined,
   }));
+}
+
+function isTikTokContentUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    return host === 'www.tiktok.com' && /^\/@[^/]+\/video\/[^/?#]+/.test(u.pathname);
+  } catch {
+    return false;
+  }
 }
 
 await test('tistory: 비도메인 URL 제거', () => {
@@ -350,11 +362,27 @@ await test('count=3 → brunch 3개 제한', () => {
   assertEquals(searchYouComMock(webResults, ['brunch.co.kr'], 'brunch', 3).length, 3);
 });
 
+await test('tiktok: www.tiktok.com/@user/video URL만 유지', () => {
+  const webResults = [
+    { url: 'https://www.tiktok.com/@u/video/735', title: 'A', snippets: [] },
+    { url: 'https://www.tiktok.com/@u', title: 'B', snippets: [] },
+    { url: 'https://www.tiktok.com/discover/dance', title: 'C', snippets: [] },
+    { url: 'https://www.tiktok.com/t/ZT123abc/', title: 'D', snippets: [] },
+    { url: 'https://www.tiktok.com/@u/photo/735', title: 'E', snippets: [] },
+    { url: 'https://tiktok.com/@u/video/735', title: 'F', snippets: [] },
+    { url: 'https://m.tiktok.com/@u/video/735', title: 'G', snippets: [] },
+  ];
+  const results = searchYouComMock(webResults, ['tiktok.com'], 'tiktok', 10);
+  assertEquals(results.map(r => r.url), [
+    'https://www.tiktok.com/@u/video/735',
+  ]);
+});
+
 // ── Orchestrator: searchAllPlatforms 검증 ────────────────────────────────────
 
 section('Orchestrator: searchAllPlatforms');
 
-const COST_PER_SEARCH = { naver_blog: 0, youtube: 0, tistory: 0.005, brunch: 0.005 };
+const COST_PER_SEARCH = { naver_blog: 0, youtube: 0, youtube_shorts: 0, tistory: 0.005, brunch: 0.005, tiktok: 0.005 };
 
 function mockSearchAllPlatforms(platforms, mockSearchers) {
   const results = platforms.map(platform => {
@@ -598,8 +626,10 @@ function buildToggle(title, children) {
 const PLATFORM_INFO = {
   naver_blog: { name: '네이버 블로그', emoji: '📝' },
   youtube:    { name: '유튜브', emoji: '🎥' },
+  youtube_shorts: { name: '유튜브 숏츠', emoji: '📱' },
   tistory:    { name: '티스토리', emoji: '📚' },
   brunch:     { name: '브런치', emoji: '✍️' },
+  tiktok:     { name: '틱톡', emoji: '🎵' },
 };
 
 function buildResultBlocksMock(keyword, results, meta) {

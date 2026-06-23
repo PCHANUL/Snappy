@@ -83,7 +83,7 @@ async function processSearch(
     // 매체 미선택 시 전체 매체 검색
     const resolvedPlatforms = platforms.length
       ? platforms
-      : ['naver_blog', 'youtube', 'youtube_shorts', 'tistory', 'brunch'] as Platform[];
+      : ['naver_blog', 'youtube', 'youtube_shorts', 'tistory', 'brunch', 'tiktok'] as Platform[];
 
     const request = validateSearchRequest({
       user_id: user.id,

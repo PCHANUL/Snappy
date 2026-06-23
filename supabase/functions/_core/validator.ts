@@ -4,7 +4,7 @@
 import { ValidationError } from './errors.ts';
 import type { Platform, Period, SearchRequest } from './types.ts';
 
-const VALID_PLATFORMS: Platform[] = ['naver_blog', 'youtube', 'youtube_shorts', 'tistory', 'brunch'];
+const VALID_PLATFORMS: Platform[] = ['naver_blog', 'youtube', 'youtube_shorts', 'tistory', 'brunch', 'tiktok'];
 const VALID_PERIODS: Period[] = ['day', 'week', 'month', 'year'];
 const VALID_COUNTS = [5, 10, 20];
 

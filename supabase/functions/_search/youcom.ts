@@ -1,5 +1,5 @@
 // You.com Search API 모듈
-// 회당 $0.005, 티스토리 + 브런치 담당
+// 회당 $0.005, 티스토리 + 브런치 + 틱톡 담당
 // 신규 가입 시 $100 크레딧
 
 import { env } from '../_core/env.ts';
@@ -63,10 +63,10 @@ async function searchYouCom(
   const data: YouComSearchResponse = await response.json();
   const webResults = data.results?.web || [];
 
-  // 1. 도메인 필터 — include_domains가 API에서 무시될 수 있으므로 클라이언트에서도 강제
-  const domainFiltered = webResults.filter((item) =>
-    domains.some((domain) => item.url.includes(domain))
-  );
+  // 1. 도메인/플랫폼 필터 — include_domains가 API에서 무시될 수 있으므로 클라이언트에서도 강제
+  const domainFiltered = webResults
+    .filter((item) => domains.some((domain) => item.url.includes(domain)))
+    .filter((item) => isPlatformResult(item.url, platform));
 
   // 2. 키워드 관련성 점수 정렬 — 제목·설명·스니펫에 키워드 단어가 많을수록 상위
   const words = keyword.toLowerCase().split(/\s+/).filter(Boolean);
@@ -118,19 +118,45 @@ function normalizeItem(item: YouComWebResult, platform: Platform): ContentItem {
     snippet: item.snippets?.[0] || undefined,
     thumbnail: item.thumbnail_url || undefined,
     published_at: item.page_age || undefined,
-    author: extractTistoryAuthor(item.url, platform),
+    author: extractAuthor(item.url, platform),
   };
 }
 
-function extractTistoryAuthor(url: string, platform: Platform): string | undefined {
-  if (platform !== 'tistory') return undefined;
+function isPlatformResult(url: string, platform: Platform): boolean {
+  if (platform !== 'tiktok') return true;
+  return isTikTokContentUrl(url);
+}
+
+function isTikTokContentUrl(url: string): boolean {
   try {
-    const host = new URL(url).hostname; // e.g. "username.tistory.com"
-    const sub = host.split('.')[0];
-    return sub && sub !== 'tistory' ? sub : undefined;
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host !== 'www.tiktok.com') return false;
+
+    return /^\/@[^/]+\/video\/[^/?#]+/.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function extractAuthor(url: string, platform: Platform): string | undefined {
+  try {
+    const parsed = new URL(url);
+
+    if (platform === 'tistory') {
+      const host = parsed.hostname; // e.g. "username.tistory.com"
+      const sub = host.split('.')[0];
+      return sub && sub !== 'tistory' ? sub : undefined;
+    }
+
+    if (platform === 'tiktok') {
+      const match = parsed.pathname.match(/^\/@([^/]+)/);
+      return match ? `@${match[1]}` : undefined;
+    }
   } catch {
     return undefined;
   }
+  return undefined;
 }
 
 export function searchTistory(
@@ -147,4 +173,12 @@ export function searchBrunch(
   period: Period = 'month',
 ): Promise<ContentItem[]> {
   return searchYouCom(keyword, ['brunch.co.kr'], 'brunch', count, period);
+}
+
+export function searchTikTok(
+  keyword: string,
+  count: number = 10,
+  period: Period = 'month',
+): Promise<ContentItem[]> {
+  return searchYouCom(keyword, ['tiktok.com'], 'tiktok', count, period);
 }

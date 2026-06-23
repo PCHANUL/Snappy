@@ -174,6 +174,7 @@ async function createSearchDB(parentPageId) {
         { name: '유튜브숏츠', color: 'pink' },
         { name: '티스토리',     color: 'orange' },
         { name: '브런치',       color: 'brown'  },
+        { name: '틱톡',         color: 'gray'   },
       ]}},
       '기간':          { select: { options: [
         { name: '1일',   color: 'gray'   },
@@ -204,6 +205,7 @@ async function createContentDB(parentPageId) {
             { name: '유튜브숏츠', color: 'pink' },
             { name: '티스토리', color: 'orange' },
             { name: '브런치', color: 'purple' },
+            { name: '틱톡', color: 'gray' },
           ],
         },
       },
@@ -259,7 +261,7 @@ function blocksSijak() {
     b.h2('3. 첫 검색'),
     b.num('메인 페이지의 검색 입력창에 키워드를 입력합니다.'),
     b.num('기간을 선택합니다. 기본값은 1개월입니다.'),
-    b.num('검색할 매체를 선택합니다. 네이버, 유튜브, 티스토리, 브런치를 각각 켜고 끌 수 있습니다.'),
+    b.num('검색할 매체를 선택합니다. 네이버, 유튜브, 티스토리, 브런치, 틱톡을 각각 켜고 끌 수 있습니다.'),
     b.num('검색하기를 누른 뒤 결과가 검색 DB에 기록될 때까지 기다립니다.'),
     b.callout('검색 중에는 Notion 페이지와 자체 데이터베이스에 결과를 저장합니다. 몇 초 정도 대기 시간이 있을 수 있습니다.', '⏳'),
     b.divider(),
@@ -293,6 +295,7 @@ function blocksFaq() {
       b.bullet('유튜브: YouTube Data API (공식)'),
       b.bullet('티스토리: 웹 검색 결과 기반'),
       b.bullet('브런치: 웹 검색 결과 기반'),
+      b.bullet('틱톡: 웹 검색 결과 기반, 콘텐츠 URL은 Notion에 임베드'),
     ]),
     b.toggle('기간은 어떻게 적용되나요?', [
       b.p('검색 임베드에서 1일, 1주, 1개월, 1년 중 하나를 선택할 수 있습니다. 기본값은 1개월입니다.'),

@@ -24,6 +24,7 @@ const PLATFORM_ROOTS: Record<string, string> = {
   'brunch.co.kr': 'brunch.co.kr',
   'youtube.com': 'youtube.com',
   'youtu.be': 'youtube.com',
+  'tiktok.com': 'tiktok.com',
 };
 
 // URL → 루트 도메인. 실패 시 빈 문자열.

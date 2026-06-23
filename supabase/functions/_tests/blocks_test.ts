@@ -87,6 +87,14 @@ Deno.test('buildResultBlocks: 유튜브 숏츠 아이템 → video 블록으로 
   assertEquals(videos[0].video.external.url, item.url);
 });
 
+Deno.test('buildResultBlocks: 틱톡 아이템 → embed 블록으로 임베딩', () => {
+  const item = makeItem('tiktok', { url: 'https://www.tiktok.com/@creator/video/7350000000000000000' });
+  const blocks = buildResultBlocks('test', [makeResult('tiktok', [item])], META);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assertEquals(embeds.length, 1, '틱톡은 embed 블록이어야 함');
+  assertEquals(embeds[0].embed.url, item.url);
+});
+
 Deno.test('buildResultBlocks: 썸네일 없는 아이템 → image 블록 없음', () => {
   const item = makeItem('naver_blog'); // thumbnail 없음
   const blocks = buildResultBlocks('test', [makeResult('naver_blog', [item])], META);
@@ -169,6 +177,14 @@ Deno.test('buildTabItemBlocks: 유튜브 숏츠 아이템 → bookmark 대신 vi
   assertEquals(blocks.filter(b => b.type === 'bookmark').length, 0);
 });
 
+Deno.test('buildTabItemBlocks: 틱톡 아이템 → bookmark 대신 embed 블록', () => {
+  const item = makeItem('tiktok', { url: 'https://www.tiktok.com/@creator/video/tab123' });
+  const blocks = buildTabItemBlocks(item);
+  assertEquals(blocks[0].type, 'embed');
+  assertEquals(blocks[0].embed.url, item.url);
+  assertEquals(blocks.filter(b => b.type === 'bookmark').length, 0);
+});
+
 // ── buildSubPageBlocks ────────────────────────────────────────────────────────
 
 Deno.test('buildSubPageBlocks: 배열을 반환함', () => {
@@ -191,6 +207,14 @@ Deno.test('buildSubPageBlocks: 유튜브 숏츠 아이템 → video 블록으로
   const videos = blocks.filter(b => b.type === 'video');
   assertEquals(videos.length, 1, '서브페이지에서도 숏츠 video 블록 필요');
   assertEquals(videos[0].video.external.url, item.url);
+});
+
+Deno.test('buildSubPageBlocks: 틱톡 아이템 → embed 블록으로 임베딩', () => {
+  const item = makeItem('tiktok', { url: 'https://www.tiktok.com/@creator/video/sub123' });
+  const blocks = buildSubPageBlocks(item);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assertEquals(embeds.length, 1, '서브페이지에서도 틱톡 embed 블록 필요');
+  assertEquals(embeds[0].embed.url, item.url);
 });
 
 Deno.test('buildSubPageBlocks: author + published_at → 첫 paragraph에 포함', () => {

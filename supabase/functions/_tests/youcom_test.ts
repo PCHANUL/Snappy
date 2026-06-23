@@ -60,7 +60,7 @@ Deno.test('searchTistory: 정상 응답 파싱', async () => {
 
     // 요청 URL 검증
     assert(capturedUrl.includes('tistory.com'), `include_domains에 tistory.com 포함 필요: ${capturedUrl}`);
-    assert(capturedUrl.includes('비건'), `query에 키워드 포함 필요: ${capturedUrl}`);
+    assertEquals(new URL(capturedUrl).searchParams.get('query'), '비건 디저트');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -131,6 +131,93 @@ Deno.test('searchBrunch: 도메인이 brunch.co.kr로 설정됨', async () => {
     const { searchBrunch } = await import('../_search/youcom.ts');
     await searchBrunch('테스트', 5, 'week');
     assert(capturedUrl.includes('brunch.co.kr'), `include_domains에 brunch.co.kr 포함 필요: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchTikTok: www.tiktok.com/@user/video URL만 반환', async () => {
+  const mockResponse = {
+    results: {
+      web: [
+        {
+          url: 'https://www.tiktok.com/@creator/video/7350000000000000000',
+          title: '댄스 챌린지 영상',
+          description: '틱톡 댄스 콘텐츠',
+          snippets: ['댄스 영상 스니펫'],
+          thumbnail_url: 'https://p16-sign.tiktokcdn.com/thumb.jpg',
+          page_age: '2024-03-10',
+        },
+        {
+          url: 'https://www.tiktok.com/@creator',
+          title: '댄스 크리에이터 프로필',
+          description: '프로필 페이지',
+          snippets: [],
+        },
+        {
+          url: 'https://www.tiktok.com/discover/dance',
+          title: '댄스 검색 페이지',
+          description: '검색 페이지',
+          snippets: [],
+        },
+        {
+          url: 'https://www.tiktok.com/@creator/photo/7350000000000000001',
+          title: '댄스 포토 콘텐츠',
+          description: '',
+          snippets: [],
+        },
+        {
+          url: 'https://www.tiktok.com/t/ZT123abc/',
+          title: '댄스 공유 링크',
+          description: '',
+          snippets: [],
+        },
+        {
+          url: 'https://tiktok.com/@creator/video/7350000000000000002',
+          title: 'www 없는 영상 링크',
+          description: '',
+          snippets: [],
+        },
+        {
+          url: 'https://m.tiktok.com/@creator/video/7350000000000000003',
+          title: '모바일 영상 링크',
+          description: '',
+          snippets: [],
+        },
+        {
+          url: 'https://example.com/not-tiktok',
+          title: '댄스 외부 링크',
+          description: '',
+          snippets: [],
+        },
+      ],
+    },
+    metadata: {},
+  };
+
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify(mockResponse), { status: 200 });
+  };
+
+  try {
+    const { searchTikTok } = await import('../_search/youcom.ts');
+    const results = await searchTikTok('댄스', 10, 'month');
+    const urls = new Set(results.map(r => r.url));
+
+    assertEquals(results.length, 1);
+    assert(urls.has('https://www.tiktok.com/@creator/video/7350000000000000000'), '영상 URL 포함');
+    assert(!urls.has('https://www.tiktok.com/@creator/photo/7350000000000000001'), '포토 URL 제외');
+    assert(!urls.has('https://www.tiktok.com/t/ZT123abc/'), '공유 URL 제외');
+    assert(!urls.has('https://tiktok.com/@creator/video/7350000000000000002'), 'www 없는 URL 제외');
+    assert(!urls.has('https://m.tiktok.com/@creator/video/7350000000000000003'), '모바일 URL 제외');
+    assert(!urls.has('https://www.tiktok.com/@creator'), '프로필 URL 제외');
+    assert(!urls.has('https://www.tiktok.com/discover/dance'), '검색 URL 제외');
+    assert(results.every(r => r.platform === 'tiktok'), 'platform=tiktok 필요');
+    assertEquals(results.find(r => r.url.includes('/video/'))?.author, '@creator');
+    assert(capturedUrl.includes('tiktok.com'), `include_domains에 tiktok.com 포함 필요: ${capturedUrl}`);
   } finally {
     globalThis.fetch = originalFetch;
   }

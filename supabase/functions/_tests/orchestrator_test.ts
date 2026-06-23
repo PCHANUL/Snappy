@@ -133,6 +133,37 @@ Deno.test('searchAllPlatforms: 한 플랫폼 실패 → 나머지 정상 반환'
   }
 });
 
+Deno.test('searchAllPlatforms: tiktok 검색은 You.com 검색기로 연결됨', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = makeFetchMock([
+    {
+      match: 'tiktok.com',
+      response: {
+        results: {
+          web: [
+            {
+              url: 'https://www.tiktok.com/@creator/video/7350000000000000000',
+              title: 'dance tiktok video',
+              description: '',
+              snippets: [],
+            },
+          ],
+        },
+        metadata: {},
+      },
+    },
+  ]) as typeof globalThis.fetch;
+  try {
+    const result = await searchAllPlatforms('dance', ['tiktok'], 5, 'month');
+    const tiktok = result.results.find(r => r.platform === 'tiktok')!;
+    assertEquals(tiktok.count, 1);
+    assertEquals(tiktok.items[0].url, 'https://www.tiktok.com/@creator/video/7350000000000000000');
+    assertEquals(result.total_cost_usd, 0.005);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test('searchAllPlatforms: 비용 계산 (tistory+brunch = $0.010)', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>

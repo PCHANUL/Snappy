@@ -18,6 +18,11 @@ Deno.test('rootDomain: 유튜브 단축 도메인 통합', () => {
   assertEquals(rootDomain('https://youtu.be/abc'), 'youtube.com');
 });
 
+Deno.test('rootDomain: 틱톡 하위 도메인 통합', () => {
+  assertEquals(rootDomain('https://www.tiktok.com/@creator/video/735'), 'tiktok.com');
+  assertEquals(rootDomain('https://vm.tiktok.com/ZT123abc/'), 'tiktok.com');
+});
+
 Deno.test('rootDomain: www 제거', () => {
   assertEquals(rootDomain('https://www.example.com/page'), 'example.com');
 });
