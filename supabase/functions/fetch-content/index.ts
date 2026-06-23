@@ -68,6 +68,7 @@ function guessPlatform(url: string): string {
   if (url.includes('brunch.')) return 'brunch';
   if (url.includes('youtube.') || url.includes('youtu.be')) return 'youtube';
   if (url.includes('tiktok.')) return 'tiktok';
+  if (url.includes('instagram.')) return 'instagram_reels';
   return 'naver_blog';
 }
 

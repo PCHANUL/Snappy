@@ -223,6 +223,85 @@ Deno.test('searchTikTok: www.tiktok.com/@user/video URL만 반환', async () => 
   }
 });
 
+Deno.test('searchInstagramReels: www.instagram.com/reel URL만 반환', async () => {
+  const mockResponse = {
+    results: {
+      web: [
+        {
+          url: 'https://www.instagram.com/reel/DRIxfcYkh0I/',
+          title: '비건 디저트 릴스',
+          description: '인스타 릴스 콘텐츠',
+          snippets: ['비건 릴스 스니펫'],
+          thumbnail_url: 'https://scontent.cdninstagram.com/thumb.jpg',
+          page_age: '2024-03-12',
+        },
+        {
+          url: 'https://www.instagram.com/p/DRIxfcYkh0I/',
+          title: '비건 디저트 게시물',
+          description: '일반 게시물',
+          snippets: [],
+        },
+        {
+          url: 'https://www.instagram.com/explore/tags/vegan/',
+          title: '비건 태그',
+          description: '태그 페이지',
+          snippets: [],
+        },
+        {
+          url: 'https://www.instagram.com/reels/audio/123456789/',
+          title: '릴스 오디오',
+          description: '오디오 페이지',
+          snippets: [],
+        },
+        {
+          url: 'https://instagram.com/reel/DRIxfcYkh0J/',
+          title: 'www 없는 릴스',
+          description: '',
+          snippets: [],
+        },
+        {
+          url: 'https://m.instagram.com/reel/DRIxfcYkh0K/',
+          title: '모바일 릴스',
+          description: '',
+          snippets: [],
+        },
+        {
+          url: 'https://example.com/instagram.com/reel/fake',
+          title: '외부 링크',
+          description: '',
+          snippets: [],
+        },
+      ],
+    },
+    metadata: {},
+  };
+
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = '';
+  globalThis.fetch = async (url: string | URL | Request) => {
+    capturedUrl = url.toString();
+    return new Response(JSON.stringify(mockResponse), { status: 200 });
+  };
+
+  try {
+    const { searchInstagramReels } = await import('../_search/youcom.ts');
+    const results = await searchInstagramReels('비건 릴스', 10, 'month');
+    const urls = new Set(results.map(r => r.url));
+
+    assertEquals(results.length, 1);
+    assert(urls.has('https://www.instagram.com/reel/DRIxfcYkh0I/'), '릴스 URL 포함');
+    assert(!urls.has('https://www.instagram.com/p/DRIxfcYkh0I/'), '일반 게시물 제외');
+    assert(!urls.has('https://www.instagram.com/explore/tags/vegan/'), '태그 URL 제외');
+    assert(!urls.has('https://www.instagram.com/reels/audio/123456789/'), '릴스 오디오 URL 제외');
+    assert(!urls.has('https://instagram.com/reel/DRIxfcYkh0J/'), 'www 없는 URL 제외');
+    assert(!urls.has('https://m.instagram.com/reel/DRIxfcYkh0K/'), '모바일 URL 제외');
+    assert(results.every(r => r.platform === 'instagram_reels'), 'platform=instagram_reels 필요');
+    assert(capturedUrl.includes('instagram.com'), `include_domains에 instagram.com 포함 필요: ${capturedUrl}`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test('searchTistory: results.web 없으면 빈 배열 반환', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>

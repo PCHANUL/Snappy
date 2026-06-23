@@ -2,7 +2,7 @@
 // - naver_blog: m.blog.naver.com 모바일 URL로 변환 후 크롤 (iframe 우회)
 // - youtube: Data API v3 videos.list 로 설명 + 태그 취득
 // - tistory / brunch: 직접 크롤
-// - tiktok: 임베드/검색 설명 기반으로 분석하므로 직접 크롤 생략
+// - tiktok / instagram_reels: 임베드/검색 설명 기반으로 분석하므로 직접 크롤 생략
 // - 공통 폴백: OG/description 메타 태그
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -32,7 +32,7 @@ export async function crawlUrl(url: string, platform: string, options?: CrawlOpt
   if (platform === 'youtube' || platform === 'youtube_shorts') {
     return fetchYouTubeContent(url, options?.youtubeApiKey);
   }
-  if (platform === 'tiktok') {
+  if (platform === 'tiktok' || platform === 'instagram_reels') {
     return { status: 'skip' };
   }
 

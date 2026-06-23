@@ -7,7 +7,8 @@ let cachedKey: CryptoKey | null = null;
 
 export async function encryptNotionKey(value: string): Promise<string> {
   const key = await getEncryptionKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const iv: Uint8Array<ArrayBuffer> = new Uint8Array(12);
+  crypto.getRandomValues(iv);
   const encrypted = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
@@ -58,9 +59,9 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function fromBase64(value: string): Uint8Array {
+function fromBase64(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
+  const bytes: Uint8Array<ArrayBuffer> = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i);
   }

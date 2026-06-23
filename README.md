@@ -25,7 +25,7 @@ supabase/
 │   ├── search/               # 검색 모듈
 │   │   ├── naver.ts          # 네이버 검색 API
 │   │   ├── youtube.ts        # YouTube Data API
-│   │   ├── youcom.ts         # You.com (티스토리/브런치/틱톡)
+│   │   ├── youcom.ts         # You.com (티스토리/브런치/틱톡/인스타 릴스)
 │   │   └── orchestrator.ts   # 통합 오케스트레이터
 │   ├── notion/               # 노션 연동
 │   │   ├── client.ts         # 노션 API 클라이언트
@@ -198,7 +198,7 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/trigger-search' \
     "user_id": "...",
     "notion_page_id": "...",
     "keyword": "비건 디저트",
-    "platforms": ["naver_blog", "youtube", "tistory", "brunch", "tiktok"],
+    "platforms": ["naver_blog", "youtube", "tistory", "brunch", "tiktok", "instagram_reels"],
     "period": "month",
     "result_count": 10
   }'
@@ -210,8 +210,8 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/trigger-search' \
 |---|---|
 | 네이버 | 무료 |
 | YouTube | 무료 |
-| You.com (티스토리+브런치+틱톡) | 약 2,100원 |
-| **합계** | **약 2,100원** |
+| You.com (티스토리+브런치+틱톡+인스타 릴스) | 약 2,800원 |
+| **합계** | **약 2,800원** |
 
 ## 다음 단계
 

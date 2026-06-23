@@ -298,7 +298,8 @@ section('You.com 도메인 필터링 (수정 후)');
 function searchYouComMock(webResults, domains, platform, count) {
   const filtered = webResults
     .filter(item => domains.some(domain => item.url.includes(domain)))
-    .filter(item => platform !== 'tiktok' || isTikTokContentUrl(item.url));
+    .filter(item => platform !== 'tiktok' || isTikTokContentUrl(item.url))
+    .filter(item => platform !== 'instagram_reels' || isInstagramReelUrl(item.url));
   // Bug fix: .slice(0, count) 추가
   return filtered.slice(0, count).map(item => ({
     platform,
@@ -316,6 +317,16 @@ function isTikTokContentUrl(url) {
     const u = new URL(url);
     const host = u.hostname.toLowerCase();
     return host === 'www.tiktok.com' && /^\/@[^/]+\/video\/[^/?#]+/.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function isInstagramReelUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    return host === 'www.instagram.com' && /^\/reel\/[^/?#]+\/?$/.test(u.pathname);
   } catch {
     return false;
   }
@@ -378,11 +389,34 @@ await test('tiktok: www.tiktok.com/@user/video URL만 유지', () => {
   ]);
 });
 
+await test('instagram_reels: www.instagram.com/reel URL만 유지', () => {
+  const webResults = [
+    { url: 'https://www.instagram.com/reel/DRIxfcYkh0I/', title: 'A', snippets: [] },
+    { url: 'https://www.instagram.com/p/DRIxfcYkh0I/', title: 'B', snippets: [] },
+    { url: 'https://www.instagram.com/explore/tags/vegan/', title: 'C', snippets: [] },
+    { url: 'https://www.instagram.com/reels/audio/123/', title: 'D', snippets: [] },
+    { url: 'https://instagram.com/reel/DRIxfcYkh0J/', title: 'E', snippets: [] },
+    { url: 'https://m.instagram.com/reel/DRIxfcYkh0K/', title: 'F', snippets: [] },
+  ];
+  const results = searchYouComMock(webResults, ['instagram.com'], 'instagram_reels', 10);
+  assertEquals(results.map(r => r.url), [
+    'https://www.instagram.com/reel/DRIxfcYkh0I/',
+  ]);
+});
+
 // ── Orchestrator: searchAllPlatforms 검증 ────────────────────────────────────
 
 section('Orchestrator: searchAllPlatforms');
 
-const COST_PER_SEARCH = { naver_blog: 0, youtube: 0, youtube_shorts: 0, tistory: 0.005, brunch: 0.005, tiktok: 0.005 };
+const COST_PER_SEARCH = {
+  naver_blog: 0,
+  youtube: 0,
+  youtube_shorts: 0,
+  tistory: 0.005,
+  brunch: 0.005,
+  tiktok: 0.005,
+  instagram_reels: 0.005,
+};
 
 function mockSearchAllPlatforms(platforms, mockSearchers) {
   const results = platforms.map(platform => {
@@ -630,6 +664,7 @@ const PLATFORM_INFO = {
   tistory:    { name: '티스토리', emoji: '📚' },
   brunch:     { name: '브런치', emoji: '✍️' },
   tiktok:     { name: '틱톡', emoji: '🎵' },
+  instagram_reels: { name: '인스타 릴스', emoji: '📸' },
 };
 
 function buildResultBlocksMock(keyword, results, meta) {

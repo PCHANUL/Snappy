@@ -25,6 +25,7 @@ const PLATFORM_ROOTS: Record<string, string> = {
   'youtube.com': 'youtube.com',
   'youtu.be': 'youtube.com',
   'tiktok.com': 'tiktok.com',
+  'instagram.com': 'instagram.com',
 };
 
 // URL → 루트 도메인. 실패 시 빈 문자열.

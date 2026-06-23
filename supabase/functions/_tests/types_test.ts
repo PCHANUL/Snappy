@@ -59,8 +59,18 @@ Deno.test('DAILY_QUOTAS: free > 0', () => {
 
 // ── PLATFORM_INFO ─────────────────────────────────────────────────────────────
 
-Deno.test('PLATFORM_INFO: 6개 플랫폼 모두 정의', () => {
-  for (const platform of ['naver_blog', 'youtube', 'youtube_shorts', 'tistory', 'brunch', 'tiktok'] as const) {
+Deno.test('PLATFORM_INFO: 7개 플랫폼 모두 정의', () => {
+  for (
+    const platform of [
+      'naver_blog',
+      'youtube',
+      'youtube_shorts',
+      'tistory',
+      'brunch',
+      'tiktok',
+      'instagram_reels',
+    ] as const
+  ) {
     assertEquals(typeof PLATFORM_INFO[platform].name, 'string');
     assertEquals(typeof PLATFORM_INFO[platform].emoji, 'string');
     assertEquals(PLATFORM_INFO[platform].name.length > 0, true);

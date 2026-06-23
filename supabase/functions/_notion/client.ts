@@ -33,6 +33,7 @@ const PLATFORM_TO_NOTION: Record<Platform, string> = {
   tistory: '티스토리',
   brunch: '브런치',
   tiktok: '틱톡',
+  instagram_reels: '인스타릴스',
 };
 
 const PERIOD_TO_NOTION: Record<Period, string> = {
@@ -245,6 +246,7 @@ export class NotionClient {
                 { name: '티스토리', color: 'orange' },
                 { name: '브런치', color: 'purple' },
                 { name: '틱톡', color: 'gray' },
+                { name: '인스타릴스', color: 'pink' },
               ],
             },
           },
@@ -366,7 +368,9 @@ export class NotionClient {
         properties,
       };
       if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
-      if (item.platform === 'tiktok') body.children = buildSubPageBlocks(item);
+      if (item.platform === 'tiktok' || item.platform === 'instagram_reels') {
+        body.children = buildSubPageBlocks(item);
+      }
 
       const created = await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
       if (item.url) {
@@ -1312,6 +1316,7 @@ function searchDatabaseBody(parentPageId: string, includeLoadMoreButton: boolean
           { name: '티스토리', color: 'orange' },
           { name: '브런치', color: 'brown' },
           { name: '틱톡', color: 'gray' },
+          { name: '인스타릴스', color: 'pink' },
         ],
       },
     },

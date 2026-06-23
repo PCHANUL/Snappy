@@ -1,5 +1,5 @@
 // You.com Search API 모듈
-// 회당 $0.005, 티스토리 + 브런치 + 틱톡 담당
+// 회당 $0.005, 티스토리 + 브런치 + 틱톡 + 인스타 릴스 담당
 // 신규 가입 시 $100 크레딧
 
 import { env } from '../_core/env.ts';
@@ -123,8 +123,9 @@ function normalizeItem(item: YouComWebResult, platform: Platform): ContentItem {
 }
 
 function isPlatformResult(url: string, platform: Platform): boolean {
-  if (platform !== 'tiktok') return true;
-  return isTikTokContentUrl(url);
+  if (platform === 'tiktok') return isTikTokContentUrl(url);
+  if (platform === 'instagram_reels') return isInstagramReelUrl(url);
+  return true;
 }
 
 function isTikTokContentUrl(url: string): boolean {
@@ -134,6 +135,18 @@ function isTikTokContentUrl(url: string): boolean {
     if (host !== 'www.tiktok.com') return false;
 
     return /^\/@[^/]+\/video\/[^/?#]+/.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function isInstagramReelUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host !== 'www.instagram.com') return false;
+
+    return /^\/reel\/[^/?#]+\/?$/.test(parsed.pathname);
   } catch {
     return false;
   }
@@ -181,4 +194,12 @@ export function searchTikTok(
   period: Period = 'month',
 ): Promise<ContentItem[]> {
   return searchYouCom(keyword, ['tiktok.com'], 'tiktok', count, period);
+}
+
+export function searchInstagramReels(
+  keyword: string,
+  count: number = 10,
+  period: Period = 'month',
+): Promise<ContentItem[]> {
+  return searchYouCom(keyword, ['instagram.com'], 'instagram_reels', count, period);
 }

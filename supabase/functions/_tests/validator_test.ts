@@ -36,10 +36,10 @@ Deno.test('validateSearchRequest: 정상 입력 (기본값 적용)', () => {
     user_id: 'u1',
     notion_page_id: 'p1',
     keyword: '비건 디저트',
-    platforms: ['naver_blog', 'youtube', 'youtube_shorts', 'tiktok'],
+    platforms: ['naver_blog', 'youtube', 'youtube_shorts', 'tiktok', 'instagram_reels'],
   });
   assertEquals(result.keyword, '비건 디저트');
-  assertEquals(result.platforms, ['naver_blog', 'youtube', 'youtube_shorts', 'tiktok']);
+  assertEquals(result.platforms, ['naver_blog', 'youtube', 'youtube_shorts', 'tiktok', 'instagram_reels']);
   assertEquals(result.period, 'month');       // 기본값
   assertEquals(result.result_count, 10);      // 기본값
 });

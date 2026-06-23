@@ -23,6 +23,11 @@ Deno.test('rootDomain: 틱톡 하위 도메인 통합', () => {
   assertEquals(rootDomain('https://vm.tiktok.com/ZT123abc/'), 'tiktok.com');
 });
 
+Deno.test('rootDomain: 인스타그램 하위 도메인 통합', () => {
+  assertEquals(rootDomain('https://www.instagram.com/reel/DRIxfcYkh0I/'), 'instagram.com');
+  assertEquals(rootDomain('https://m.instagram.com/reel/DRIxfcYkh0I/'), 'instagram.com');
+});
+
 Deno.test('rootDomain: www 제거', () => {
   assertEquals(rootDomain('https://www.example.com/page'), 'example.com');
 });

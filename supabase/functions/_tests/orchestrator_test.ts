@@ -164,6 +164,37 @@ Deno.test('searchAllPlatforms: tiktok 검색은 You.com 검색기로 연결됨',
   }
 });
 
+Deno.test('searchAllPlatforms: instagram_reels 검색은 You.com 검색기로 연결됨', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = makeFetchMock([
+    {
+      match: 'instagram.com',
+      response: {
+        results: {
+          web: [
+            {
+              url: 'https://www.instagram.com/reel/DRIxfcYkh0I/',
+              title: 'vegan reels',
+              description: '',
+              snippets: [],
+            },
+          ],
+        },
+        metadata: {},
+      },
+    },
+  ]) as typeof globalThis.fetch;
+  try {
+    const result = await searchAllPlatforms('vegan', ['instagram_reels'], 5, 'month');
+    const reels = result.results.find(r => r.platform === 'instagram_reels')!;
+    assertEquals(reels.count, 1);
+    assertEquals(reels.items[0].url, 'https://www.instagram.com/reel/DRIxfcYkh0I/');
+    assertEquals(result.total_cost_usd, 0.005);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test('searchAllPlatforms: 비용 계산 (tistory+brunch = $0.010)', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>

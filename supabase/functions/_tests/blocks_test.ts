@@ -95,6 +95,14 @@ Deno.test('buildResultBlocks: 틱톡 아이템 → embed 블록으로 임베딩'
   assertEquals(embeds[0].embed.url, item.url);
 });
 
+Deno.test('buildResultBlocks: 인스타 릴스 아이템 → embed 블록으로 임베딩', () => {
+  const item = makeItem('instagram_reels', { url: 'https://www.instagram.com/reel/DRIxfcYkh0I/' });
+  const blocks = buildResultBlocks('test', [makeResult('instagram_reels', [item])], META);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assertEquals(embeds.length, 1, '인스타 릴스는 embed 블록이어야 함');
+  assertEquals(embeds[0].embed.url, item.url);
+});
+
 Deno.test('buildResultBlocks: 썸네일 없는 아이템 → image 블록 없음', () => {
   const item = makeItem('naver_blog'); // thumbnail 없음
   const blocks = buildResultBlocks('test', [makeResult('naver_blog', [item])], META);
@@ -185,6 +193,14 @@ Deno.test('buildTabItemBlocks: 틱톡 아이템 → bookmark 대신 embed 블록
   assertEquals(blocks.filter(b => b.type === 'bookmark').length, 0);
 });
 
+Deno.test('buildTabItemBlocks: 인스타 릴스 아이템 → bookmark 대신 embed 블록', () => {
+  const item = makeItem('instagram_reels', { url: 'https://www.instagram.com/reel/tab123/' });
+  const blocks = buildTabItemBlocks(item);
+  assertEquals(blocks[0].type, 'embed');
+  assertEquals(blocks[0].embed.url, item.url);
+  assertEquals(blocks.filter(b => b.type === 'bookmark').length, 0);
+});
+
 // ── buildSubPageBlocks ────────────────────────────────────────────────────────
 
 Deno.test('buildSubPageBlocks: 배열을 반환함', () => {
@@ -214,6 +230,14 @@ Deno.test('buildSubPageBlocks: 틱톡 아이템 → embed 블록으로 임베딩
   const blocks = buildSubPageBlocks(item);
   const embeds = blocks.filter(b => b.type === 'embed');
   assertEquals(embeds.length, 1, '서브페이지에서도 틱톡 embed 블록 필요');
+  assertEquals(embeds[0].embed.url, item.url);
+});
+
+Deno.test('buildSubPageBlocks: 인스타 릴스 아이템 → embed 블록으로 임베딩', () => {
+  const item = makeItem('instagram_reels', { url: 'https://www.instagram.com/reel/sub123/' });
+  const blocks = buildSubPageBlocks(item);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assertEquals(embeds.length, 1, '서브페이지에서도 인스타 릴스 embed 블록 필요');
   assertEquals(embeds[0].embed.url, item.url);
 });
 
