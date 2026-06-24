@@ -7,14 +7,32 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --paper: #ffffff;
+      --paper-soft: #f7f7f5;
+      --ink: #37352f;
+      --muted: rgba(55, 53, 47, 0.62);
+      --line: rgba(55, 53, 47, 0.16);
+      --line-strong: rgba(55, 53, 47, 0.26);
+      --accent: #37352f;
+      --accent-soft: rgba(55, 53, 47, 0.08);
+      --ok: #448361;
+      --ok-soft: #edf3ec;
+      --warn: #a76a1f;
+      --warn-soft: #fbf3db;
+      --danger: #d44c47;
+      --danger-soft: #fdebec;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
       background: transparent;
       display: flex;
-      align-items: center;
+      align-items: start;
       justify-content: center;
       min-height: 100vh;
-      padding: 16px;
+      padding: 8px;
+      color: var(--ink);
     }
 
     .wrap {
@@ -22,38 +40,197 @@
       flex-direction: column;
       gap: 12px;
       width: 100%;
-      max-width: 520px;
+      max-width: 620px;
+      padding: 12px;
+      border: 1px solid rgba(55, 53, 47, 0.12);
+      border-radius: 6px;
+      background: var(--paper);
+      box-shadow: none;
+      overflow: visible;
     }
 
     /* ── 입력 필드 ── */
-    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field { display: flex; flex-direction: column; gap: 7px; }
     .label {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 600;
-      color: #4b5563;
-      letter-spacing: -0.2px;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+    .keyword-composer {
+      position: relative;
+      min-width: 0;
+    }
+    .keyword-shell {
+      width: 100%;
+      min-height: 50px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fff;
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr) 36px;
+      gap: 8px;
+      align-items: center;
+      padding: 0 8px 0 13px;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .keyword-shell:hover {
+      border-color: var(--line-strong);
+      background: rgba(55, 53, 47, 0.02);
+    }
+    .keyword-shell:focus-within {
+      border-color: var(--line-strong);
+      background: var(--paper-soft);
+      box-shadow: 0 0 0 2px rgba(55, 53, 47, 0.08);
+    }
+    .keyword-shell.is-invalid {
+      border-color: var(--danger);
+      background: var(--danger-soft);
+      box-shadow: 0 0 0 2px rgba(212, 76, 71, 0.10);
+    }
+    .keyword-shell.has-value .keyword-icon {
+      color: var(--ink);
+    }
+    .keyword-shell.is-invalid .keyword-icon {
+      color: var(--danger);
+    }
+    .keyword-icon {
+      width: 18px;
+      height: 18px;
+      color: rgba(55, 53, 47, 0.42);
+    }
+    .keyword-icon svg,
+    .keyword-clear svg,
+    .button-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     #keyword {
       width: 100%;
-      padding: 11px 14px;
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
+      min-width: 0;
+      min-height: 48px;
+      border: 0;
+      outline: 0;
+      padding: 0;
       font-size: 0.95rem;
+      line-height: 1.35;
       font-family: inherit;
-      color: #111827;
-      background: #fff;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      color: var(--ink);
+      background: transparent;
     }
     #keyword:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    #keyword::placeholder {
+      color: rgba(55, 53, 47, 0.38);
+    }
+    .keyword-clear {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s, background 0.15s, color 0.15s;
+    }
+    .keyword-clear svg { width: 16px; height: 16px; }
+    .keyword-shell.has-value .keyword-clear {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .keyword-clear:hover {
+      background: rgba(55, 53, 47, 0.08);
+      color: var(--ink);
+    }
+    .suggestions {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 0;
+      padding-top: 2px;
+    }
+    .suggestions.open {
+      display: flex;
+    }
+    .suggestion-item {
+      max-width: 100%;
+      min-height: 32px;
+      padding: 6px 9px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--paper-soft);
+      color: var(--muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: left;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .suggestion-item:hover,
+    .suggestion-item.active {
+      border-color: var(--line-strong);
+      background: rgba(55, 53, 47, 0.08);
+      color: var(--ink);
+    }
+    .suggestion-more {
+      border-color: rgba(55, 53, 47, 0.22);
+      background: #fff;
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .suggestion-icon {
+      width: 14px;
+      height: 14px;
+      color: rgba(55, 53, 47, 0.44);
+      flex: 0 0 auto;
+    }
+    .suggestion-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .suggestion-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .keyword-clear:focus-visible,
+    .suggestion-item:focus-visible,
+    .segment-btn:focus-visible,
+    .chip:focus-visible,
+    .mini-action:focus-visible,
+    #searchBtn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .filter-grid {
       display: grid;
-      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-      gap: 10px;
+      grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.28fr);
+      gap: 12px;
       align-items: start;
     }
 
@@ -64,269 +241,343 @@
       gap: 8px;
     }
 
+    .label-with-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .selection-count {
+      min-width: 42px;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--paper-soft);
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .platform-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+
+    .platform-toggle { display: none; }
+
     .segmented {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 4px;
-      padding: 4px;
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
-      background: #f8fafc;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--paper-soft);
     }
 
     .segment-btn {
       min-width: 0;
-      min-height: 34px;
-      padding: 7px 6px;
+      min-height: 44px;
+      padding: 8px 6px;
       border: 1px solid transparent;
-      border-radius: 7px;
+      border-radius: 3px;
       background: transparent;
-      color: #64748b;
+      color: var(--muted);
       font-size: 0.82rem;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
-      white-space: nowrap;
-    }
-
-    .segment-btn:hover { color: #334155; background: #fff; }
-    .segment-btn.active {
-      background: #111827;
-      border-color: #111827;
-      color: #fff;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
-    }
-
-    /* ── 매체 칩 ── */
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-    .chip {
-      padding: 8px 14px;
-      border: 1px solid #d1d5db;
-      border-radius: 999px;
-      background: #fff;
-      color: #6b7280;
-      font-size: 0.85rem;
       font-weight: 600;
       font-family: inherit;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
     }
-    .chip:hover { border-color: #a5b4fc; }
+
+    .segment-btn:hover { color: var(--ink); background: rgba(55, 53, 47, 0.08); }
+    .segment-btn.active {
+      background: rgba(55, 53, 47, 0.12);
+      border-color: transparent;
+      color: var(--ink);
+    }
+
+    .chip {
+      padding: 8px 12px;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .chip:hover { border-color: var(--line-strong); background: rgba(55, 53, 47, 0.04); }
     .chip.active {
-      background: #eef2ff;
-      border-color: #6366f1;
-      color: #4338ca;
+      background: rgba(55, 53, 47, 0.09);
+      border-color: transparent;
+      color: var(--ink);
     }
 
     .platform-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
+    }
+
+    .platform-grid.is-invalid .platform-chip {
+      border-color: rgba(185, 28, 28, 0.42);
+      background: #fffafa;
     }
 
     .platform-chip {
       min-width: 0;
-      min-height: 34px;
-      padding: 7px 10px;
-      border-radius: 8px;
+      min-height: 44px;
+      padding: 8px 9px;
+      border-radius: 4px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
       line-height: 1.2;
+      position: relative;
     }
 
-    .platform-chip::before {
-      content: "";
-      width: 7px;
-      height: 7px;
-      border-radius: 999px;
-      background: #cbd5e1;
+    .platform-icon {
+      width: 16px;
+      height: 16px;
       flex: 0 0 auto;
+      color: rgba(55, 53, 47, 0.50);
     }
-
-    .platform-chip.active::before { background: #6366f1; }
+    .platform-icon svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .platform-chip.active .platform-icon { color: currentColor; }
+    .platform-chip::after {
+      content: "";
+      width: 9px;
+      margin-left: 1px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1;
+      text-align: center;
+    }
+    .platform-chip.active::after {
+      content: "✓";
+    }
 
     .mini-action {
-      border: 0;
+      border: 1px solid transparent;
+      border-radius: 4px;
       background: transparent;
-      color: #6366f1;
+      color: var(--muted);
       font-size: 0.74rem;
-      font-weight: 700;
+      font-weight: 600;
       font-family: inherit;
       cursor: pointer;
-      padding: 0 2px;
+      min-height: 40px;
+      padding: 7px 9px;
     }
-    .mini-action:hover { color: #4338ca; }
+    .mini-action:hover { background: rgba(55, 53, 47, 0.08); border-color: transparent; color: var(--ink); }
 
     /* ── 버튼 ── */
     #searchBtn {
-      width: 116px;
-      min-height: 43px;
-      padding: 11px 14px;
-      background: #6366f1;
+      width: 124px;
+      min-height: 50px;
+      padding: 12px 14px;
+      background: var(--ink);
       color: #fff;
       border: none;
-      border-radius: 10px;
+      border-radius: 5px;
       font-size: 0.92rem;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: background 0.15s, transform 0.1s;
-      letter-spacing: -0.2px;
+      transition: background 0.15s;
+      letter-spacing: 0;
       white-space: nowrap;
     }
-    #searchBtn:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
-    #searchBtn:active:not(:disabled) { transform: translateY(0); }
-    #searchBtn:disabled { background: #a5b4fc; cursor: not-allowed; }
-    #searchBtn.searching { background: #818cf8; cursor: not-allowed; }
-    #searchBtn.unconfigured { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; pointer-events: auto; }
+    .button-icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+    }
+    #searchBtn:hover:not(:disabled) { background: #2f2d29; }
+    #searchBtn:disabled { background: rgba(55, 53, 47, 0.16); color: rgba(55, 53, 47, 0.42); cursor: not-allowed; box-shadow: none; }
+    #searchBtn.searching { background: rgba(55, 53, 47, 0.54); cursor: not-allowed; color: #fff; }
+    #searchBtn.unconfigured { background: rgba(55, 53, 47, 0.10); color: rgba(55, 53, 47, 0.32); cursor: not-allowed; pointer-events: auto; }
 
     /* ── 상태 메시지 ── */
-    #status {
+    .message {
       width: 100%;
-      padding: 10px 14px;
-      border-radius: 8px;
+      padding: 11px 12px;
+      border-radius: 4px;
       font-size: 0.85rem;
-      line-height: 1.5;
-      text-align: center;
+      line-height: 1.45;
+      text-align: left;
       display: none;
+      font-weight: 500;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
     }
-    #status.searching {
-      display: block;
-      background: #eef2ff;
-      color: #4338ca;
-      border: 1px solid #c7d2fe;
+
+    #status.message.searching,
+    #status.message.accepted,
+    #status.message.error,
+    .config-guide.visible {
+      display: grid;
     }
-    #status.accepted {
-      display: block;
-      background: #f0fdf4;
-      color: #166534;
-      border: 1px solid #bbf7d0;
+
+    .message-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+      color: currentColor;
     }
-    #status.error {
+    .message-icon svg {
+      width: 18px;
+      height: 18px;
       display: block;
-      background: #fef2f2;
-      color: #991b1b;
-      border: 1px solid #fecaca;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .message-icon.is-loading::before {
+      content: "";
+      width: 15px;
+      height: 15px;
+      border: 2px solid rgba(55, 53, 47, 0.18);
+      border-top-color: var(--ink);
+      border-radius: 999px;
+      animation: spin 0.75s linear infinite;
+    }
+    .message-title {
+      display: block;
+      color: var(--ink);
+      font-size: 0.84rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .message-description {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 500;
+      line-height: 1.45;
+    }
+    .message-link {
+      color: var(--warn);
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .message-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+    .message.searching {
+      background: var(--accent-soft);
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .message.accepted {
+      background: var(--ok-soft);
+      color: var(--ok);
+      border: 1px solid rgba(68, 131, 97, 0.24);
+    }
+    .message.error {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border: 1px solid rgba(212, 76, 71, 0.24);
+    }
+    .message.accepted .message-title,
+    .message.error .message-title {
+      color: currentColor;
     }
 
     /* ── 설정 안내 (파라미터 없을 때) ── */
     .config-guide {
-      width: 100%;
-      padding: 12px 14px;
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      border-radius: 10px;
-      font-size: 0.82rem;
-      color: #9a3412;
-      line-height: 1.6;
-      text-align: center;
+      background: var(--warn-soft);
+      border: 1px solid rgba(167, 106, 31, 0.22);
+      color: var(--warn);
+    }
+    .config-guide .message-title {
+      color: var(--warn);
+    }
+
+    .field-error {
       display: none;
+      color: var(--danger);
+      font-size: 0.76rem;
+      line-height: 1.45;
     }
+    .field-error.visible { display: block; }
 
-    /* ── 자동완성 드롭다운 ── */
-    .kw-wrap { position: relative; }
-    .suggest {
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0;
-      right: 0;
-      background: #fff;
-      border: 1px solid #d1d5db;
-      border-radius: 10px;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-      overflow: hidden;
-      z-index: 20;
-      display: none;
-    }
-    .suggest.open { display: block; }
-    .suggest-item {
-      padding: 9px 14px;
-      font-size: 0.9rem;
-      color: #374151;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .suggest-item:hover, .suggest-item.active {
-      background: #eef2ff;
-      color: #4338ca;
-    }
-    .suggest-item .ico { font-size: 0.78rem; color: #9ca3af; flex-shrink: 0; }
 
-    /* ── 키워드 트렌드 ── */
-    #keywordTrend {
-      padding: 10px 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      color: #374151;
-      text-align: center;
-      line-height: 1.7;
-    }
-
-    /* ── 연관 인기 키워드 ── */
-    #relatedSection { margin-top: 4px; }
-    .related-label {
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: #4b5563;
-      margin-bottom: 6px;
-      letter-spacing: -0.2px;
-    }
-    .related-chip {
-      padding: 6px 12px;
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      border-radius: 999px;
-      color: #1d4ed8;
-      font-size: 0.82rem;
-      font-weight: 600;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all 0.15s;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .related-chip:hover { background: #dbeafe; border-color: #93c5fd; }
-    .related-chip .ratio {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: #3b82f6;
-      background: #bfdbfe;
-      border-radius: 999px;
-      padding: 1px 5px;
-    }
-
-    #form { display: flex; flex-direction: column; gap: 10px; }
+    #form { display: flex; flex-direction: column; gap: 12px; }
     .search-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 116px;
+      grid-template-columns: minmax(0, 1fr) 124px;
       gap: 8px;
       align-items: start;
     }
 
-    @media (max-width: 430px) {
-      body { padding: 12px; }
+    @media (max-width: 620px) {
       .filter-grid { grid-template-columns: 1fr; }
+      .platform-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 430px) {
+      body { padding: 10px; align-items: start; }
+      .wrap { padding: 12px; }
+      .platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .platform-grid.is-collapsed { display: none; }
+      .platform-toggle { display: inline-flex; }
       .search-row { grid-template-columns: 1fr; }
       #searchBtn { width: 100%; }
     }
 
-    .disabled-overlay { opacity: 0.5; pointer-events: none; }
+    .disabled-overlay { opacity: 0.56; pointer-events: none; filter: grayscale(0.18); }
 
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
       display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.46);
+      border-top-color: #fff;
+      border-radius: 999px;
       animation: spin 0.7s linear infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
@@ -347,43 +598,100 @@
 
         <div class="field">
           <div class="label-row">
-            <span class="label" id="platformsLabel">매체</span>
-            <button type="button" class="mini-action" id="allPlatformsBtn">전체</button>
+            <span class="label label-with-count" id="platformsLabel">
+              매체
+              <span class="selection-count" id="platformCount" aria-live="polite">모두 선택됨</span>
+            </span>
+            <span class="platform-actions">
+              <button type="button" class="mini-action platform-toggle" id="platformToggleBtn" aria-controls="platforms" aria-expanded="false">펼치기</button>
+              <button type="button" class="mini-action" id="allPlatformsBtn">전체 해제</button>
+            </span>
           </div>
-          <div class="platform-grid" id="platforms" aria-labelledby="platformsLabel">
-            <button type="button" class="chip platform-chip active" data-value="naver_blog" aria-pressed="true">네이버</button>
-            <button type="button" class="chip platform-chip active" data-value="youtube" aria-pressed="true">유튜브</button>
-            <button type="button" class="chip platform-chip active" data-value="youtube_shorts" aria-pressed="true">숏츠</button>
-            <button type="button" class="chip platform-chip active" data-value="tistory" aria-pressed="true">티스토리</button>
-            <button type="button" class="chip platform-chip active" data-value="brunch" aria-pressed="true">브런치</button>
-            <button type="button" class="chip platform-chip active" data-value="tiktok" aria-pressed="true">틱톡</button>
-            <button type="button" class="chip platform-chip active" data-value="instagram_reels" aria-pressed="true">릴스</button>
+          <div class="platform-grid is-collapsed" id="platforms" aria-labelledby="platformsLabel">
+            <button type="button" class="chip platform-chip active" data-value="naver_blog" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 6h10v12H7z"></path><path d="M10 9h4"></path><path d="M10 12h4"></path><path d="M10 15h3"></path></svg></span>
+              네이버
+            </button>
+            <button type="button" class="chip platform-chip active" data-value="youtube" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 8.5c0-1.4 1-2.5 2.4-2.6 1.4-.1 3-.2 4.6-.2s3.2.1 4.6.2C18 6 19 7.1 19 8.5v7c0 1.4-1 2.5-2.4 2.6-1.4.1-3 .2-4.6.2s-3.2-.1-4.6-.2C6 18 5 16.9 5 15.5z"></path><path d="m10.5 9.5 4 2.5-4 2.5z"></path></svg></span>
+              유튜브
+            </button>
+            <button type="button" class="chip platform-chip active" data-value="youtube_shorts" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m10 5 6 3-6 3z"></path><path d="m14 13-6 3 6 3z"></path><path d="M7 7.5v9"></path><path d="M17 7.5v9"></path></svg></span>
+              숏츠
+            </button>
+            <button type="button" class="chip platform-chip active" data-value="tistory" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 7h12"></path><path d="M12 7v10"></path><path d="M9 17h6"></path></svg></span>
+              티스토리
+            </button>
+            <button type="button" class="chip platform-chip active" data-value="brunch" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 6h5a3 3 0 0 1 0 6H8z"></path><path d="M8 12h6a3 3 0 0 1 0 6H8z"></path></svg></span>
+              브런치
+            </button>
+            <button type="button" class="chip platform-chip active" data-value="tiktok" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 5v9.5a3.5 3.5 0 1 1-3.5-3.5"></path><path d="M14 7c1 2 2.4 3.2 4.5 3.5"></path></svg></span>
+              틱톡
+            </button>
+            <button type="button" class="chip platform-chip active" data-value="instagram_reels" aria-pressed="true">
+              <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="14" rx="3"></rect><path d="m11 10 4 2-4 2z"></path><path d="M8 8h8"></path></svg></span>
+              릴스
+            </button>
           </div>
+          <div class="field-error" id="platformError"></div>
         </div>
       </div>
 
-      <div class="field">
+      <div class="field keyword-field">
         <label class="label" for="keyword">키워드</label>
         <div class="search-row">
-          <div class="kw-wrap">
-            <input id="keyword" type="text" placeholder="검색할 단어 (예: 비건 디저트)" maxlength="100" autocomplete="off">
-            <div id="suggest" class="suggest"></div>
+          <div class="keyword-composer">
+            <div class="keyword-shell" id="keywordShell">
+              <span class="keyword-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="6"></circle>
+                  <path d="m16 16 4 4"></path>
+                </svg>
+              </span>
+              <input id="keyword" type="text" placeholder="검색할 단어를 입력하세요" maxlength="100" autocomplete="off" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="keywordSuggest" aria-describedby="keywordError">
+              <button type="button" class="keyword-clear" id="keywordClearBtn" aria-label="키워드 지우기">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            </div>
           </div>
-          <button id="searchBtn" type="button">검색하기</button>
+          <button id="searchBtn" type="button">
+            <span class="button-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="6"></circle>
+                <path d="m16 16 4 4"></path>
+              </svg>
+            </span>
+            검색하기
+          </button>
         </div>
+        <div class="suggestions" id="keywordSuggest" role="listbox" aria-label="추천 키워드"></div>
+        <div class="field-error" id="keywordError"></div>
       </div>
     </div>
 
-    <div id="status"></div>
-    <div id="relatedSection" style="display:none">
-      <div class="related-label">📊 연관 인기 키워드</div>
-      <div class="chips" id="relatedChips"></div>
-    </div>
-    <div id="keywordTrend" style="display:none"></div>
-    <div class="config-guide" id="configGuide">
-      셋업을 완료하면 이 버튼이 활성화됩니다.<br>
-      <a href="https://pchanul.github.io/Snappy/" target="_blank"
-         style="color:#c2410c;font-weight:600;">시작하기 →</a>
+    <div id="status" class="message" role="status" aria-live="polite"></div>
+    <div class="message config-guide" id="configGuide">
+      <span class="message-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8"></circle>
+          <path d="M12 11v5"></path>
+          <path d="M12 8h.01"></path>
+        </svg>
+      </span>
+      <span class="message-body">
+        <span class="message-title">셋업 필요</span>
+        <span class="message-description">
+          셋업을 완료하면 검색하기 버튼이 활성화됩니다.
+          <a class="message-link" href="https://pchanul.github.io/Snappy/" target="_blank" rel="noopener">시작하기</a>
+        </span>
+      </span>
     </div>
   </div>
 
@@ -403,28 +711,65 @@
     const configGuide = document.getElementById('configGuide');
     const form        = document.getElementById('form');
     const keywordEl   = document.getElementById('keyword');
+    const keywordShell = document.getElementById('keywordShell');
+    const keywordClearBtn = document.getElementById('keywordClearBtn');
+    const keywordSuggest = document.getElementById('keywordSuggest');
     const periodEl    = document.getElementById('period');
     const periodBtns  = [...document.querySelectorAll('#periods .segment-btn')];
     const chipsEl     = document.getElementById('platforms');
     const allPlatformsBtn = document.getElementById('allPlatformsBtn');
+    const platformCount = document.getElementById('platformCount');
+    const platformToggleBtn = document.getElementById('platformToggleBtn');
+    const keywordError = document.getElementById('keywordError');
+    const platformError = document.getElementById('platformError');
+    const PREFERENCE_KEY = 'snappy.search.preferences.v1';
+    const SUGGEST_MIN_LENGTH = 2;
+    const SUGGEST_DEBOUNCE_MS = 250;
+    const SUGGEST_INITIAL_LIMIT = 5;
+    const SUGGEST_MAX_RESULTS = 20;
+    let platformsExpanded = false;
+    let suggestTimer = null;
+    let suggestAbortController = null;
+    let suggestItems = [];
+    let activeSuggestIndex = -1;
+    let lastSuggestQuery = '';
+    let suggestRequestSeq = 0;
+    let suggestionsExpanded = false;
 
 
     const configured = !!(userId && pageId);
 
     if (presetKeyword) keywordEl.value = presetKeyword;
 
+    const SEARCH_BUTTON_ICON = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg>';
+
     // ── 기간/매체 선택 ──────────────────────────────────────────────────────
-    function setPeriod(value) {
+    function setPeriod(value, options = {}) {
       periodEl.value = value;
       periodBtns.forEach((button) => {
         const active = button.dataset.value === value;
         button.classList.toggle('active', active);
         button.setAttribute('aria-checked', String(active));
+        button.tabIndex = active ? 0 : -1;
       });
+      if (options.persist !== false) savePreferences();
     }
 
     periodBtns.forEach((button) => {
       button.addEventListener('click', () => setPeriod(button.dataset.value));
+      button.addEventListener('keydown', (e) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        const currentIndex = periodBtns.findIndex((item) => item === button);
+        const nextIndex =
+          e.key === 'Home' ? 0 :
+          e.key === 'End' ? periodBtns.length - 1 :
+          e.key === 'ArrowLeft' ? (currentIndex - 1 + periodBtns.length) % periodBtns.length :
+          (currentIndex + 1) % periodBtns.length;
+        const next = periodBtns[nextIndex];
+        setPeriod(next.dataset.value);
+        next.focus();
+      });
     });
 
     chipsEl.addEventListener('click', (e) => {
@@ -432,18 +777,352 @@
       if (!chip) return;
       chip.classList.toggle('active');
       chip.setAttribute('aria-pressed', String(chip.classList.contains('active')));
+      updatePlatformMeta();
+      savePreferences();
     });
 
     allPlatformsBtn.addEventListener('click', () => {
-      chipsEl.querySelectorAll('.chip').forEach((chip) => {
-        chip.classList.add('active');
-        chip.setAttribute('aria-pressed', 'true');
-      });
+      const chips = [...chipsEl.querySelectorAll('.chip')];
+      const shouldSelectAll = selectedPlatforms().length !== chips.length;
+      chips.forEach((chip) => setPlatformChip(chip, shouldSelectAll));
+      updatePlatformMeta();
+      savePreferences();
     });
 
     function selectedPlatforms() {
       return [...chipsEl.querySelectorAll('.chip.active')].map((c) => c.dataset.value);
     }
+
+    function setPlatformChip(chip, active) {
+      chip.classList.toggle('active', active);
+      chip.setAttribute('aria-pressed', String(active));
+    }
+
+    function updatePlatformMeta() {
+      const chips = [...chipsEl.querySelectorAll('.chip')];
+      const count = selectedPlatforms().length;
+      const allSelected = count === chips.length;
+      platformCount.textContent = allSelected ? '모두 선택됨' : `${count}개 선택됨`;
+      allPlatformsBtn.textContent = allSelected ? '전체 해제' : '전체 선택';
+      allPlatformsBtn.setAttribute('aria-label', allSelected ? '모든 매체 선택 해제' : '모든 매체 선택');
+      if (count > 0) clearValidation('platforms');
+      updatePlatformToggleLabel();
+    }
+
+    function setPlatformPanelExpanded(expanded) {
+      platformsExpanded = expanded;
+      chipsEl.classList.toggle('is-collapsed', !expanded);
+      updatePlatformToggleLabel();
+    }
+
+    function updatePlatformToggleLabel() {
+      const count = selectedPlatforms().length;
+      platformToggleBtn.textContent = platformsExpanded ? '접기' : `매체 ${count}개`;
+      platformToggleBtn.setAttribute('aria-expanded', String(platformsExpanded));
+    }
+
+    function readPreferences() {
+      try {
+        return JSON.parse(localStorage.getItem(PREFERENCE_KEY) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function savePreferences() {
+      try {
+        localStorage.setItem(PREFERENCE_KEY, JSON.stringify({
+          period: periodEl.value,
+          platforms: selectedPlatforms(),
+        }));
+      } catch { /* localStorage 차단 환경에서는 기본값 유지 */ }
+    }
+
+    function restorePreferences() {
+      const prefs = readPreferences();
+      if (['day', 'week', 'month', 'year'].includes(prefs.period)) {
+        setPeriod(prefs.period, { persist: false });
+      } else {
+        setPeriod(periodEl.value, { persist: false });
+      }
+
+      if (Array.isArray(prefs.platforms)) {
+        const valid = new Set(prefs.platforms);
+        const chips = [...chipsEl.querySelectorAll('.chip')];
+        const hasAnyValid = chips.some((chip) => valid.has(chip.dataset.value));
+        if (hasAnyValid) chips.forEach((chip) => setPlatformChip(chip, valid.has(chip.dataset.value)));
+      }
+      updatePlatformMeta();
+    }
+
+    const STATUS_ICONS = {
+      accepted: '<svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>',
+      error: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v5"></path><path d="M12 16h.01"></path></svg>',
+    };
+
+    function createMessageIcon(type) {
+      const icon = document.createElement('span');
+      icon.className = type === 'searching' ? 'message-icon is-loading' : 'message-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      if (STATUS_ICONS[type]) icon.innerHTML = STATUS_ICONS[type];
+      return icon;
+    }
+
+    function setStatusMessage(type, title, description) {
+      const body = document.createElement('span');
+      body.className = 'message-body';
+
+      const titleEl = document.createElement('span');
+      titleEl.className = 'message-title';
+      titleEl.textContent = title;
+      body.append(titleEl);
+
+      if (description) {
+        const descriptionEl = document.createElement('span');
+        descriptionEl.className = 'message-description';
+        descriptionEl.textContent = description;
+        body.append(descriptionEl);
+      }
+
+      status.className = `message ${type}`;
+      status.replaceChildren(createMessageIcon(type), body);
+    }
+
+    function clearStatusMessage() {
+      status.className = 'message';
+      status.replaceChildren();
+    }
+
+    function setSearchError(message, title = '검색할 수 없어요') {
+      setStatusMessage('error', title, message);
+    }
+
+    function setSearchSuccess(message = '검색 결과가 노션 페이지에 추가됐습니다.') {
+      setStatusMessage('accepted', '완료됐어요', message);
+    }
+
+    function syncKeywordControls() {
+      keywordShell.classList.toggle('has-value', keywordEl.value.trim().length > 0);
+    }
+
+    function resetSuggestionTokens() {
+      suggestItems = [];
+      activeSuggestIndex = -1;
+      suggestionsExpanded = false;
+      keywordSuggest.classList.remove('open');
+      keywordSuggest.replaceChildren();
+      keywordEl.setAttribute('aria-expanded', 'false');
+      keywordEl.removeAttribute('aria-activedescendant');
+    }
+
+    function closeSuggestions() {
+      if (suggestTimer) clearTimeout(suggestTimer);
+      suggestTimer = null;
+      if (suggestAbortController) suggestAbortController.abort();
+      suggestAbortController = null;
+      suggestRequestSeq++;
+      resetSuggestionTokens();
+    }
+
+    function setActiveSuggestion(index) {
+      const items = [...keywordSuggest.querySelectorAll('[role="option"]')];
+      items.forEach((item, itemIndex) => {
+        const active = itemIndex === index;
+        item.classList.toggle('active', active);
+        item.setAttribute('aria-selected', String(active));
+      });
+      activeSuggestIndex = index;
+      if (index >= 0) {
+        keywordEl.setAttribute('aria-activedescendant', `suggestion-${index}`);
+      } else {
+        keywordEl.removeAttribute('aria-activedescendant');
+      }
+    }
+
+    function moveSuggestion(delta) {
+      const optionCount = keywordSuggest.querySelectorAll('[role="option"]').length;
+      if (!optionCount) return;
+      const nextIndex =
+        activeSuggestIndex < 0
+          ? (delta > 0 ? 0 : optionCount - 1)
+          : (activeSuggestIndex + delta + optionCount) % optionCount;
+      setActiveSuggestion(nextIndex);
+    }
+
+    function applySuggestion(value) {
+      keywordEl.value = value;
+      clearValidation('keyword');
+      syncKeywordControls();
+      closeSuggestions();
+      keywordEl.focus();
+    }
+
+    function renderSuggestions(words) {
+      suggestItems = words;
+      activeSuggestIndex = -1;
+      keywordSuggest.replaceChildren();
+
+      if (!words.length) {
+        closeSuggestions();
+        return;
+      }
+
+      const visibleWords = suggestionsExpanded ? words : words.slice(0, SUGGEST_INITIAL_LIMIT);
+      visibleWords.forEach((word, index) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'suggestion-item suggestion-option';
+        item.id = `suggestion-${index}`;
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
+
+        const icon = document.createElement('span');
+        icon.className = 'suggestion-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.innerHTML = SEARCH_BUTTON_ICON;
+
+        const text = document.createElement('span');
+        text.className = 'suggestion-text';
+        text.textContent = word;
+
+        item.replaceChildren(icon, text);
+        item.addEventListener('mousedown', (event) => event.preventDefault());
+        item.addEventListener('click', () => applySuggestion(word));
+        keywordSuggest.append(item);
+      });
+
+      if (!suggestionsExpanded && words.length > SUGGEST_INITIAL_LIMIT) {
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'suggestion-item suggestion-more';
+        more.setAttribute('role', 'button');
+        more.setAttribute('aria-label', `추천 키워드 ${words.length - SUGGEST_INITIAL_LIMIT}개 더 보기`);
+
+        const icon = document.createElement('span');
+        icon.className = 'suggestion-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>';
+
+        const text = document.createElement('span');
+        text.className = 'suggestion-text';
+        text.textContent = `더보기 ${words.length - SUGGEST_INITIAL_LIMIT}개`;
+
+        more.replaceChildren(icon, text);
+        more.addEventListener('mousedown', (event) => event.preventDefault());
+        more.addEventListener('click', () => {
+          suggestionsExpanded = true;
+          renderSuggestions(suggestItems);
+        });
+        keywordSuggest.append(more);
+      }
+
+      keywordSuggest.classList.add('open');
+      keywordEl.setAttribute('aria-expanded', 'true');
+    }
+
+    function scheduleSuggestions() {
+      const query = keywordEl.value.trim();
+      if (suggestTimer) clearTimeout(suggestTimer);
+
+      if (query.length < SUGGEST_MIN_LENGTH) {
+        closeSuggestions();
+        lastSuggestQuery = '';
+        return;
+      }
+      if (query === lastSuggestQuery && suggestItems.length) return;
+
+      if (query !== lastSuggestQuery) {
+        if (suggestAbortController) suggestAbortController.abort();
+        suggestAbortController = null;
+        suggestRequestSeq++;
+        resetSuggestionTokens();
+      }
+
+      suggestTimer = setTimeout(() => fetchSuggestions(query), SUGGEST_DEBOUNCE_MS);
+    }
+
+    async function fetchSuggestions(query) {
+      suggestTimer = null;
+      lastSuggestQuery = query;
+      if (suggestAbortController) suggestAbortController.abort();
+      suggestAbortController = new AbortController();
+      const requestSeq = ++suggestRequestSeq;
+
+      try {
+        const response = await fetch(
+          `${FUNCTION_BASE}/manage-user?action=trend-suggest&keyword=${encodeURIComponent(query)}&t=${Date.now()}`,
+          { signal: suggestAbortController.signal }
+        );
+        if (!response.ok) return closeSuggestions();
+        const data = await response.json();
+        if (requestSeq !== suggestRequestSeq) return;
+        if (keywordEl.value.trim() !== query) return;
+
+        const normalized = [...new Set((data.suggestions || [])
+          .map((item) => String(item).trim())
+          .filter((item) => item && item !== query))]
+          .slice(0, SUGGEST_MAX_RESULTS);
+        suggestionsExpanded = false;
+        renderSuggestions(normalized);
+      } catch (error) {
+        if (error?.name !== 'AbortError') closeSuggestions();
+      }
+    }
+
+    function setReadyButton() {
+      const icon = document.createElement('span');
+      icon.className = 'button-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.innerHTML = SEARCH_BUTTON_ICON;
+      btn.replaceChildren(icon, document.createTextNode('검색하기'));
+    }
+
+    function showValidationError(message, target) {
+      const title = target === 'keyword' ? '키워드를 확인해주세요' : '매체를 선택해주세요';
+      setSearchError(message, title);
+      if (target === 'keyword') {
+        keywordEl.classList.add('is-invalid');
+        keywordShell.classList.add('is-invalid');
+        keywordError.textContent = message;
+        keywordError.classList.add('visible');
+      }
+      if (target === 'platforms') {
+        chipsEl.classList.add('is-invalid');
+        platformError.textContent = message;
+        platformError.classList.add('visible');
+        setPlatformPanelExpanded(true);
+        chipsEl.querySelector('.chip')?.focus();
+      }
+    }
+
+    function clearValidation(target) {
+      if (target === 'keyword') {
+        keywordEl.classList.remove('is-invalid');
+        keywordShell.classList.remove('is-invalid');
+        keywordError.textContent = '';
+        keywordError.classList.remove('visible');
+      }
+      if (target === 'platforms') {
+        chipsEl.classList.remove('is-invalid');
+        platformError.textContent = '';
+        platformError.classList.remove('visible');
+      }
+      if (
+        status.classList.contains('error') &&
+        !keywordEl.classList.contains('is-invalid') &&
+        !chipsEl.classList.contains('is-invalid')
+      ) {
+        clearStatusMessage();
+      }
+    }
+
+    restorePreferences();
+    setPlatformPanelExpanded(false);
+    syncKeywordControls();
+
+    platformToggleBtn.addEventListener('click', () => {
+      setPlatformPanelExpanded(!platformsExpanded);
+    });
 
     async function setEmbedSearching(searching) {
       try {
@@ -455,19 +1134,30 @@
       } catch { /* 임베드 URL 상태 갱신 실패는 검색 자체를 막지 않음 */ }
     }
 
+    function setSearchingButton(label = '진행 중') {
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      btn.replaceChildren(spinner, document.createTextNode(label));
+    }
+
+    function setSearchProgress(message) {
+      setStatusMessage('searching', '검색 중', message);
+      btn.title = message;
+    }
+
     // ── 초기 상태 렌더링 ─────────────────────────────────────────────────────
     if (!configured) {
       btn.classList.add('unconfigured');
       form.classList.add('disabled-overlay');
-      configGuide.style.display = 'block';
+      configGuide.classList.add('visible');
     } else if (searching) {
       // URL에 ?searching=1 → 다른 기기/새 탭에서 진행 중인 검색 표시
       btn.disabled = true;
       btn.classList.add('searching');
-      btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      setSearchingButton();
       form.classList.add('disabled-overlay');
-      status.className = 'searching';
-      status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+      setSearchProgress('노션에서 검색 결과를 작성하고 있어요...');
     }
 
     // ── 버튼 클릭 ────────────────────────────────────────────────────────────
@@ -478,29 +1168,28 @@
       const keyword   = keywordEl.value.trim();
       const platforms = selectedPlatforms();
       const period    = periodEl.value;
+      closeSuggestions();
 
       // 클라이언트 검증
       if (!keyword) {
-        status.className = 'error';
-        status.textContent = '검색 키워드를 입력해주세요.';
+        showValidationError('검색 키워드를 입력해주세요.', 'keyword');
         keywordEl.focus();
         return;
       }
       if (platforms.length === 0) {
-        status.className = 'error';
-        status.textContent = '하나 이상의 매체를 선택해주세요.';
+        showValidationError('하나 이상의 매체를 선택해주세요.', 'platforms');
         return;
       }
 
       // 1. 즉시 UI 비활성
-      document.getElementById('keywordTrend').style.display = 'none';
-      document.getElementById('relatedSection').style.display = 'none';
+      clearValidation('keyword');
+      clearValidation('platforms');
+      savePreferences();
       btn.disabled = true;
       btn.classList.add('searching');
-      btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+      setSearchingButton();
       form.classList.add('disabled-overlay');
-      status.className = 'searching';
-      status.textContent = '검색을 요청하고 있어요...';
+      setSearchProgress('검색 요청을 보내고 있어요...');
       activeSearch = true;
 
       try {
@@ -522,7 +1211,7 @@
 
         // 202 수신 — 다른 기기/새 탭 차단용 URL 갱신 후 폴링으로 완료 감지
         setEmbedSearching(true);
-        status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+        setSearchProgress('노션에서 검색 결과를 작성하고 있어요...');
         startPolling();
 
       } catch (err) {
@@ -530,8 +1219,7 @@
         activeSearch = false;
         stopPolling();
         resetButton();
-        status.className = 'error';
-        status.textContent = err.message;
+        setSearchError(err.message);
       }
     });
 
@@ -564,22 +1252,17 @@
           const data = await res.json();
           if (data.searching) {
             sawSearching = true;
-            if (data.message) status.textContent = data.message;
+            if (data.message) setSearchProgress(data.message);
           } else if (!sawSearching && Date.now() - startedAt < minWaitMs) {
-            status.className = 'searching';
-            status.textContent = '검색 상태를 확인하고 있어요...';
+            setSearchProgress('검색 상태를 확인하고 있어요...');
           } else {
             stopPolling();
             activeSearch = false;
             resetButton();
             if (data.error) {
-              status.className = 'error';
-              status.textContent = data.error;
+              setSearchError(data.error);
             } else {
-              status.className = 'accepted';
-              status.textContent = '검색 완료! 노션에서 결과를 확인하세요.';
-              showKeywordTrend(keywordEl.value.trim());
-              if (data.related?.keywords?.length) showRelatedKeywords(data.related);
+              setSearchSuccess();
             }
             return;
           }
@@ -589,8 +1272,7 @@
           stopPolling();
           activeSearch = false;
           resetButton();
-          status.className = 'error';
-          status.textContent = '시간이 초과됐어요. 노션을 직접 확인해주세요.';
+          setSearchError('시간이 초과됐어요. 노션을 직접 확인해주세요.');
         }
       }, STATUS_POLL_INTERVAL_MS);
     }
@@ -598,7 +1280,8 @@
     function resetButton() {
       btn.disabled = false;
       btn.classList.remove('searching');
-      btn.innerHTML = '검색하기';
+      setReadyButton();
+      btn.title = '';
       form.classList.remove('disabled-overlay');
     }
 
@@ -619,10 +1302,9 @@
       if (isSearching && !pollTimer) {
         btn.disabled = true;
         btn.classList.add('searching');
-        btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+        setSearchingButton();
         form.classList.add('disabled-overlay');
-        status.className = 'searching';
-        status.textContent = '노션에서 검색 결과를 작성하고 있어요...';
+        setSearchProgress('노션에서 검색 결과를 작성하고 있어요...');
         startPolling();
       } else if (!isSearching) {
         stopPolling();
@@ -630,148 +1312,62 @@
         if (searching) {
           btn.disabled = true;
           btn.classList.add('searching');
-          btn.innerHTML = '<span class="spinner">⟳</span> 검색 중...';
+          setSearchingButton();
           form.classList.add('disabled-overlay');
-          status.className = 'searching';
-          status.textContent = '검색 상태를 확인하고 있어요...';
+          setSearchProgress('검색 상태를 확인하고 있어요...');
           startPolling({ minWaitMs: STATUS_SETTLE_MS });
         }
       }
     })();
 
-    // ── 자동완성 ─────────────────────────────────────────────────────────────
-    const suggestEl = document.getElementById('suggest');
-    let suggestItems = [];
-    let activeIdx = -1;
-    let suggestTimer = null;
-    let lastQuery = '';
-
-    function closeSuggest() {
-      suggestEl.classList.remove('open');
-      suggestEl.innerHTML = '';
-      suggestItems = [];
-      activeIdx = -1;
-    }
-
-    function renderSuggest(words) {
-      if (!words.length) { closeSuggest(); return; }
-      suggestItems = words;
-      activeIdx = -1;
-      suggestEl.innerHTML = '';
-      words.forEach((w) => {
-        const item = document.createElement('div');
-        item.className = 'suggest-item';
-        item.innerHTML = '<span class="ico">🔍</span>';
-        item.appendChild(document.createTextNode(w));
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // blur 먼저 발생 방지
-          keywordEl.value = w;
-          closeSuggest();
-          keywordEl.focus();
-        });
-        suggestEl.appendChild(item);
-      });
-      suggestEl.classList.add('open');
-    }
-
-    async function fetchSuggest(q) {
-      try {
-        const res = await fetch(
-          `${FUNCTION_BASE}/manage-user?action=trend-suggest&keyword=${encodeURIComponent(q)}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (keywordEl.value.trim() === q) renderSuggest(data.suggestions || []);
-      } catch { /* 자동완성 실패는 무시 */ }
-    }
-
-    function highlight(delta) {
-      if (!suggestItems.length) return;
-      const items = suggestEl.querySelectorAll('.suggest-item');
-      if (activeIdx >= 0) items[activeIdx]?.classList.remove('active');
-      activeIdx = (activeIdx + delta + suggestItems.length) % suggestItems.length;
-      items[activeIdx]?.classList.add('active');
-    }
-
     keywordEl.addEventListener('input', () => {
-      const q = keywordEl.value.trim();
-      if (q === lastQuery) return;
-      lastQuery = q;
-      clearTimeout(suggestTimer);
-      if (q.length < 1) { closeSuggest(); return; }
-      suggestTimer = setTimeout(() => fetchSuggest(q), 200);
+      clearValidation('keyword');
+      syncKeywordControls();
+      scheduleSuggestions();
+    });
+
+    keywordEl.addEventListener('focus', () => {
+      scheduleSuggestions();
+    });
+
+    keywordClearBtn.addEventListener('click', () => {
+      keywordEl.value = '';
+      clearValidation('keyword');
+      syncKeywordControls();
+      closeSuggestions();
+      keywordEl.focus();
     });
 
     keywordEl.addEventListener('keydown', (e) => {
-      const open = suggestEl.classList.contains('open');
-      if (open && e.key === 'ArrowDown') { e.preventDefault(); highlight(1); return; }
-      if (open && e.key === 'ArrowUp')   { e.preventDefault(); highlight(-1); return; }
+      const suggestionsOpen = keywordSuggest.classList.contains('open');
+      if (suggestionsOpen && e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveSuggestion(1);
+        return;
+      }
+      if (suggestionsOpen && e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveSuggestion(-1);
+        return;
+      }
+      if (suggestionsOpen && e.key === 'Escape') {
+        e.preventDefault();
+        closeSuggestions();
+        return;
+      }
       if (e.key === 'Enter') {
-        if (open && activeIdx >= 0) {
-          e.preventDefault();
-          keywordEl.value = suggestItems[activeIdx];
-          closeSuggest();
+        e.preventDefault();
+        if (suggestionsOpen && activeSuggestIndex >= 0) {
+          applySuggestion(suggestItems[activeSuggestIndex]);
           return;
         }
         btn.click();
-        return;
       }
-      if (e.key === 'Escape') closeSuggest();
     });
 
-    keywordEl.addEventListener('blur', () => setTimeout(closeSuggest, 120));
-
-    async function showKeywordTrend(keyword) {
-      if (!keyword) return;
-      try {
-        const res = await fetch(
-          `${FUNCTION_BASE}/trend-data?action=keyword&keyword=${encodeURIComponent(keyword)}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.trend) return;
-
-        const { direction, changePercent, points } = data.trend;
-        const sparkline = toSparkline(points.map((p) => p.ratio));
-        const arrow = direction === 'up' ? '📈' : direction === 'down' ? '📉' : '➡️';
-        const changeText =
-          direction === 'up' ? `+${changePercent}%` :
-          direction === 'down' ? `${changePercent}%` : '보합';
-
-        const el = document.getElementById('keywordTrend');
-        el.innerHTML =
-          `${arrow} <strong>'${keyword}'</strong> 검색량 ${changeText} (최근 2주)<br>` +
-          `<span style="font-family:monospace;letter-spacing:3px;font-size:1rem">${sparkline}</span>`;
-        el.style.display = 'block';
-      } catch { /* 트렌드 표시 실패는 무시 */ }
-    }
-
-    function showRelatedKeywords(related) {
-      const section = document.getElementById('relatedSection');
-      const chips = document.getElementById('relatedChips');
-      chips.innerHTML = '';
-      related.keywords.forEach(({ keyword, ratio }) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'related-chip';
-        chip.innerHTML = `${keyword}<span class="ratio">${ratio}</span>`;
-        chip.addEventListener('click', () => {
-          keywordEl.value = keyword;
-          section.style.display = 'none';
-          keywordEl.focus();
-        });
-        chips.appendChild(chip);
-      });
-      section.style.display = 'block';
-    }
-
-    function toSparkline(values) {
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const range = max - min || 1;
-      const chars = '▁▂▃▄▅▆▇█';
-      return values.slice(-12).map((v) => chars[Math.round((v - min) / range * 7)]).join('');
-    }
+    document.addEventListener('mousedown', (event) => {
+      if (!event.target.closest('.keyword-field')) closeSuggestions();
+    });
   </script>
 </body>
 </html>

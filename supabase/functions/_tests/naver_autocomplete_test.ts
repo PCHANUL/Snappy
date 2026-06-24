@@ -33,3 +33,22 @@ Deno.test('fetchNaverAutocomplete returns empty for blank input without fetching
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test('fetchNaverAutocomplete returns up to 20 suggestions', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    items: [[
+      ['테스트', 'meta'],
+      ...Array.from({ length: 25 }, (_, index) => [`테스트 ${index + 1}`, 'meta']),
+    ]],
+  }))) as typeof fetch;
+
+  try {
+    const suggestions = await fetchNaverAutocomplete('테스트');
+    assertEquals(suggestions.length, 20);
+    assertEquals(suggestions[0], '테스트 1');
+    assertEquals(suggestions[19], '테스트 20');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

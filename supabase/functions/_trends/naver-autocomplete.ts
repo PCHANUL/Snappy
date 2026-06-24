@@ -52,5 +52,5 @@ export async function fetchNaverAutocomplete(keyword: string): Promise<string[]>
     suggestions.push(clean);
   }
 
-  return suggestions.slice(0, 10);
+  return suggestions.slice(0, 20);
 }
