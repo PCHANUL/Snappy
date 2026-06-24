@@ -209,12 +209,20 @@ Deno.test('buildSubPageBlocks: 배열을 반환함', () => {
   assert(blocks.length > 0);
 });
 
-Deno.test('buildSubPageBlocks: bookmark 블록 포함 + 올바른 URL', () => {
-  const item = makeItem('youtube');
+Deno.test('buildSubPageBlocks: 일반 링크 아이템 → bookmark 블록 포함 + 올바른 URL', () => {
+  const item = makeItem('naver_blog');
   const blocks = buildSubPageBlocks(item);
   const bookmarks = blocks.filter(b => b.type === 'bookmark');
   assert(bookmarks.length > 0, 'bookmark 존재');
   assertEquals(bookmarks[0].bookmark.url, item.url);
+});
+
+Deno.test('buildSubPageBlocks: 유튜브 아이템 → video 블록으로 임베딩', () => {
+  const item = makeItem('youtube', { url: 'https://www.youtube.com/watch?v=watch123' });
+  const blocks = buildSubPageBlocks(item);
+  const videos = blocks.filter(b => b.type === 'video');
+  assertEquals(videos.length, 1, '서브페이지에서 유튜브 video 블록 필요');
+  assertEquals(videos[0].video.external.url, item.url);
 });
 
 Deno.test('buildSubPageBlocks: 유튜브 숏츠 아이템 → video 블록으로 임베딩', () => {

@@ -56,6 +56,12 @@ const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
 const MAX_BLOCKS_PER_REQUEST = 100;
 const SEARCH_DATABASE_TITLE = '검색 DB';
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
+const INITIAL_BODY_PLATFORMS = new Set<Platform>([
+  'youtube',
+  'youtube_shorts',
+  'tiktok',
+  'instagram_reels',
+]);
 
 export class NotionClient {
   private pagesCreatedWithTemplate = new Set<string>();
@@ -368,7 +374,7 @@ export class NotionClient {
         properties,
       };
       if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
-      if (item.platform === 'tiktok' || item.platform === 'instagram_reels') {
+      if (INITIAL_BODY_PLATFORMS.has(item.platform)) {
         body.children = buildSubPageBlocks(item);
       }
 
