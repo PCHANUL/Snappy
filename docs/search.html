@@ -31,7 +31,7 @@
       align-items: start;
       justify-content: center;
       min-height: 100vh;
-      padding: 8px;
+      padding: 8px clamp(8px, 2vw, 16px);
       color: var(--ink);
     }
 
@@ -40,7 +40,7 @@
       flex-direction: column;
       gap: 12px;
       width: 100%;
-      max-width: 620px;
+      max-width: 1040px;
       padding: 12px;
       border: 1px solid rgba(55, 53, 47, 0.12);
       border-radius: 6px;
@@ -232,6 +232,11 @@
       grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.28fr);
       gap: 12px;
       align-items: start;
+      min-width: 0;
+    }
+
+    .filter-field {
+      min-width: 0;
     }
 
     .label-row {
@@ -239,6 +244,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+      min-width: 0;
     }
 
     .label-with-count {
@@ -267,6 +273,7 @@
       align-items: center;
       gap: 4px;
       flex: 0 0 auto;
+      margin-left: auto;
     }
 
     .platform-toggle { display: none; }
@@ -326,8 +333,9 @@
 
     .platform-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
       gap: 6px;
+      min-width: 0;
     }
 
     .platform-grid.is-invalid .platform-chip {
@@ -346,6 +354,7 @@
       gap: 6px;
       line-height: 1.2;
       position: relative;
+      width: 100%;
     }
 
     .platform-icon {
@@ -535,16 +544,80 @@
     .field-error.visible { display: block; }
 
 
-    #form { display: flex; flex-direction: column; gap: 12px; }
+    #form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
     .search-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 124px;
       gap: 8px;
       align-items: start;
+      min-width: 0;
+    }
+
+    @media (min-width: 960px) {
+      #form {
+        display: grid;
+        grid-template-columns: minmax(0, 1.16fr) minmax(340px, 0.84fr);
+        gap: 14px;
+        align-items: start;
+      }
+
+      .filter-grid {
+        grid-template-columns: minmax(210px, 0.56fr) minmax(0, 1.44fr);
+        gap: 14px;
+      }
+
+      .platform-grid {
+        grid-template-columns: repeat(auto-fit, minmax(102px, 1fr));
+      }
+
+      .keyword-field {
+        min-width: 0;
+      }
+
+      .search-row {
+        grid-template-columns: minmax(0, 1fr) 132px;
+      }
+
+      #searchBtn {
+        width: 132px;
+      }
+    }
+
+    @media (min-width: 621px) {
+      .filter-field .label-row {
+        min-height: 40px;
+      }
+    }
+
+    @media (min-width: 621px) and (max-width: 959px) {
+      .filter-grid {
+        grid-template-columns: minmax(190px, 0.54fr) minmax(0, 1.46fr);
+      }
+
+      .platform-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .search-row {
+        grid-template-columns: minmax(0, 1fr) 132px;
+      }
+
+      #searchBtn {
+        width: 132px;
+      }
     }
 
     @media (max-width: 620px) {
       .filter-grid { grid-template-columns: 1fr; }
+      .label-row {
+        flex-wrap: wrap;
+        row-gap: 4px;
+      }
       .platform-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
 
@@ -585,8 +658,10 @@
   <div class="wrap">
     <div id="form">
       <div class="filter-grid">
-        <div class="field">
-          <span class="label" id="periodLabel">기간</span>
+        <div class="field filter-field period-field">
+          <div class="label-row">
+            <span class="label" id="periodLabel">기간</span>
+          </div>
           <div class="segmented" id="periods" role="radiogroup" aria-labelledby="periodLabel">
             <button type="button" class="segment-btn" data-value="day" role="radio" aria-checked="false">1일</button>
             <button type="button" class="segment-btn" data-value="week" role="radio" aria-checked="false">1주</button>
@@ -596,7 +671,7 @@
           <input id="period" type="hidden" value="month">
         </div>
 
-        <div class="field">
+        <div class="field filter-field platform-field">
           <div class="label-row">
             <span class="label label-with-count" id="platformsLabel">
               매체
