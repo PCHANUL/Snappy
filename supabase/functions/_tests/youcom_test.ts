@@ -136,7 +136,7 @@ Deno.test('searchBrunch: 도메인이 brunch.co.kr로 설정됨', async () => {
   }
 });
 
-Deno.test('searchTikTok: www.tiktok.com/@user/video URL만 반환', async () => {
+Deno.test('searchTikTok: TikTok 영상 URL을 www.tiktok.com/@user/video 형식으로 반환', async () => {
   const mockResponse = {
     results: {
       web: [
@@ -174,13 +174,13 @@ Deno.test('searchTikTok: www.tiktok.com/@user/video URL만 반환', async () => 
         },
         {
           url: 'https://tiktok.com/@creator/video/7350000000000000002',
-          title: 'www 없는 영상 링크',
+          title: '댄스 www 없는 영상 링크',
           description: '',
           snippets: [],
         },
         {
           url: 'https://m.tiktok.com/@creator/video/7350000000000000003',
-          title: '모바일 영상 링크',
+          title: '댄스 모바일 영상 링크',
           description: '',
           snippets: [],
         },
@@ -207,23 +207,76 @@ Deno.test('searchTikTok: www.tiktok.com/@user/video URL만 반환', async () => 
     const results = await searchTikTok('댄스', 10, 'month');
     const urls = new Set(results.map(r => r.url));
 
-    assertEquals(results.length, 1);
+    assertEquals(results.length, 3);
     assert(urls.has('https://www.tiktok.com/@creator/video/7350000000000000000'), '영상 URL 포함');
+    assert(urls.has('https://www.tiktok.com/@creator/video/7350000000000000002'), 'www 없는 영상 URL 정규화');
+    assert(urls.has('https://www.tiktok.com/@creator/video/7350000000000000003'), '모바일 영상 URL 정규화');
     assert(!urls.has('https://www.tiktok.com/@creator/photo/7350000000000000001'), '포토 URL 제외');
     assert(!urls.has('https://www.tiktok.com/t/ZT123abc/'), '공유 URL 제외');
-    assert(!urls.has('https://tiktok.com/@creator/video/7350000000000000002'), 'www 없는 URL 제외');
-    assert(!urls.has('https://m.tiktok.com/@creator/video/7350000000000000003'), '모바일 URL 제외');
     assert(!urls.has('https://www.tiktok.com/@creator'), '프로필 URL 제외');
     assert(!urls.has('https://www.tiktok.com/discover/dance'), '검색 URL 제외');
     assert(results.every(r => r.platform === 'tiktok'), 'platform=tiktok 필요');
     assertEquals(results.find(r => r.url.includes('/video/'))?.author, '@creator');
     assert(capturedUrl.includes('tiktok.com'), `include_domains에 tiktok.com 포함 필요: ${capturedUrl}`);
+    const query = new URL(capturedUrl).searchParams.get('query') || '';
+    assert(query.includes('site:tiktok.com/@'), `TikTok 검색 쿼리에 site 힌트 필요: ${query}`);
+    assert(query.includes('/video/'), `TikTok 검색 쿼리에 video 경로 힌트 필요: ${query}`);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-Deno.test('searchInstagramReels: www.instagram.com/reel URL만 반환', async () => {
+Deno.test('searchTikTok: 경로 힌트 쿼리 결과가 없으면 기본 키워드로 재시도', async () => {
+  const originalFetch = globalThis.fetch;
+  const capturedQueries: string[] = [];
+  globalThis.fetch = async (url: string | URL | Request) => {
+    const query = new URL(url.toString()).searchParams.get('query') || '';
+    capturedQueries.push(query);
+    const response = capturedQueries.length === 1
+      ? {
+        results: {
+          web: [
+            {
+              url: 'https://www.tiktok.com/@creator',
+              title: '댄스 크리에이터 프로필',
+              description: '',
+              snippets: [],
+            },
+          ],
+        },
+        metadata: {},
+      }
+      : {
+        results: {
+          web: [
+            {
+              url: 'https://www.tiktok.com/@creator/video/7350000000000000000',
+              title: '댄스 영상',
+              description: '',
+              snippets: [],
+            },
+          ],
+        },
+        metadata: {},
+      };
+    return new Response(JSON.stringify(response), { status: 200 });
+  };
+
+  try {
+    const { searchTikTok } = await import('../_search/youcom.ts');
+    const results = await searchTikTok('댄스', 10, 'month');
+
+    assertEquals(capturedQueries.length, 2);
+    assert(capturedQueries[0].includes('site:tiktok.com/@'), '첫 요청은 TikTok 경로 힌트 포함');
+    assertEquals(capturedQueries[1], '댄스');
+    assertEquals(results.length, 1);
+    assertEquals(results[0].url, 'https://www.tiktok.com/@creator/video/7350000000000000000');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test('searchInstagramReels: Instagram Reel URL을 www.instagram.com/reel 형식으로 반환', async () => {
   const mockResponse = {
     results: {
       web: [
@@ -266,6 +319,12 @@ Deno.test('searchInstagramReels: www.instagram.com/reel URL만 반환', async ()
           snippets: [],
         },
         {
+          url: 'https://www.instagram.com/reels/DRIxfcYkh0L/',
+          title: '비건 릴스 복수형 reels 경로',
+          description: '',
+          snippets: [],
+        },
+        {
           url: 'https://example.com/instagram.com/reel/fake',
           title: '외부 링크',
           description: '',
@@ -288,15 +347,18 @@ Deno.test('searchInstagramReels: www.instagram.com/reel URL만 반환', async ()
     const results = await searchInstagramReels('비건 릴스', 10, 'month');
     const urls = new Set(results.map(r => r.url));
 
-    assertEquals(results.length, 1);
+    assertEquals(results.length, 4);
     assert(urls.has('https://www.instagram.com/reel/DRIxfcYkh0I/'), '릴스 URL 포함');
+    assert(urls.has('https://www.instagram.com/reel/DRIxfcYkh0J/'), 'www 없는 릴스 URL 정규화');
+    assert(urls.has('https://www.instagram.com/reel/DRIxfcYkh0K/'), '모바일 릴스 URL 정규화');
+    assert(urls.has('https://www.instagram.com/reel/DRIxfcYkh0L/'), '복수형 reels 경로 정규화');
     assert(!urls.has('https://www.instagram.com/p/DRIxfcYkh0I/'), '일반 게시물 제외');
     assert(!urls.has('https://www.instagram.com/explore/tags/vegan/'), '태그 URL 제외');
     assert(!urls.has('https://www.instagram.com/reels/audio/123456789/'), '릴스 오디오 URL 제외');
-    assert(!urls.has('https://instagram.com/reel/DRIxfcYkh0J/'), 'www 없는 URL 제외');
-    assert(!urls.has('https://m.instagram.com/reel/DRIxfcYkh0K/'), '모바일 URL 제외');
     assert(results.every(r => r.platform === 'instagram_reels'), 'platform=instagram_reels 필요');
     assert(capturedUrl.includes('instagram.com'), `include_domains에 instagram.com 포함 필요: ${capturedUrl}`);
+    const query = new URL(capturedUrl).searchParams.get('query') || '';
+    assert(query.includes('site:instagram.com/reel/'), `Reels 검색 쿼리에 reel site 힌트 필요: ${query}`);
   } finally {
     globalThis.fetch = originalFetch;
   }
