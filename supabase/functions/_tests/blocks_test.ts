@@ -209,28 +209,28 @@ Deno.test('buildSubPageBlocks: 배열을 반환함', () => {
   assert(blocks.length > 0);
 });
 
-Deno.test('buildSubPageBlocks: 일반 링크 아이템 → bookmark 블록 포함 + 올바른 URL', () => {
+Deno.test('buildSubPageBlocks: 일반 링크 아이템 → embed 블록 포함 + 올바른 URL', () => {
   const item = makeItem('naver_blog');
   const blocks = buildSubPageBlocks(item);
-  const bookmarks = blocks.filter(b => b.type === 'bookmark');
-  assert(bookmarks.length > 0, 'bookmark 존재');
-  assertEquals(bookmarks[0].bookmark.url, item.url);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assert(embeds.length > 0, 'embed 존재');
+  assertEquals(embeds[0].embed.url, item.url);
 });
 
-Deno.test('buildSubPageBlocks: 유튜브 아이템 → video 블록으로 임베딩', () => {
+Deno.test('buildSubPageBlocks: 유튜브 아이템 → embed 블록으로 임베딩', () => {
   const item = makeItem('youtube', { url: 'https://www.youtube.com/watch?v=watch123' });
   const blocks = buildSubPageBlocks(item);
-  const videos = blocks.filter(b => b.type === 'video');
-  assertEquals(videos.length, 1, '서브페이지에서 유튜브 video 블록 필요');
-  assertEquals(videos[0].video.external.url, item.url);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assertEquals(embeds.length, 1, '서브페이지에서 유튜브 embed 블록 필요');
+  assertEquals(embeds[0].embed.url, item.url);
 });
 
-Deno.test('buildSubPageBlocks: 유튜브 숏츠 아이템 → video 블록으로 임베딩', () => {
+Deno.test('buildSubPageBlocks: 유튜브 숏츠 아이템 → embed 블록으로 임베딩', () => {
   const item = makeItem('youtube_shorts', { url: 'https://www.youtube.com/shorts/sub123' });
   const blocks = buildSubPageBlocks(item);
-  const videos = blocks.filter(b => b.type === 'video');
-  assertEquals(videos.length, 1, '서브페이지에서도 숏츠 video 블록 필요');
-  assertEquals(videos[0].video.external.url, item.url);
+  const embeds = blocks.filter(b => b.type === 'embed');
+  assertEquals(embeds.length, 1, '서브페이지에서도 숏츠 embed 블록 필요');
+  assertEquals(embeds[0].embed.url, item.url);
 });
 
 Deno.test('buildSubPageBlocks: 틱톡 아이템 → embed 블록으로 임베딩', () => {
@@ -282,7 +282,7 @@ Deno.test('buildSubPageBlocks: snippet 있으면 description 대신 사용', () 
 Deno.test('buildSubPageBlocks: description/snippet 모두 없으면 텍스트 블록 없음', () => {
   const item = makeItem('naver_blog', { description: '', snippet: undefined });
   const blocks = buildSubPageBlocks(item);
-  // bookmark + meta paragraph 외에 긴 텍스트 paragraph 없어야 함
+  // embed + meta paragraph 외에 긴 텍스트 paragraph 없어야 함
   const textParagraphs = blocks
     .filter(b => b.type === 'paragraph')
     .filter(b => b.paragraph.rich_text[0].text.content.length > 50);

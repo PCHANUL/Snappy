@@ -1,5 +1,5 @@
 import './setup.ts';
-import { assertEquals, assertArrayIncludes } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
+import { assert, assertEquals, assertArrayIncludes } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
 import { stripHtml, parseNaverDate, filterByPeriod } from '../_search/naver.ts';
 import type { ContentItem } from '../_core/types.ts';
 
@@ -102,7 +102,7 @@ Deno.test('searchNaverBlog: 정상 응답 파싱', async () => {
         description: '맛있는 <b>비건</b> 디저트를 만들어봤습니다.',
         bloggername: '요리블로거',
         bloggerlink: 'https://blog.naver.com/test',
-        postdate: '20240315',
+        postdate: daysAgo(0).replace(/-/g, ''),
       },
       {
         title: '오래된 글',
@@ -135,7 +135,7 @@ Deno.test('searchNaverBlog: 정상 응답 파싱', async () => {
     assertEquals(results[0].url, 'https://blog.naver.com/test/123');
     assertEquals(results[0].description, '맛있는 비건 디저트를 만들어봤습니다.');
     assertEquals(results[0].author, '요리블로거');
-    assertEquals(results[0].published_at, '2024-03-15');
+    assertEquals(results[0].published_at, daysAgo(0));
     assertEquals(results[0].platform, 'naver_blog');
   } finally {
     globalThis.fetch = originalFetch;

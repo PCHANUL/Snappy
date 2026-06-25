@@ -61,52 +61,43 @@ Deno.test('deduplicateResults: 3개 플랫폼 전체 중복 시나리오', () =>
 
 // ── searchAllPlatforms ────────────────────────────────────────────────────────
 
-function makeFetchMock(handlers: Array<{ match: string; response: unknown; status?: number }>) {
-  return async (url: string | URL | Request): Promise<Response> => {
-    const urlStr = url.toString();
-    for (const h of handlers) {
-      if (urlStr.includes(h.match)) {
-        return new Response(JSON.stringify(h.response), { status: h.status ?? 200 });
-      }
-    }
-    return new Response('not found', { status: 404 });
-  };
+function makeTavilyResult(url: string, title: string, content = 'test content') {
+  return { url, title, content, published_date: '2026-06-01', score: 0.9 };
 }
 
-const naverItem = {
-  title: 'Naver 글',
-  link: 'https://blog.naver.com/post/1',
-  description: '내용',
-  bloggername: 'blogger',
-  bloggerlink: '',
-  postdate: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
-};
+function domainsFromBody(init?: RequestInit): string[] {
+  const body = JSON.parse(String(init?.body ?? '{}'));
+  return Array.isArray(body.include_domains) ? body.include_domains : [];
+}
 
-const ytItem = {
-  id: { videoId: 'vid1' },
-  snippet: {
-    title: 'YT 영상',
-    description: '',
-    channelTitle: 'ch',
-    publishedAt: new Date().toISOString(),
-    thumbnails: { high: { url: 'https://img.youtube.com/vi/vid1/hqdefault.jpg' } },
-  },
-};
+function queryFromBody(init?: RequestInit): string {
+  const body = JSON.parse(String(init?.body ?? '{}'));
+  return String(body.query ?? '');
+}
 
 Deno.test('searchAllPlatforms: 모든 플랫폼 성공', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = makeFetchMock([
-    { match: 'openapi.naver.com',    response: { items: [naverItem], total: 1, start: 1, display: 1 } },
-    { match: 'googleapis.com',       response: { items: [ytItem], pageInfo: {} } },
-    { match: 'tistory.com',          response: { results: { web: [{ url: 'https://post.tistory.com/1', title: 'T', description: '', snippets: [] }] }, metadata: {} } },
-    { match: 'brunch.co.kr',         response: { results: { web: [{ url: 'https://brunch.co.kr/@u/1',  title: 'B', description: '', snippets: [] }] }, metadata: {} } },
-    { match: 'ydc-index.io',         response: { results: { web: [] }, metadata: {} } },
-  ]) as typeof globalThis.fetch;
+  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+    const domains = domainsFromBody(init);
+    let results: unknown[] = [];
+    if (domains.includes('blog.naver.com')) {
+      results = [makeTavilyResult('https://blog.naver.com/user/1', 'Naver 글')];
+    } else if (domains.includes('youtube.com')) {
+      results = [makeTavilyResult('https://www.youtube.com/watch?v=vid1', 'YT 영상')];
+    } else if (domains.includes('tistory.com')) {
+      results = [makeTavilyResult('https://post.tistory.com/1', 'Tistory 글')];
+    } else if (domains.includes('brunch.co.kr')) {
+      results = [makeTavilyResult('https://brunch.co.kr/@u/1', 'Brunch 글')];
+    }
+    return new Response(JSON.stringify({ results, usage: { credits: 1 } }), { status: 200 });
+  };
   try {
     const result = await searchAllPlatforms('test', ['naver_blog', 'youtube', 'tistory', 'brunch'], 10, 'month');
     assertEquals(result.results.length, 4);
     assertEquals(result.results.find(r => r.platform === 'naver_blog')?.count, 1);
     assertEquals(result.results.find(r => r.platform === 'youtube')?.count, 1);
+    assertEquals(result.results.find(r => r.platform === 'tistory')?.count, 1);
+    assertEquals(result.results.find(r => r.platform === 'brunch')?.count, 1);
     assert(result.duration_ms >= 0, 'duration_ms가 설정되어야 함');
   } finally {
     globalThis.fetch = originalFetch;
@@ -115,10 +106,18 @@ Deno.test('searchAllPlatforms: 모든 플랫폼 성공', async () => {
 
 Deno.test('searchAllPlatforms: 한 플랫폼 실패 → 나머지 정상 반환', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = makeFetchMock([
-    { match: 'openapi.naver.com', response: { error: 'fail' }, status: 500 }, // Naver 실패
-    { match: 'googleapis.com',    response: { items: [ytItem], pageInfo: {} } },
-  ]) as typeof globalThis.fetch;
+  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+    const domains = domainsFromBody(init);
+    if (domains.includes('blog.naver.com')) {
+      return new Response(JSON.stringify({ error: 'fail' }), { status: 500 });
+    }
+    return new Response(
+      JSON.stringify({
+        results: [makeTavilyResult('https://www.youtube.com/watch?v=vid1', 'YT 영상')],
+      }),
+      { status: 200 },
+    );
+  };
   try {
     const result = await searchAllPlatforms('test', ['naver_blog', 'youtube'], 10, 'month');
     assertEquals(result.results.length, 2);
@@ -133,90 +132,86 @@ Deno.test('searchAllPlatforms: 한 플랫폼 실패 → 나머지 정상 반환'
   }
 });
 
-Deno.test('searchAllPlatforms: tiktok 검색은 You.com 검색기로 연결됨', async () => {
+Deno.test('searchAllPlatforms: tiktok 검색은 Tavily 검색기로 연결됨', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = makeFetchMock([
-    {
-      match: 'tiktok.com',
-      response: {
-        results: {
-          web: [
-            {
-              url: 'https://www.tiktok.com/@creator/video/7350000000000000000',
-              title: 'dance tiktok video',
-              description: '',
-              snippets: [],
-            },
-          ],
-        },
-        metadata: {},
-      },
-    },
-  ]) as typeof globalThis.fetch;
+  let capturedQuery = '';
+  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+    capturedQuery = queryFromBody(init);
+    return new Response(
+      JSON.stringify({
+        results: [
+          makeTavilyResult(
+            'https://www.tiktok.com/@creator/video/7350000000000000000',
+            'dance tiktok video',
+            'dance tiktok content',
+          ),
+        ],
+      }),
+      { status: 200 },
+    );
+  };
   try {
     const result = await searchAllPlatforms('dance', ['tiktok'], 5, 'month');
     const tiktok = result.results.find(r => r.platform === 'tiktok')!;
     assertEquals(tiktok.count, 1);
     assertEquals(tiktok.items[0].url, 'https://www.tiktok.com/@creator/video/7350000000000000000');
-    assertEquals(result.total_cost_usd, 0.005);
+    assert(capturedQuery.includes('site:tiktok.com/@'), 'TikTok Tavily query에 site 힌트 필요');
+    assert(capturedQuery.includes('/video/'), 'TikTok Tavily query에 video 힌트 필요');
+    assertEquals(result.total_cost_usd, 0.008);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-Deno.test('searchAllPlatforms: instagram_reels 검색은 You.com 검색기로 연결됨', async () => {
+Deno.test('searchAllPlatforms: instagram_reels 검색은 Tavily 검색기로 연결됨', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = makeFetchMock([
-    {
-      match: 'instagram.com',
-      response: {
-        results: {
-          web: [
-            {
-              url: 'https://www.instagram.com/reel/DRIxfcYkh0I/',
-              title: 'vegan reels',
-              description: '',
-              snippets: [],
-            },
-          ],
-        },
-        metadata: {},
-      },
-    },
-  ]) as typeof globalThis.fetch;
+  let capturedQuery = '';
+  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+    capturedQuery = queryFromBody(init);
+    return new Response(
+      JSON.stringify({
+        results: [
+          makeTavilyResult(
+            'https://www.instagram.com/reel/DRIxfcYkh0I/',
+            'vegan reels',
+            'vegan reels content',
+          ),
+        ],
+      }),
+      { status: 200 },
+    );
+  };
   try {
     const result = await searchAllPlatforms('vegan', ['instagram_reels'], 5, 'month');
     const reels = result.results.find(r => r.platform === 'instagram_reels')!;
     assertEquals(reels.count, 1);
     assertEquals(reels.items[0].url, 'https://www.instagram.com/reel/DRIxfcYkh0I/');
-    assertEquals(result.total_cost_usd, 0.005);
+    assert(capturedQuery.includes('site:instagram.com/reel/'), 'Reels Tavily query에 reel site 힌트 필요');
+    assertEquals(result.total_cost_usd, 0.008);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-Deno.test('searchAllPlatforms: 비용 계산 (tistory+brunch = $0.010)', async () => {
+Deno.test('searchAllPlatforms: 비용 계산 (tistory+brunch = $0.016)', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
-    new Response(JSON.stringify({ results: { web: [] }, metadata: {} }), { status: 200 });
+    new Response(JSON.stringify({ results: [] }), { status: 200 });
   try {
     const result = await searchAllPlatforms('test', ['tistory', 'brunch'], 5, 'month');
-    // tistory($0.005) + brunch($0.005) = $0.010
-    assertEquals(result.total_cost_usd, 0.010);
+    assertEquals(result.total_cost_usd, 0.016);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-Deno.test('searchAllPlatforms: naver+youtube 비용 = $0 (무료 API)', async () => {
+Deno.test('searchAllPlatforms: naver+youtube 비용 = $0.016', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = makeFetchMock([
-    { match: 'openapi.naver.com', response: { items: [], total: 0, start: 1, display: 0 } },
-    { match: 'googleapis.com',    response: { items: [], pageInfo: {} } },
-  ]) as typeof globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ results: [] }), { status: 200 });
   try {
     const result = await searchAllPlatforms('test', ['naver_blog', 'youtube'], 5, 'month');
-    assertEquals(result.total_cost_usd, 0);
+    assertEquals(result.total_cost_usd, 0.016);
   } finally {
     globalThis.fetch = originalFetch;
   }

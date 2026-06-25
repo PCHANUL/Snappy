@@ -409,13 +409,13 @@ await test('instagram_reels: www.instagram.com/reel URL만 유지', () => {
 section('Orchestrator: searchAllPlatforms');
 
 const COST_PER_SEARCH = {
-  naver_blog: 0,
-  youtube: 0,
-  youtube_shorts: 0,
-  tistory: 0.005,
-  brunch: 0.005,
-  tiktok: 0.005,
-  instagram_reels: 0.005,
+  naver_blog: 0.008,
+  youtube: 0.008,
+  youtube_shorts: 0.008,
+  tistory: 0.008,
+  brunch: 0.008,
+  tiktok: 0.008,
+  instagram_reels: 0.008,
 };
 
 function mockSearchAllPlatforms(platforms, mockSearchers) {
@@ -466,14 +466,14 @@ await test('한 플랫폼 실패 → error 설정, 나머지 정상', () => {
   assertEquals(yt?.error, undefined);
 });
 
-await test('비용 계산: tistory+brunch = $0.010', () => {
+await test('비용 계산: tistory+brunch = $0.016', () => {
   const r = mockSearchAllPlatforms(['tistory', 'brunch'], { tistory: () => [], brunch: () => [] });
-  assertEquals(r.total_cost_usd, 0.010);
+  assertEquals(r.total_cost_usd, 0.016);
 });
 
-await test('비용 계산: naver+youtube = $0', () => {
+await test('비용 계산: naver+youtube = $0.016', () => {
   const r = mockSearchAllPlatforms(['naver_blog', 'youtube'], { naver_blog: () => [], youtube: () => [] });
-  assertEquals(r.total_cost_usd, 0);
+  assertEquals(r.total_cost_usd, 0.016);
 });
 
 await test('크로스 플랫폼 URL 중복 제거', () => {
@@ -736,9 +736,7 @@ await test('buildLoadMoreCallout: 남은 개수 포함', () => {
 
 // ── 통합 테스트 (실제 API 호출) ──────────────────────────────────────────────
 
-const hasNaverKey = !!(process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET);
-const hasYoutubeKey = !!process.env.YOUTUBE_API_KEY;
-const hasYoucomKey = !!process.env.YOUCOM_API_KEY;
+const hasTavilyKey = !!process.env.TAVILY_API_KEY;
 const hasNotionKey = !!process.env.NOTION_API_KEY;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -872,27 +870,37 @@ function getNotionTitle(page, propertyName = '키워드') {
   return title.map(part => part.plain_text || part.text?.content || '').join('');
 }
 
-async function fetchNaverResultForNotionTest(keyword) {
-  const url = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(keyword)}&display=1&sort=sim`;
-  const res = await fetch(url, {
+async function fetchTavilyResultForNotionTest(keyword) {
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
     headers: {
-      'X-Naver-Client-Id': process.env.NAVER_CLIENT_ID,
-      'X-Naver-Client-Secret': process.env.NAVER_CLIENT_SECRET,
+      'Authorization': `Bearer ${process.env.TAVILY_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
+    body: JSON.stringify({
+      query: `${keyword} site:blog.naver.com`,
+      search_depth: 'basic',
+      max_results: 1,
+      include_domains: ['blog.naver.com'],
+      include_favicon: true,
+      include_usage: true,
+      country: 'south korea',
+    }),
   });
   if (!res.ok) {
-    throw new Error(`Naver API 오류: ${res.status} ${await res.text()}`);
+    throw new Error(`Tavily API 오류: ${res.status} ${await res.text()}`);
   }
   const data = await res.json();
-  const first = data.items?.[0];
-  assert(first, 'Notion 생성에 사용할 Naver 검색 결과가 필요합니다.');
+  const first = data.results?.[0];
+  assert(first, 'Notion 생성에 사용할 Tavily 검색 결과가 필요합니다.');
   return {
     platform: 'naver_blog',
-    title: truncateNotionText(stripHtml(first.title || 'Naver 검색 결과')),
-    url: first.link || 'https://example.com/snappy-test-result',
-    description: truncateNotionText(stripHtml(first.description || ''), 500),
-    author: stripHtml(first.bloggername || ''),
-    published_at: parseNaverDate(first.postdate),
+    title: truncateNotionText(stripHtml(first.title || 'Tavily 검색 결과')),
+    url: first.url || 'https://example.com/snappy-test-result',
+    description: truncateNotionText(stripHtml(first.content || ''), 500),
+    author: '',
+    published_at: first.published_date || '',
   };
 }
 
@@ -992,60 +1000,56 @@ const notionContext = { children: null, searchDbId: '', statusOptions: null };
 
 section('통합 테스트 (실제 API 호출)');
 
-await test('Naver 블로그: 비건 디저트 검색', async () => {
-  const url = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent('비건 디저트')}&display=5&sort=sim`;
-  const res = await fetch(url, {
+await test('Tavily: 비건 디저트 + 네이버 블로그 검색', async () => {
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
     headers: {
-      'X-Naver-Client-Id': process.env.NAVER_CLIENT_ID,
-      'X-Naver-Client-Secret': process.env.NAVER_CLIENT_SECRET,
+      'Authorization': `Bearer ${process.env.TAVILY_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
+    body: JSON.stringify({
+      query: `${'비건 디저트'} site:blog.naver.com`,
+      search_depth: 'basic',
+      max_results: 5,
+      include_domains: ['blog.naver.com'],
+      include_usage: true,
+      country: 'south korea',
+    }),
   });
-  assert(res.ok, `Naver API 오류: ${res.status}`);
+  assert(res.ok, `Tavily API 오류: ${res.status}`);
   const data = await res.json();
-  assert(Array.isArray(data.items), 'items 배열 필요');
-  assert(data.items.length > 0, '결과가 있어야 함');
-  const first = data.items[0];
-  assert(first.title, 'title 필드 필요');
-  assert(first.link, 'link 필드 필요');
-  assert(first.postdate, 'postdate 필드 필요');
-  assert(/^\d{8}$/.test(first.postdate), `postdate는 YYYYMMDD 형식: ${first.postdate}`);
-  console.log(`     결과 ${data.items.length}개, 첫 번째: ${stripHtml(first.title)}`);
-}, { skip: !hasNaverKey });
+  assert(Array.isArray(data.results), 'results 배열 필요');
+  assert(data.results.length > 0, '결과가 있어야 함');
+  const filtered = data.results.filter(item => item.url?.includes('blog.naver.com'));
+  assert(filtered.length > 0, 'blog.naver.com 결과가 필요합니다');
+  console.log(`     전체 ${data.results.length}개, blog.naver.com 필터 후 ${filtered.length}개`);
+}, { skip: !hasTavilyKey });
 
-await test('YouTube: 비건 디저트 검색', async () => {
-  const publishedAfter = getPublishedAfter('month');
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent('비건 디저트')}&type=video&maxResults=5&regionCode=KR&publishedAfter=${publishedAfter}&key=${process.env.YOUTUBE_API_KEY}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`YouTube API 오류: ${res.status} ${await res.text()}`);
-  }
-  const data = await res.json();
-  assert(Array.isArray(data.items), 'items 배열 필요');
-  assert(data.items.length > 0, '결과가 있어야 함');
-  const first = data.items[0];
-  assert(first.id?.videoId, 'videoId 필요');
-  assert(first.snippet?.title, 'title 필요');
-  console.log(`     결과 ${data.items.length}개, 첫 번째: ${first.snippet.title}`);
-}, { skip: !hasYoutubeKey });
-
-await test('You.com: 비건 디저트 + tistory.com 검색', async () => {
-  const url = `https://ydc-index.io/v1/search?query=${encodeURIComponent('비건 디저트')}&count=5&include_domains=tistory.com`;
-  const res = await fetch(url, {
-    headers: { 'X-API-KEY': process.env.YOUCOM_API_KEY, 'Accept': 'application/json' },
+await test('Tavily: 비건 디저트 + tistory.com 검색', async () => {
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.TAVILY_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      query: `${'비건 디저트'} site:tistory.com`,
+      search_depth: 'basic',
+      max_results: 5,
+      include_domains: ['tistory.com'],
+      include_usage: true,
+      country: 'south korea',
+    }),
   });
-  if (!res.ok) {
-    throw new Error(`You.com API 오류: ${res.status} ${await res.text()}`);
-  }
+  assert(res.ok, `Tavily API 오류: ${res.status}`);
   const data = await res.json();
-  const webResults = data.results?.web || [];
-  assert(Array.isArray(webResults), 'results.web 배열 필요');
-  // 클라이언트 측 도메인 필터링 검증
-  const filtered = webResults.filter(item => item.url.includes('tistory.com'));
-  console.log(`     전체 ${webResults.length}개, tistory.com 필터 후 ${filtered.length}개`);
-  if (webResults.length > 0 && filtered.length < webResults.length) {
-    console.log(`     ⚠️  include_domains 파라미터가 완전히 동작하지 않음 (클라이언트 필터링 필요)`);
-  }
-}, { skip: !hasYoucomKey });
+  const results = data.results || [];
+  assert(Array.isArray(results), 'results 배열 필요');
+  const filtered = results.filter(item => item.url?.includes('tistory.com'));
+  console.log(`     전체 ${results.length}개, tistory.com 필터 후 ${filtered.length}개`);
+}, { skip: !hasTavilyKey });
 
 await test('Notion: config 템플릿 페이지 조회', async () => {
   const page = await notionFetch(`pages/${notionTemplatePageId}`);
@@ -1104,7 +1108,7 @@ await test('Notion: 검색 결과를 검색 DB 페이지와 하위 결과 페이
   let searchPageId = '';
 
   try {
-    const item = await fetchNaverResultForNotionTest(searchKeyword);
+    const item = await fetchTavilyResultForNotionTest(searchKeyword);
 
     searchPageId = await createNotionSearchEntryForTest(searchDbId, testKeyword);
     const { statusName } = await completeNotionSearchEntryForTest(searchDbId, searchPageId, testKeyword, item);
@@ -1132,7 +1136,7 @@ await test('Notion: 검색 결과를 검색 DB 페이지와 하위 결과 페이
       console.log(`     임시 검색 페이지 archive 완료: ${searchPageId}`);
     }
   }
-}, { skip: shouldSkipNotion || !hasNaverKey });
+}, { skip: shouldSkipNotion || !hasTavilyKey });
 
 // ── 결과 요약 ─────────────────────────────────────────────────────────────────
 

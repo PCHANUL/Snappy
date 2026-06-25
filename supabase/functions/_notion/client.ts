@@ -1,12 +1,25 @@
 // 노션 API 클라이언트
 // 사용자별 노션 API 키로 인증하여 사용자 워크스페이스의 페이지 업데이트
 
-import { NotionApiError } from '../_core/errors.ts';
-import { logger } from '../_core/logger.ts';
-import { buildResultBlocks, buildSummaryBlocks, buildLoadMoreCallout, buildSubPageBlocks, buildTabItemBlocks } from './blocks.ts';
-import type { FlatResult, Platform, Period, SearchResult, SearchMetadata, SearchStatus } from '../_core/types.ts';
-import { PLATFORM_INFO } from '../_core/types.ts';
-import type { AnalysisResult } from '../_analysis/content-analyzer.ts';
+import { NotionApiError } from "../_core/errors.ts";
+import { logger } from "../_core/logger.ts";
+import {
+  buildLoadMoreCallout,
+  buildResultBlocks,
+  buildSubPageBlocks,
+  buildSummaryBlocks,
+  buildTabItemBlocks,
+} from "./blocks.ts";
+import type {
+  FlatResult,
+  Period,
+  Platform,
+  SearchMetadata,
+  SearchResult,
+  SearchStatus,
+} from "../_core/types.ts";
+import { PLATFORM_INFO } from "../_core/types.ts";
+import type { AnalysisResult } from "../_analysis/content-analyzer.ts";
 
 // 검색 결과 행에 추가된 콘텐츠 — 분석 루프 대상
 export interface CreatedRow {
@@ -14,55 +27,56 @@ export interface CreatedRow {
   url: string;
   platform: Platform;
   title: string;
+  description?: string;
+  snippet?: string;
 }
 
 // 콘텐츠 분석 결과를 담는 DB 속성 이름 (템플릿/프로그램 DB 공통)
 const ANALYSIS_PROPS = {
-  summary: '요약',
-  keywords: '키워드',
-  status: '분석 상태',
+  summary: "요약",
+  keywords: "키워드",
+  confidence: "신뢰도",
+  status: "분석 상태",
 } as const;
 
-const ANALYSIS_STATUS = { analyzing: '분석중', done: '완료', failed: '실패' } as const;
+const ANALYSIS_STATUS = {
+  analyzing: "분석중",
+  done: "완료",
+  failed: "실패",
+} as const;
 
 // 내부 ID → Notion DB 옵션값 매핑 (검색 DB 행 생성 시 사용)
 const PLATFORM_TO_NOTION: Record<Platform, string> = {
-  naver_blog: '네이버블로그',
-  youtube: '유튜브',
-  youtube_shorts: '유튜브숏츠',
-  tistory: '티스토리',
-  brunch: '브런치',
-  tiktok: '틱톡',
-  instagram_reels: '인스타릴스',
+  naver_blog: "네이버블로그",
+  youtube: "유튜브",
+  youtube_shorts: "유튜브숏츠",
+  tistory: "티스토리",
+  brunch: "브런치",
+  tiktok: "틱톡",
+  instagram_reels: "인스타릴스",
 };
 
 const PERIOD_TO_NOTION: Record<Period, string> = {
-  day: '1일',
-  week: '1주',
-  month: '1개월',
-  year: '1년',
+  day: "1일",
+  week: "1주",
+  month: "1개월",
+  year: "1년",
 };
 
 const STATUS_FALLBACK: Record<SearchStatus, string> = {
-  '대기': 'Not started',
-  '검색중': 'In progress',
-  '완료': 'Done',
-  '실패': 'Done',
+  "대기": "Not started",
+  "검색중": "In progress",
+  "완료": "Done",
+  "실패": "Done",
 };
 
-const NOTION_API_BASE = 'https://api.notion.com/v1';
-const NOTION_API_VERSION = '2022-06-28';
-const NOTION_TEMPLATE_API_VERSION = '2026-03-11';
+const NOTION_API_BASE = "https://api.notion.com/v1";
+const NOTION_API_VERSION = "2022-06-28";
+const NOTION_TEMPLATE_API_VERSION = "2026-03-11";
 const MAX_BLOCKS_PER_REQUEST = 100;
-const SEARCH_DATABASE_TITLE = '검색 DB';
-const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
-const INITIAL_BODY_PLATFORMS = new Set<Platform>([
-  'youtube',
-  'youtube_shorts',
-  'tiktok',
-  'instagram_reels',
-]);
-
+const SEARCH_DATABASE_TITLE = "검색 DB";
+const SEARCH_TEMPLATE_PAGE_TITLE = "검색 결과 템플릿";
+const CONTENT_PAGE_TEMPLATE_TITLE = "검색 결과 콘텐츠 페이지 템플릿";
 export class NotionClient {
   private pagesCreatedWithTemplate = new Set<string>();
 
@@ -74,25 +88,25 @@ export class NotionClient {
     status: SearchStatus,
     errorMessage?: string,
   ): Promise<void> {
-    if (errorMessage && status === '실패') {
+    if (errorMessage && status === "실패") {
       await this.appendBlocks(pageId, [
         {
-          object: 'block',
-          type: 'callout',
+          object: "block",
+          type: "callout",
           callout: {
             rich_text: [
-              { type: 'text', text: { content: `검색 실패: ${errorMessage}` } },
+              { type: "text", text: { content: `검색 실패: ${errorMessage}` } },
             ],
-            icon: { type: 'emoji', emoji: '⚠️' },
-            color: 'red_background',
+            icon: { type: "emoji", emoji: "⚠️" },
+            color: "red_background",
           },
         },
       ]);
     }
 
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ properties: { '상태': statusValue(status) } }),
+      method: "PATCH",
+      body: JSON.stringify({ properties: { "상태": statusValue(status) } }),
     }, status);
   }
 
@@ -107,20 +121,20 @@ export class NotionClient {
 
     // 1. 속성 업데이트
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         properties: {
-          '상태': statusValue('완료'),
-          '발견 콘텐츠 수': { number: totalCount },
+          "상태": statusValue("완료"),
+          "발견 콘텐츠 수": { number: totalCount },
         },
       }),
-    }, '완료');
+    }, "완료");
 
     // 2. 페이지 본문에 결과 블록 추가
     const blocks = buildResultBlocks(keyword, results, metadata);
     await this.appendBlocks(pageId, blocks);
 
-    logger.info('Notion page updated', {
+    logger.info("Notion page updated", {
       pageId,
       totalCount,
       blockCount: blocks.length,
@@ -139,14 +153,14 @@ export class NotionClient {
   ): Promise<void> {
     // 1. 속성 업데이트
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         properties: {
-          '상태': statusValue('완료'),
-          '발견 콘텐츠 수': { number: totalCount },
+          "상태": statusValue("완료"),
+          "발견 콘텐츠 수": { number: totalCount },
         },
       }),
-    }, '완료');
+    }, "완료");
 
     // 2. 요약 블록 추가 (callout + 플랫폼별 요약 + divider)
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
@@ -161,7 +175,11 @@ export class NotionClient {
       await this.appendBlocks(pageId, [buildLoadMoreCallout(remaining)]);
     }
 
-    logger.info('Notion page updated with sub-pages', { pageId, totalCount, shown: firstBatch.length });
+    logger.info("Notion page updated with sub-pages", {
+      pageId,
+      totalCount,
+      shown: firstBatch.length,
+    });
   }
 
   // 매체별 탭 + 콘텐츠 블록으로 검색 결과를 페이지에 저장
@@ -174,112 +192,129 @@ export class NotionClient {
   ): Promise<void> {
     // 1. 속성 업데이트 (status fallback 포함)
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         properties: {
-          '상태': statusValue('완료'),
-          '발견 콘텐츠 수': { number: totalCount },
+          "상태": statusValue("완료"),
+          "발견 콘텐츠 수": { number: totalCount },
         },
       }),
-    }, '완료');
+    }, "완료");
 
     // 2. 요약 callout 추가
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
     await this.appendBlocks(pageId, summaryBlocks);
 
     // 3. 결과가 있는 매체만 탭으로 생성
-    const nonEmpty = results.filter(r => r.items.length > 0);
+    const nonEmpty = results.filter((r) => r.items.length > 0);
     if (nonEmpty.length === 0) return;
 
     // 4. tab 블록 생성 — 매체 이름을 paragraph 텍스트(탭 라벨)로, children은 이후 추가
     const tabBlock = {
-      type: 'tab',
+      type: "tab",
       tab: {},
-      children: nonEmpty.map(r => {
+      children: nonEmpty.map((r) => {
         const info = PLATFORM_INFO[r.platform];
         return {
-          type: 'paragraph',
+          type: "paragraph",
           paragraph: {
-            rich_text: [{ type: 'text', text: { content: `${info.emoji} ${info.name}` } }],
+            rich_text: [{
+              type: "text",
+              text: { content: `${info.emoji} ${info.name}` },
+            }],
           },
         };
       }),
     };
 
     const tabResult = await this.fetchApi(`blocks/${pageId}/children`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ children: [tabBlock] }),
     });
 
     const createdTabId = tabResult.results?.[0]?.id as string | undefined;
     if (!createdTabId) {
-      logger.error('Failed to get created tab block id', undefined, { pageId });
+      logger.error("Failed to get created tab block id", undefined, { pageId });
       return;
     }
 
     // 5. 생성된 탭의 paragraph block ID 목록 조회
     await sleep(300);
-    const tabChildren = await this.fetchApi(`blocks/${createdTabId}/children`, { method: 'GET' });
+    const tabChildren = await this.fetchApi(`blocks/${createdTabId}/children`, {
+      method: "GET",
+    });
     const panelBlocks = (tabChildren.results as any[]) ?? [];
 
     // 6. 각 패널(paragraph)에 해당 매체 콘텐츠 블록 추가
     for (let i = 0; i < panelBlocks.length; i++) {
       const panelId = panelBlocks[i].id as string;
-      const contentBlocks = nonEmpty[i].items.flatMap(item => buildTabItemBlocks(item));
+      const contentBlocks = nonEmpty[i].items.flatMap((item) =>
+        buildTabItemBlocks(item)
+      );
       await this.appendBlocks(panelId, contentBlocks);
       if (i < panelBlocks.length - 1) await sleep(350);
     }
 
-    logger.info('Notion page updated with tabs', { pageId, platforms: nonEmpty.length, totalCount });
+    logger.info("Notion page updated with tabs", {
+      pageId,
+      platforms: nonEmpty.length,
+      totalCount,
+    });
   }
 
   // 검색 결과 페이지 내에 콘텐츠 child database 생성 — 매체별 보드 뷰용
-  async createContentDatabase(pageId: string, keyword: string): Promise<string> {
-    const res = await this.fetchApi('databases', {
-      method: 'POST',
+  async createContentDatabase(
+    pageId: string,
+    keyword: string,
+  ): Promise<string> {
+    const res = await this.fetchApi("databases", {
+      method: "POST",
       body: JSON.stringify({
         parent: { page_id: toUuid(pageId) },
         is_inline: true,
-        title: [{ type: 'text', text: { content: `콘텐츠 — ${keyword}` } }],
+        title: [{ type: "text", text: { content: `콘텐츠 — ${keyword}` } }],
         properties: {
-          '제목': { title: {} },
-          '매체': {
+          "제목": { title: {} },
+          "매체": {
             select: {
               options: [
-                { name: '네이버블로그', color: 'green' },
-                { name: '유튜브', color: 'red' },
-                { name: '유튜브숏츠', color: 'pink' },
-                { name: '티스토리', color: 'orange' },
-                { name: '브런치', color: 'purple' },
-                { name: '틱톡', color: 'gray' },
-                { name: '인스타릴스', color: 'pink' },
+                { name: "네이버블로그", color: "green" },
+                { name: "유튜브", color: "red" },
+                { name: "유튜브숏츠", color: "pink" },
+                { name: "티스토리", color: "orange" },
+                { name: "브런치", color: "purple" },
+                { name: "틱톡", color: "gray" },
+                { name: "인스타릴스", color: "pink" },
               ],
             },
           },
-          'URL': { url: {} },
-          '작성자': { rich_text: {} },
-          '날짜': { date: {} },
+          "URL": { url: {} },
+          "작성자": { rich_text: {} },
+          "날짜": { date: {} },
           // 콘텐츠 분석 결과 컬럼 — 테이블 뷰에서 정렬·필터·비교 가능
           [ANALYSIS_PROPS.summary]: { rich_text: {} },
           [ANALYSIS_PROPS.keywords]: { multi_select: {} },
+          [ANALYSIS_PROPS.confidence]: { number: { format: "percent" } },
           [ANALYSIS_PROPS.status]: {
             select: {
               options: [
-                { name: ANALYSIS_STATUS.analyzing, color: 'yellow' },
-                { name: ANALYSIS_STATUS.done, color: 'green' },
-                { name: ANALYSIS_STATUS.failed, color: 'red' },
+                { name: ANALYSIS_STATUS.analyzing, color: "yellow" },
+                { name: ANALYSIS_STATUS.done, color: "green" },
+                { name: ANALYSIS_STATUS.failed, color: "red" },
               ],
             },
           },
         },
       }),
     });
-    return (res.id as string).replace(/-/g, '');
+    return (res.id as string).replace(/-/g, "");
   }
 
   // 연결된 페이지 안에 Snappy 검색 DB를 보장한다.
   // 이미 같은 DB가 있으면 재사용하고, 없으면 인라인 데이터베이스를 생성한다.
-  async ensureSearchDatabase(parentPageId: string): Promise<{ id: string; title: string; created: boolean }> {
+  async ensureSearchDatabase(
+    parentPageId: string,
+  ): Promise<{ id: string; title: string; created: boolean }> {
     const existing = await this.findSearchDatabaseOnPage(parentPageId);
     if (existing) {
       return { ...existing, created: false };
@@ -287,25 +322,28 @@ export class NotionClient {
 
     let res: any;
     try {
-      res = await this.fetchApi('databases', {
-        method: 'POST',
+      res = await this.fetchApi("databases", {
+        method: "POST",
         body: JSON.stringify(searchDatabaseBody(parentPageId, true)),
       });
     } catch (error) {
       if (!isUnsupportedButtonProperty(error)) throw error;
 
-      logger.warn('Notion button property is not creatable; retrying search DB without load-more button', {
-        parentPageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      res = await this.fetchApi('databases', {
-        method: 'POST',
+      logger.warn(
+        "Notion button property is not creatable; retrying search DB without load-more button",
+        {
+          parentPageId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      res = await this.fetchApi("databases", {
+        method: "POST",
         body: JSON.stringify(searchDatabaseBody(parentPageId, false)),
       });
     }
 
     return {
-      id: (res.id as string).replace(/-/g, ''),
+      id: (res.id as string).replace(/-/g, ""),
       title: getObjectTitle(res) || SEARCH_DATABASE_TITLE,
       created: true,
     };
@@ -314,13 +352,16 @@ export class NotionClient {
   // 콘텐츠 행(page)의 부모 DB 속성 맵 조회 — 재분석 시 분석 컬럼 확인용
   async getRowAnalysisProps(rowId: string): Promise<Map<string, string>> {
     try {
-      const page = await this.fetchApi(`pages/${toUuid(rowId)}`, { method: 'GET' });
+      const page = await this.fetchApi(`pages/${toUuid(rowId)}`, {
+        method: "GET",
+      });
       const dbId = page.parent?.database_id as string | undefined;
       if (!dbId) return new Map();
       return await this.getDatabaseProperties(dbId);
     } catch (error) {
-      logger.warn('Failed to read row parent database', {
-        rowId, error: error instanceof Error ? error.message : String(error),
+      logger.warn("Failed to read row parent database", {
+        rowId,
+        error: error instanceof Error ? error.message : String(error),
       });
       return new Map();
     }
@@ -328,17 +369,22 @@ export class NotionClient {
 
   // DB 속성 맵(이름 → 타입) 조회 — 분석 컬럼 존재 및 타입 검증용
   // 타입을 함께 보는 이유: 잘못된 타입으로 PATCH하면 요청 전체가 실패하므로
-  async getDatabaseProperties(databaseId: string): Promise<Map<string, string>> {
+  async getDatabaseProperties(
+    databaseId: string,
+  ): Promise<Map<string, string>> {
     try {
-      const db = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
+      const db = await this.fetchApi(`databases/${toUuid(databaseId)}`, {
+        method: "GET",
+      });
       const map = new Map<string, string>();
       for (const [name, def] of Object.entries(db.properties ?? {})) {
-        map.set(name, (def as any)?.type ?? '');
+        map.set(name, (def as any)?.type ?? "");
       }
       return map;
     } catch (error) {
-      logger.warn('Failed to read database properties', {
-        databaseId, error: error instanceof Error ? error.message : String(error),
+      logger.warn("Failed to read database properties", {
+        databaseId,
+        error: error instanceof Error ? error.message : String(error),
       });
       return new Map();
     }
@@ -352,35 +398,69 @@ export class NotionClient {
     items: FlatResult[],
     onProgress?: (message: string) => Promise<void>,
     analysisProps?: Map<string, string>,
+    contentPageTemplateId?: string | null,
   ): Promise<CreatedRow[]> {
-    const hasStatus = analysisProps?.get(ANALYSIS_PROPS.status) === 'select';
+    const hasStatus = analysisProps?.get(ANALYSIS_PROPS.status) === "select";
     const rows: CreatedRow[] = [];
+    const dataSourceId = contentPageTemplateId
+      ? await this.getDataSourceId(databaseId).catch((error) => {
+        logger.warn("Failed to resolve content database data source", {
+          databaseId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      })
+      : null;
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const info = PLATFORM_INFO[item.platform];
       const properties: Record<string, any> = {
-        '제목': { title: [{ type: 'text', text: { content: item.title } }] },
-        '매체': { select: { name: PLATFORM_TO_NOTION[item.platform] } },
+        "제목": { title: [{ type: "text", text: { content: item.title } }] },
+        "매체": { select: { name: PLATFORM_TO_NOTION[item.platform] } },
       };
-      if (item.url) properties['URL'] = { url: item.url };
-      if (item.author) properties['작성자'] = { rich_text: [{ type: 'text', text: { content: item.author } }] };
-      if (item.published_at) properties['날짜'] = { date: { start: item.published_at.slice(0, 10) } };
-      if (hasStatus) properties[ANALYSIS_PROPS.status] = { select: { name: ANALYSIS_STATUS.analyzing } };
+      if (item.url) properties["URL"] = { url: item.url };
+      if (item.author) {
+        properties["작성자"] = {
+          rich_text: [{ type: "text", text: { content: item.author } }],
+        };
+      }
+      if (item.published_at) {
+        properties["날짜"] = {
+          date: { start: item.published_at.slice(0, 10) },
+        };
+      }
+      if (hasStatus) {
+        properties[ANALYSIS_PROPS.status] = {
+          select: { name: ANALYSIS_STATUS.analyzing },
+        };
+      }
 
       const body: Record<string, any> = {
         parent: { database_id: toUuid(databaseId) },
-        icon: { type: 'emoji', emoji: info.emoji },
+        icon: { type: "emoji", emoji: info.emoji },
         properties,
       };
-      if (item.thumbnail) body.cover = { type: 'external', external: { url: item.thumbnail } };
-      if (INITIAL_BODY_PLATFORMS.has(item.platform)) {
-        body.children = buildSubPageBlocks(item);
+      if (item.thumbnail) {
+        body.cover = { type: "external", external: { url: item.thumbnail } };
       }
 
-      const created = await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
+      const created = await this.createContentItemPage(
+        databaseId,
+        body,
+        item,
+        dataSourceId,
+        contentPageTemplateId,
+      );
       if (item.url) {
-        rows.push({ rowId: created.id as string, url: item.url, platform: item.platform, title: item.title });
+        rows.push({
+          rowId: created.id as string,
+          url: item.url,
+          platform: item.platform,
+          title: item.title,
+          description: item.description,
+          snippet: item.snippet,
+        });
       }
 
       await onProgress?.(`노션에 콘텐츠 추가 중... (${i + 1}/${items.length})`);
@@ -390,57 +470,149 @@ export class NotionClient {
     return rows;
   }
 
+  private async createContentItemPage(
+    databaseId: string,
+    body: Record<string, any>,
+    item: FlatResult,
+    dataSourceId?: string | null,
+    templatePageId?: string | null,
+  ): Promise<any> {
+    if (dataSourceId && templatePageId) {
+      try {
+        const created = await this.fetchApi("pages", {
+          method: "POST",
+          headers: { "Notion-Version": NOTION_TEMPLATE_API_VERSION },
+          body: JSON.stringify({
+            ...body,
+            parent: {
+              type: "data_source_id",
+              data_source_id: toUuid(dataSourceId),
+            },
+            template: {
+              type: "template_id",
+              template_id: toUuid(templatePageId),
+            },
+          }),
+        });
+
+        await sleep(250);
+        await this.appendBlocks(created.id as string, buildSubPageBlocks(item))
+          .catch((error) => {
+            logger.warn("Failed to append content page blocks after template", {
+              pageId: created.id,
+              url: item.url,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+
+        return created;
+      } catch (error) {
+        logger.warn(
+          "Content page template was not applied; falling back to direct page body",
+          {
+            databaseId,
+            templatePageId,
+            url: item.url,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
+    }
+
+    body.children = buildSubPageBlocks(item);
+    return await this.fetchApi("pages", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
   // 콘텐츠 행의 분석 결과를 DB 속성으로 업데이트 (타입이 일치하는 속성만)
-  async updateRowAnalysis(rowId: string, result: AnalysisResult, analysisProps: Map<string, string>): Promise<void> {
+  async updateRowAnalysis(
+    rowId: string,
+    result: AnalysisResult,
+    analysisProps: Map<string, string>,
+  ): Promise<void> {
     const properties: Record<string, any> = {};
 
-    if (analysisProps.get(ANALYSIS_PROPS.status) === 'select') {
+    if (analysisProps.get(ANALYSIS_PROPS.status) === "select") {
       properties[ANALYSIS_PROPS.status] = {
-        select: { name: result.status === 'done' ? ANALYSIS_STATUS.done : ANALYSIS_STATUS.failed },
+        select: {
+          name: result.status === "done"
+            ? ANALYSIS_STATUS.done
+            : ANALYSIS_STATUS.failed,
+        },
       };
     }
-    if (analysisProps.get(ANALYSIS_PROPS.summary) === 'rich_text' && result.summary) {
-      const text = result.summarySource ? `${result.summary}\n(${result.summarySource})` : result.summary;
+    if (
+      analysisProps.get(ANALYSIS_PROPS.summary) === "rich_text" &&
+      result.summary
+    ) {
+      const text = result.summarySource
+        ? `${result.summary}\n(${result.summarySource})`
+        : result.summary;
       properties[ANALYSIS_PROPS.summary] = {
-        rich_text: [{ type: 'text', text: { content: text.slice(0, 1990) } }],
+        rich_text: [{ type: "text", text: { content: text.slice(0, 1990) } }],
       };
     }
-    if (analysisProps.get(ANALYSIS_PROPS.keywords) === 'multi_select' && result.keywords.length) {
+    if (
+      analysisProps.get(ANALYSIS_PROPS.keywords) === "multi_select" &&
+      result.keywords.length
+    ) {
       // multi_select 옵션명은 쉼표 불가 + 빈 문자열 불가 — 정리 후 최대 5개
       const options = result.keywords
         .slice(0, 5)
-        .map((k) => k.replace(/,/g, ' ').trim().slice(0, 100))
+        .map((k) => k.replace(/,/g, " ").trim().slice(0, 100))
         .filter((name) => name.length > 0)
         .map((name) => ({ name }));
-      if (options.length) properties[ANALYSIS_PROPS.keywords] = { multi_select: options };
+      if (options.length) {
+        properties[ANALYSIS_PROPS.keywords] = { multi_select: options };
+      }
+    }
+    if (
+      analysisProps.get(ANALYSIS_PROPS.confidence) === "number" &&
+      typeof result.confidence === "number" &&
+      Number.isFinite(result.confidence)
+    ) {
+      properties[ANALYSIS_PROPS.confidence] = {
+        number: normalizeConfidenceNumber(result.confidence),
+      };
     }
     if (Object.keys(properties).length === 0) return;
     await this.fetchApi(`pages/${toUuid(rowId)}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ properties }),
     });
   }
 
   // 콘텐츠 행(page) 본문에 분석 결과와 크롤링/검색 텍스트를 정리해 추가한다.
   // DB 속성에는 짧은 요약/태그를, 페이지 본문에는 사람이 읽기 쉬운 분석 노트를 남긴다.
-  async appendRowAnalysisContent(rowId: string, result: AnalysisResult): Promise<void> {
+  async appendRowAnalysisContent(
+    rowId: string,
+    result: AnalysisResult,
+  ): Promise<void> {
     const blocks = buildRowAnalysisBlocks(result);
     if (blocks.length === 0) return;
     await this.appendBlocks(toUuid(rowId), blocks);
   }
 
   // 결과 페이지에 분석 진행 상태 callout 추가 → 생성된 block id 반환
-  async appendAnalysisStatusCallout(pageId: string, total: number): Promise<string | null> {
+  async appendAnalysisStatusCallout(
+    pageId: string,
+    total: number,
+  ): Promise<string | null> {
     const res = await this.fetchApi(`blocks/${toUuid(pageId)}/children`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         children: [{
-          object: 'block',
-          type: 'callout',
+          object: "block",
+          type: "callout",
           callout: {
-            rich_text: [{ type: 'text', text: { content: `🔄 콘텐츠 분석 중... (0/${total})` } }],
-            icon: { type: 'emoji', emoji: '🔄' },
-            color: 'yellow_background',
+            rich_text: [{
+              type: "text",
+              text: { content: `🔄 콘텐츠 분석 중... (0/${total})` },
+            }],
+            icon: { type: "emoji", emoji: "🔄" },
+            color: "yellow_background",
           },
         }],
       }),
@@ -459,12 +631,12 @@ export class NotionClient {
       ? `✅ 콘텐츠 분석 완료 — 총 ${total}개 (테이블에서 요약·키워드를 확인하세요)`
       : `🔄 콘텐츠 분석 중... (${done}/${total})`;
     await this.fetchApi(`blocks/${toUuid(blockId)}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         callout: {
-          rich_text: [{ type: 'text', text: { content } }],
-          icon: { type: 'emoji', emoji: finished ? '✅' : '🔄' },
-          color: finished ? 'green_background' : 'yellow_background',
+          rich_text: [{ type: "text", text: { content } }],
+          icon: { type: "emoji", emoji: finished ? "✅" : "🔄" },
+          color: finished ? "green_background" : "yellow_background",
         },
       }),
     });
@@ -476,15 +648,18 @@ export class NotionClient {
     keywords: Array<{ keyword: string; ratio: number }>,
   ): Promise<void> {
     if (!keywords.length) return;
-    const chips = keywords.map((k) => `${k.keyword} ${k.ratio}`).join('  ·  ');
+    const chips = keywords.map((k) => `${k.keyword} ${k.ratio}`).join("  ·  ");
     await this.appendBlocks(pageId, [
       {
-        object: 'block',
-        type: 'callout',
+        object: "block",
+        type: "callout",
         callout: {
-          rich_text: [{ type: 'text', text: { content: `🔗 연관 인기 키워드\n${chips}` } }],
-          icon: { type: 'emoji', emoji: '📊' },
-          color: 'blue_background',
+          rich_text: [{
+            type: "text",
+            text: { content: `🔗 연관 인기 키워드\n${chips}` },
+          }],
+          icon: { type: "emoji", emoji: "📊" },
+          color: "blue_background",
         },
       },
     ]);
@@ -501,50 +676,80 @@ export class NotionClient {
   ): Promise<{ rows: CreatedRow[]; analysisProps: Map<string, string> }> {
     // 1. 속성 업데이트 (상태 → 완료)
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         properties: {
-          '키워드': { title: [{ type: 'text', text: { content: keyword } }] },
-          '상태': statusValue('완료'),
-          '발견 콘텐츠 수': { number: totalCount },
+          "키워드": { title: [{ type: "text", text: { content: keyword } }] },
+          "상태": statusValue("완료"),
+          "발견 콘텐츠 수": { number: totalCount },
         },
       }),
-    }, '완료');
+    }, "완료");
 
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
-    const createdWithTemplate = this.pagesCreatedWithTemplate.has(toUuid(pageId));
+    const createdWithTemplate = this.pagesCreatedWithTemplate.has(
+      toUuid(pageId),
+    );
     let databaseId: string;
 
     if (createdWithTemplate) {
       // 템플릿 적용은 비동기라, 콘텐츠 DB 복제가 끝난 뒤 결과 블록을 추가한다.
-      await onProgress?.('콘텐츠 DB 확인 중...');
+      await onProgress?.("콘텐츠 DB 확인 중...");
       databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
 
-      await onProgress?.('노션에 요약 작성 중...');
+      await onProgress?.("노션에 요약 작성 중...");
       await this.appendBlocks(pageId, summaryBlocks);
     } else {
-      await onProgress?.('노션에 요약 작성 중...');
+      await onProgress?.("노션에 요약 작성 중...");
       await this.appendBlocks(pageId, summaryBlocks);
 
-      await onProgress?.('콘텐츠 DB 확인 중...');
+      await onProgress?.("콘텐츠 DB 확인 중...");
       databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
     }
 
     // 4. DB에 분석 컬럼이 있는지 확인 (없으면 분석 단계 스킵)
+    await this.ensureContentDatabaseAnalysisProperties(databaseId);
     const analysisProps = await this.getDatabaseProperties(databaseId);
+    const contentPageTemplateId = await this
+      .findOrCreateContentPageTemplatePage(
+        pageId,
+      ).catch((error) => {
+        logger.warn(
+          "Content page template was not prepared; using direct blocks",
+          {
+            pageId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        return null;
+      });
 
     // 5. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지), 분석중 상태로 표시
-    const allItems: FlatResult[] = results.flatMap(r =>
-      r.items.map(item => ({ ...item, platform: r.platform }))
+    const allItems: FlatResult[] = results.flatMap((r) =>
+      r.items.map((item) => ({ ...item, platform: r.platform }))
     );
-    const rows = await this.addItemsToDatabase(databaseId, allItems, onProgress, analysisProps);
+    const rows = await this.addItemsToDatabase(
+      databaseId,
+      allItems,
+      onProgress,
+      analysisProps,
+      contentPageTemplateId,
+    );
 
-    logger.info('Notion page updated with child database', { pageId, totalCount, databaseId, rows: rows.length });
+    logger.info("Notion page updated with child database", {
+      pageId,
+      totalCount,
+      databaseId,
+      rows: rows.length,
+    });
     return { rows, analysisProps };
   }
 
   // 배치 서브페이지 생성 (더보기용)
-  async createResultSubPages(parentPageId: string, items: FlatResult[]): Promise<void> {
+  async createResultSubPages(
+    parentPageId: string,
+    items: FlatResult[],
+  ): Promise<void> {
     for (const item of items) {
       await this.createResultSubPage(parentPageId, item);
       await sleep(350);
@@ -552,33 +757,48 @@ export class NotionClient {
   }
 
   // 더보기 후 안내 callout 교체: 기존 "더보기" callout 삭제 → 새 callout 추가
-  async appendLoadMoreCallout(pageId: string, remaining: number): Promise<void> {
+  async appendLoadMoreCallout(
+    pageId: string,
+    remaining: number,
+  ): Promise<void> {
     // 마지막 블록이 더보기 callout이면 삭제 후 재추가
-    const data = await this.fetchApi(`blocks/${pageId}/children?page_size=100`, { method: 'GET' });
+    const data = await this.fetchApi(
+      `blocks/${pageId}/children?page_size=100`,
+      { method: "GET" },
+    );
     const blocks = data.results || [];
     const last = blocks[blocks.length - 1];
-    if (last?.type === 'callout' && last.callout?.rich_text?.[0]?.text?.content?.startsWith('⏬')) {
-      await this.fetchApi(`blocks/${last.id}`, { method: 'DELETE' });
+    if (
+      last?.type === "callout" &&
+      last.callout?.rich_text?.[0]?.text?.content?.startsWith("⏬")
+    ) {
+      await this.fetchApi(`blocks/${last.id}`, { method: "DELETE" });
     }
     if (remaining > 0) {
       await this.appendBlocks(pageId, [buildLoadMoreCallout(remaining)]);
     }
   }
 
-  private async createResultSubPage(parentPageId: string, item: FlatResult): Promise<void> {
+  private async createResultSubPage(
+    parentPageId: string,
+    item: FlatResult,
+  ): Promise<void> {
     const info = PLATFORM_INFO[item.platform];
     const body: Record<string, any> = {
       parent: { page_id: parentPageId },
-      icon: { type: 'emoji', emoji: info.emoji },
+      icon: { type: "emoji", emoji: info.emoji },
       properties: {
-        title: { title: [{ type: 'text', text: { content: item.title } }] },
+        title: { title: [{ type: "text", text: { content: item.title } }] },
       },
       children: buildSubPageBlocks(item),
     };
     if (item.thumbnail) {
-      body.cover = { type: 'external', external: { url: item.thumbnail } };
+      body.cover = { type: "external", external: { url: item.thumbnail } };
     }
-    await this.fetchApi('pages', { method: 'POST', body: JSON.stringify(body) });
+    await this.fetchApi("pages", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 
   // 검색 DB에 새 행(페이지)을 생성한다 — 검색 파라미터를 속성으로 기록, 상태=검색중
@@ -592,29 +812,44 @@ export class NotionClient {
       const templatePageId = await this.findSearchEntryTemplatePage(databaseId);
 
       if (templatePageId) {
-        return await this.createSearchEntryWithTemplate(databaseId, dataSourceId, templatePageId, params);
+        return await this.createSearchEntryWithTemplate(
+          databaseId,
+          dataSourceId,
+          templatePageId,
+          params,
+        );
       }
 
-      logger.warn('Search entry template page not found; trying Notion default template', {
+      logger.warn(
+        "Search entry template page not found; trying Notion default template",
+        {
+          databaseId,
+          templateTitle: SEARCH_TEMPLATE_PAGE_TITLE,
+        },
+      );
+      return await this.createSearchEntryWithDefaultTemplate(
         databaseId,
-        templateTitle: SEARCH_TEMPLATE_PAGE_TITLE,
-      });
-      return await this.createSearchEntryWithDefaultTemplate(databaseId, dataSourceId, params);
+        dataSourceId,
+        params,
+      );
     } catch (error) {
-      logger.warn('Notion template was not applied; falling back to direct page creation', {
-        databaseId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      logger.warn(
+        "Notion template was not applied; falling back to direct page creation",
+        {
+          databaseId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
     }
 
-    const res = await this.fetchApiWithStatusFallback('pages', {
-      method: 'POST',
+    const res = await this.fetchApiWithStatusFallback("pages", {
+      method: "POST",
       body: JSON.stringify({
         parent: { database_id: toUuid(databaseId) },
-        icon: { type: 'emoji', emoji: '🔍' },
+        icon: { type: "emoji", emoji: "🔍" },
         properties: searchEntryProperties(params),
       }),
-    }, '검색중');
+    }, "검색중");
     return res.id as string;
   }
 
@@ -623,7 +858,7 @@ export class NotionClient {
     for (let i = 0; i < blocks.length; i += MAX_BLOCKS_PER_REQUEST) {
       const chunk = blocks.slice(i, i + MAX_BLOCKS_PER_REQUEST);
       await this.fetchApi(`blocks/${pageId}/children`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify({ children: chunk }),
       });
 
@@ -648,10 +883,14 @@ export class NotionClient {
       if (!fallback || fallback === status || !init.body) throw error;
 
       const body = JSON.parse(String(init.body));
-      if (!body.properties?.['상태']) throw error;
+      if (!body.properties?.["상태"]) throw error;
 
-      body.properties['상태'] = statusValue(fallback);
-      logger.info('Notion status option fallback applied', { path, status, fallback });
+      body.properties["상태"] = statusValue(fallback);
+      logger.info("Notion status option fallback applied", {
+        path,
+        status,
+        fallback,
+      });
 
       return await this.fetchApi(path, {
         ...init,
@@ -662,53 +901,129 @@ export class NotionClient {
 
   private async getDataSourceId(databaseId: string): Promise<string> {
     const db = await this.fetchApi(`databases/${toUuid(databaseId)}`, {
-      method: 'GET',
-      headers: { 'Notion-Version': NOTION_TEMPLATE_API_VERSION },
+      method: "GET",
+      headers: { "Notion-Version": NOTION_TEMPLATE_API_VERSION },
     });
     const dataSourceId = db.data_sources?.[0]?.id;
     if (!dataSourceId) {
-      throw new NotionApiError('data source not found for database');
+      throw new NotionApiError("data source not found for database");
     }
     return dataSourceId as string;
   }
 
-  private async findSearchEntryTemplatePage(databaseId: string): Promise<string | null> {
-    const settingsTemplatePageId = await this.findSettingsTemplatePage(databaseId);
+  private async findOrCreateContentPageTemplatePage(
+    searchEntryPageId: string,
+  ): Promise<string | null> {
+    const settingsPageId = await this.findSettingsPageFromEntry(
+      searchEntryPageId,
+    );
+    if (!settingsPageId) return null;
+
+    const existing = await this.findChildPageIdByTitle(
+      settingsPageId,
+      CONTENT_PAGE_TEMPLATE_TITLE,
+    );
+    if (existing) return existing;
+
+    const created = await this.createChildPage(
+      settingsPageId,
+      CONTENT_PAGE_TEMPLATE_TITLE,
+      "📄",
+    );
+    logger.info("Content page template created", {
+      searchEntryPageId,
+      settingsPageId,
+      templatePageId: created,
+      title: CONTENT_PAGE_TEMPLATE_TITLE,
+    });
+    return created;
+  }
+
+  private async findSettingsPageFromEntry(
+    searchEntryPageId: string,
+  ): Promise<string | null> {
+    const page = await this.fetchApi(`pages/${toUuid(searchEntryPageId)}`, {
+      method: "GET",
+    });
+    const searchDatabaseId = page.parent?.database_id as string | undefined;
+    if (!searchDatabaseId) return null;
+    return await this.findSettingsPage(searchDatabaseId);
+  }
+
+  private async createChildPage(
+    parentPageId: string,
+    title: string,
+    emoji: string,
+  ): Promise<string> {
+    const res = await this.fetchApi("pages", {
+      method: "POST",
+      body: JSON.stringify({
+        parent: { page_id: toUuid(parentPageId) },
+        icon: { type: "emoji", emoji },
+        properties: {
+          title: { title: [{ type: "text", text: { content: title } }] },
+        },
+      }),
+    });
+    return res.id as string;
+  }
+
+  private async findSearchEntryTemplatePage(
+    databaseId: string,
+  ): Promise<string | null> {
+    const settingsTemplatePageId = await this.findSettingsTemplatePage(
+      databaseId,
+    );
     if (settingsTemplatePageId) return settingsTemplatePageId;
 
     // 이전 템플릿 구조 호환: 검색 DB 안에 템플릿용 행이 있으면 계속 사용한다.
     const data = await this.fetchApi(`databases/${toUuid(databaseId)}/query`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({
         page_size: 1,
         filter: {
-          property: '키워드',
+          property: "키워드",
           title: { equals: SEARCH_TEMPLATE_PAGE_TITLE },
         },
       }),
     });
 
     const templatePage = ((data.results as any[]) || [])[0];
-    return typeof templatePage?.id === 'string' ? templatePage.id : null;
+    return typeof templatePage?.id === "string" ? templatePage.id : null;
   }
 
-  private async findSettingsTemplatePage(databaseId: string): Promise<string | null> {
-    const parentPageId = await this.getDatabaseParentPageId(databaseId);
-    const settingsPageId = await this.findChildPageIdByTitle(parentPageId, '설정');
+  private async findSettingsTemplatePage(
+    databaseId: string,
+  ): Promise<string | null> {
+    const settingsPageId = await this.findSettingsPage(databaseId);
     if (!settingsPageId) return null;
 
-    return await this.findChildPageIdByTitle(settingsPageId, SEARCH_TEMPLATE_PAGE_TITLE);
+    return await this.findChildPageIdByTitle(
+      settingsPageId,
+      SEARCH_TEMPLATE_PAGE_TITLE,
+    );
   }
 
-  private async findChildPageIdByTitle(pageId: string, title: string): Promise<string | null> {
+  private async findSettingsPage(databaseId: string): Promise<string | null> {
+    const parentPageId = await this.getDatabaseParentPageId(databaseId);
+    return await this.findChildPageIdByTitle(parentPageId, "설정");
+  }
+
+  private async findChildPageIdByTitle(
+    pageId: string,
+    title: string,
+  ): Promise<string | null> {
     let cursor: string | undefined;
     do {
-      const qs = new URLSearchParams({ page_size: '100' });
-      if (cursor) qs.set('start_cursor', cursor);
+      const qs = new URLSearchParams({ page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
 
-      const data = await this.fetchApi(`blocks/${toUuid(pageId)}/children?${qs.toString()}`, { method: 'GET' });
+      const data = await this.fetchApi(
+        `blocks/${toUuid(pageId)}/children?${qs.toString()}`,
+        { method: "GET" },
+      );
       const block = ((data.results as any[]) || []).find(
-        (b) => b.type === 'child_page' && b.child_page?.title === title,
+        (b) => b.type === "child_page" && b.child_page?.title === title,
       );
       if (block?.id) return block.id as string;
 
@@ -727,11 +1042,11 @@ export class NotionClient {
     const res = await this.createSearchEntryWithNotionTemplate(
       dataSourceId,
       params,
-      { type: 'template_id', template_id: toUuid(templatePageId) },
+      { type: "template_id", template_id: toUuid(templatePageId) },
     );
 
     this.pagesCreatedWithTemplate.add(toUuid(res.id as string));
-    logger.info('Notion search entry created with template page', {
+    logger.info("Notion search entry created with template page", {
       pageId: res.id,
       databaseId,
       dataSourceId,
@@ -748,11 +1063,15 @@ export class NotionClient {
     const res = await this.createSearchEntryWithNotionTemplate(
       dataSourceId,
       params,
-      { type: 'default' },
+      { type: "default" },
     );
 
     this.pagesCreatedWithTemplate.add(toUuid(res.id as string));
-    logger.info('Notion search entry created with default template', { pageId: res.id, databaseId, dataSourceId });
+    logger.info("Notion search entry created with default template", {
+      pageId: res.id,
+      databaseId,
+      dataSourceId,
+    });
     return res.id as string;
   }
 
@@ -761,24 +1080,29 @@ export class NotionClient {
     params: { keyword: string; platforms: Platform[]; period: Period },
     template: Record<string, unknown>,
   ): Promise<any> {
-    return await this.fetchApiWithStatusFallback('pages', {
-      method: 'POST',
-      headers: { 'Notion-Version': NOTION_TEMPLATE_API_VERSION },
+    return await this.fetchApiWithStatusFallback("pages", {
+      method: "POST",
+      headers: { "Notion-Version": NOTION_TEMPLATE_API_VERSION },
       body: JSON.stringify({
         parent: {
-          type: 'data_source_id',
+          type: "data_source_id",
           data_source_id: toUuid(dataSourceId),
         },
-        icon: { type: 'emoji', emoji: '🔍' },
+        icon: { type: "emoji", emoji: "🔍" },
         properties: searchEntryProperties(params),
         template,
       }),
-    }, '검색중');
+    }, "검색중");
   }
 
-  private async findOrCreateContentDatabase(pageId: string, keyword: string): Promise<string> {
+  private async findOrCreateContentDatabase(
+    pageId: string,
+    keyword: string,
+  ): Promise<string> {
     const normalizedPageId = toUuid(pageId);
-    const shouldWaitForTemplate = this.pagesCreatedWithTemplate.has(normalizedPageId);
+    const shouldWaitForTemplate = this.pagesCreatedWithTemplate.has(
+      normalizedPageId,
+    );
 
     const existing = shouldWaitForTemplate
       ? await this.waitForTemplateContentDatabase(normalizedPageId)
@@ -788,15 +1112,20 @@ export class NotionClient {
       this.pagesCreatedWithTemplate.delete(normalizedPageId);
       await this.renameContentDatabase(existing, keyword);
       await this.removeDeprecatedContentDatabaseProperties(existing);
-      logger.info('Using content database from template', { pageId, databaseId: existing });
-      return existing.replace(/-/g, '');
+      logger.info("Using content database from template", {
+        pageId,
+        databaseId: existing,
+      });
+      return existing.replace(/-/g, "");
     }
 
     this.pagesCreatedWithTemplate.delete(normalizedPageId);
     return await this.createContentDatabase(pageId, keyword);
   }
 
-  private async waitForTemplateContentDatabase(pageId: string): Promise<string | null> {
+  private async waitForTemplateContentDatabase(
+    pageId: string,
+  ): Promise<string | null> {
     const attempts = 30;
     const delayMs = 1000;
 
@@ -806,7 +1135,7 @@ export class NotionClient {
       await sleep(delayMs);
     }
 
-    logger.warn('Timed out waiting for template content database', {
+    logger.warn("Timed out waiting for template content database", {
       pageId,
       attempts,
       delayMs,
@@ -819,58 +1148,115 @@ export class NotionClient {
     let cursor: string | undefined;
 
     do {
-      const qs = new URLSearchParams({ page_size: '100' });
-      if (cursor) qs.set('start_cursor', cursor);
+      const qs = new URLSearchParams({ page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
 
-      const data = await this.fetchApi(`blocks/${toUuid(pageId)}/children?${qs.toString()}`, { method: 'GET' });
+      const data = await this.fetchApi(
+        `blocks/${toUuid(pageId)}/children?${qs.toString()}`,
+        { method: "GET" },
+      );
       for (const block of (data.results as any[]) || []) {
-        if (block.type === 'child_database') {
+        if (block.type === "child_database") {
           databases.push({
             id: block.id as string,
-            title: block.child_database?.title || '',
+            title: block.child_database?.title || "",
           });
         }
       }
       cursor = data.has_more ? data.next_cursor : undefined;
     } while (cursor);
 
-    const contentDb = databases.find(db => isContentDatabaseTitle(db.title));
+    const contentDb = databases.find((db) => isContentDatabaseTitle(db.title));
     if (contentDb) return contentDb.id;
 
     return databases.length === 1 ? databases[0].id : null;
   }
 
-  private async renameContentDatabase(databaseId: string, keyword: string): Promise<void> {
+  private async renameContentDatabase(
+    databaseId: string,
+    keyword: string,
+  ): Promise<void> {
     try {
       await this.fetchApi(`databases/${toUuid(databaseId)}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify({
-          title: [{ type: 'text', text: { content: `콘텐츠 — ${keyword}` } }],
+          title: [{ type: "text", text: { content: `콘텐츠 — ${keyword}` } }],
         }),
       });
     } catch (error) {
-      logger.warn('Failed to rename template content database', {
+      logger.warn("Failed to rename template content database", {
         databaseId,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
-  private async removeDeprecatedContentDatabaseProperties(databaseId: string): Promise<void> {
+  private async removeDeprecatedContentDatabaseProperties(
+    databaseId: string,
+  ): Promise<void> {
     try {
       const props = await this.getDatabaseProperties(databaseId);
-      if (!props.has('SEO 적합도')) return;
+      if (!props.has("SEO 적합도")) return;
 
       await this.fetchApi(`databases/${toUuid(databaseId)}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify({
           properties: {
-            'SEO 적합도': null,
+            "SEO 적합도": null,
           },
         }),
       });
     } catch (error) {
-      logger.warn('Failed to remove deprecated content database properties', {
+      logger.warn("Failed to remove deprecated content database properties", {
+        databaseId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async ensureContentDatabaseAnalysisProperties(
+    databaseId: string,
+  ): Promise<void> {
+    try {
+      const props = await this.getDatabaseProperties(databaseId);
+      const properties: Record<string, any> = {};
+
+      if (!props.has(ANALYSIS_PROPS.summary)) {
+        properties[ANALYSIS_PROPS.summary] = { rich_text: {} };
+      }
+      if (!props.has(ANALYSIS_PROPS.keywords)) {
+        properties[ANALYSIS_PROPS.keywords] = { multi_select: {} };
+      }
+      if (!props.has(ANALYSIS_PROPS.confidence)) {
+        properties[ANALYSIS_PROPS.confidence] = {
+          number: { format: "percent" },
+        };
+      } else if (props.get(ANALYSIS_PROPS.confidence) !== "number") {
+        logger.warn("Content database confidence property has wrong type", {
+          databaseId,
+          property: ANALYSIS_PROPS.confidence,
+          type: props.get(ANALYSIS_PROPS.confidence),
+        });
+      }
+      if (!props.has(ANALYSIS_PROPS.status)) {
+        properties[ANALYSIS_PROPS.status] = {
+          select: {
+            options: [
+              { name: ANALYSIS_STATUS.analyzing, color: "yellow" },
+              { name: ANALYSIS_STATUS.done, color: "green" },
+              { name: ANALYSIS_STATUS.failed, color: "red" },
+            ],
+          },
+        };
+      }
+
+      if (Object.keys(properties).length === 0) return;
+      await this.fetchApi(`databases/${toUuid(databaseId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ properties }),
+      });
+    } catch (error) {
+      logger.warn("Failed to ensure content database analysis properties", {
         databaseId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -878,13 +1264,17 @@ export class NotionClient {
   }
 
   // 공통 fetch 함수 — 429/5xx 시 최대 2회 재시도
-  private async fetchApi(path: string, init: RequestInit, retries = 2): Promise<any> {
+  private async fetchApi(
+    path: string,
+    init: RequestInit,
+    retries = 2,
+  ): Promise<any> {
     const response = await fetch(`${NOTION_API_BASE}/${path}`, {
       ...init,
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'Notion-Version': NOTION_API_VERSION,
+        "Authorization": `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_API_VERSION,
         ...(init.headers || {}),
       },
     });
@@ -897,7 +1287,7 @@ export class NotionClient {
       }
 
       const body = await response.text();
-      logger.error('Notion API error', undefined, {
+      logger.error("Notion API error", undefined, {
         path,
         status: response.status,
         body: body.slice(0, 500),
@@ -912,18 +1302,21 @@ export class NotionClient {
   async removeTrendsEmbed(databaseId: string): Promise<void> {
     try {
       const parentPageId = await this.getDatabaseParentPageId(databaseId);
-      const embeds = await this.findEmbedsInPage(parentPageId, 'trends.html');
+      const embeds = await this.findEmbedsInPage(parentPageId, "trends.html");
 
       for (const embed of embeds) {
-        await this.fetchApi(`blocks/${embed.blockId}`, { method: 'DELETE' });
+        await this.fetchApi(`blocks/${embed.blockId}`, { method: "DELETE" });
         await sleep(250);
       }
 
       if (embeds.length) {
-        logger.info('Trends embeds removed', { parentPageId, count: embeds.length });
+        logger.info("Trends embeds removed", {
+          parentPageId,
+          count: embeds.length,
+        });
       }
     } catch (error) {
-      logger.warn('Failed to remove trends embed (non-fatal)', {
+      logger.warn("Failed to remove trends embed (non-fatal)", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -934,31 +1327,36 @@ export class NotionClient {
     try {
       const parentPageId = await this.getDatabaseParentPageId(databaseId);
       const embed = await this.findSearchEmbedInPage(parentPageId);
-      const newUrl = `https://pchanul.github.io/Snappy/search.html?user_id=${userId}&page_id=${parentPageId}`;
+      const newUrl =
+        `https://pchanul.github.io/Snappy/search.html?user_id=${userId}&page_id=${parentPageId}`;
 
       if (embed) {
         await this.fetchApi(`blocks/${embed.blockId}`, {
-          method: 'PATCH',
+          method: "PATCH",
           body: JSON.stringify({ embed: { url: newUrl } }),
         });
       } else {
         await this.appendBlocks(parentPageId, [
           {
-            object: 'block',
-            type: 'embed',
+            object: "block",
+            type: "embed",
             embed: { url: newUrl },
           },
         ]);
       }
 
-      logger.info('Search embed updated', { userId, parentPageId, created: !embed });
+      logger.info("Search embed updated", {
+        userId,
+        parentPageId,
+        created: !embed,
+      });
       return newUrl;
     } catch (error) {
       if (error instanceof NotionApiError) {
-        const message = error.message.replace(/^Notion API error: /, '');
+        const message = error.message.replace(/^Notion API error: /, "");
         throw new NotionApiError(
           message,
-          '검색 버튼 자동 연결에 실패했습니다. Notion 연결을 다시 진행하면서 복제한 Snappy 메인 페이지를 선택해주세요.',
+          "검색 버튼 자동 연결에 실패했습니다. Notion 연결을 다시 진행하면서 복제한 Snappy 메인 페이지를 선택해주세요.",
         );
       }
       throw error;
@@ -968,32 +1366,35 @@ export class NotionClient {
   // 검색 진행 중 상태를 임베드 URL 파라미터로 표현
   // searching=true  → URL에 &searching=1 추가
   // searching=false → &searching=1 제거 (완료/실패 후 복원)
-  async setSearchEmbedStatus(databaseId: string, searching: boolean): Promise<void> {
+  async setSearchEmbedStatus(
+    databaseId: string,
+    searching: boolean,
+  ): Promise<void> {
     const parentPageId = await this.getDatabaseParentPageId(databaseId);
     const embed = await this.findSearchEmbedInPage(parentPageId);
     if (!embed) return; // 임베드 블록 없으면 무시 (non-fatal)
 
     const url = new URL(embed.currentUrl);
     if (searching) {
-      url.searchParams.set('searching', '1');
+      url.searchParams.set("searching", "1");
     } else {
-      url.searchParams.delete('searching');
+      url.searchParams.delete("searching");
     }
     const newUrl = url.toString();
     if (newUrl === embed.currentUrl) return; // 변경 불필요
 
     await this.fetchApi(`blocks/${embed.blockId}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ embed: { url: newUrl } }),
     });
 
-    logger.info('Search embed status updated', { searching, newUrl });
+    logger.info("Search embed status updated", { searching, newUrl });
   }
 
   // 통합이 접근 가능한 객체(페이지/DB)가 하나라도 있는지 조회 — 연결 검증용
   async searchAccessible(): Promise<any[]> {
-    const data = await this.fetchApi('search', {
-      method: 'POST',
+    const data = await this.fetchApi("search", {
+      method: "POST",
       body: JSON.stringify({ page_size: 5 }),
     });
     return (data.results as any[]) || [];
@@ -1001,35 +1402,38 @@ export class NotionClient {
 
   // 통합이 접근 가능한 모든 페이지의 제목 목록 조회 (연결된 페이지 표시용)
   async listAccessiblePages(): Promise<{ id: string; title: string }[]> {
-    const data = await this.fetchApi('search', {
-      method: 'POST',
+    const data = await this.fetchApi("search", {
+      method: "POST",
       body: JSON.stringify({
-        filter: { value: 'page', property: 'object' },
+        filter: { value: "page", property: "object" },
         page_size: 50,
       }),
     });
     return ((data.results as any[]) || [])
-      .filter((obj) => obj.parent?.type === 'workspace')
+      .filter((obj) => obj.parent?.type === "workspace")
       .map((obj) => {
         const title = getObjectTitle(obj);
-        return { id: (obj.id as string).replace(/-/g, ''), title };
+        return { id: (obj.id as string).replace(/-/g, ""), title };
       })
       .filter((p) => p.title);
   }
 
   // 제목으로 접근 가능한 페이지를 찾는다. 셋업 중 사용자가 선택한 Snappy 페이지 식별용.
-  async findAccessiblePageByTitle(title: string): Promise<{ id: string; title: string } | null> {
+  async findAccessiblePageByTitle(
+    title: string,
+  ): Promise<{ id: string; title: string } | null> {
     const results = await this.searchByTitle(title);
     if (!results) return null;
 
     const expected = normalizeTitle(title);
     const page = results.find((obj: any) =>
-      obj.object === 'page' && normalizeTitle(getObjectTitle(obj)).startsWith(expected)
+      obj.object === "page" &&
+      normalizeTitle(getObjectTitle(obj)).startsWith(expected)
     );
     if (!page?.id) return null;
 
     return {
-      id: (page.id as string).replace(/-/g, ''),
+      id: (page.id as string).replace(/-/g, ""),
       title: getObjectTitle(page),
     };
   }
@@ -1038,15 +1442,15 @@ export class NotionClient {
   // 반환값: 결과 배열, 또는 접근 가능한 객체가 아예 없으면 null
   async searchByTitle(title: string): Promise<any[] | null> {
     // 먼저 전체 접근 가능 객체 수 확인
-    const all = await this.fetchApi('search', {
-      method: 'POST',
+    const all = await this.fetchApi("search", {
+      method: "POST",
       body: JSON.stringify({ page_size: 1 }),
     });
     if (!((all.results as any[]) || []).length) return null;
 
     // 제목 쿼리로 검색
-    const data = await this.fetchApi('search', {
-      method: 'POST',
+    const data = await this.fetchApi("search", {
+      method: "POST",
       body: JSON.stringify({ query: title, page_size: 20 }),
     });
     return (data.results as any[]) || [];
@@ -1055,12 +1459,14 @@ export class NotionClient {
   // duplicated_template_id로부터 검색 DB ID 해석
   // 템플릿 루트가 페이지일 수도(내부 인라인 DB), 데이터베이스 자체일 수도 있어 둘 다 처리
   async resolveSearchDatabase(duplicatedId: string): Promise<string | null> {
-    const id = duplicatedId.replace(/-/g, '');
+    const id = duplicatedId.replace(/-/g, "");
 
     // 1. duplicated_template_id 자체가 데이터베이스인 경우
     try {
-      const db = await this.fetchApi(`databases/${toUuid(id)}`, { method: 'GET' });
-      if (db?.object === 'database') return id;
+      const db = await this.fetchApi(`databases/${toUuid(id)}`, {
+        method: "GET",
+      });
+      if (db?.object === "database") return id;
     } catch { /* 페이지일 수 있으므로 무시 */ }
 
     // 2. 페이지인 경우 → 내부 자식 데이터베이스 탐색
@@ -1071,12 +1477,17 @@ export class NotionClient {
   async findChildDatabaseId(pageId: string): Promise<string | null> {
     let cursor: string | undefined;
     do {
-      const qs = new URLSearchParams({ page_size: '100' });
-      if (cursor) qs.set('start_cursor', cursor);
+      const qs = new URLSearchParams({ page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
 
-      const data = await this.fetchApi(`blocks/${pageId.replace(/-/g, '')}/children?${qs.toString()}`, { method: 'GET' });
-      const block = (data.results as any[]).find((b) => b.type === 'child_database');
-      if (block) return (block.id as string).replace(/-/g, '');
+      const data = await this.fetchApi(
+        `blocks/${pageId.replace(/-/g, "")}/children?${qs.toString()}`,
+        { method: "GET" },
+      );
+      const block = (data.results as any[]).find((b) =>
+        b.type === "child_database"
+      );
+      if (block) return (block.id as string).replace(/-/g, "");
 
       cursor = data.has_more ? data.next_cursor : undefined;
     } while (cursor);
@@ -1084,20 +1495,25 @@ export class NotionClient {
     return null;
   }
 
-  private async findSearchDatabaseOnPage(pageId: string): Promise<{ id: string; title: string } | null> {
+  private async findSearchDatabaseOnPage(
+    pageId: string,
+  ): Promise<{ id: string; title: string } | null> {
     const databases: Array<{ id: string; title: string }> = [];
     let cursor: string | undefined;
 
     do {
-      const qs = new URLSearchParams({ page_size: '100' });
-      if (cursor) qs.set('start_cursor', cursor);
+      const qs = new URLSearchParams({ page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
 
-      const data = await this.fetchApi(`blocks/${toUuid(pageId)}/children?${qs.toString()}`, { method: 'GET' });
+      const data = await this.fetchApi(
+        `blocks/${toUuid(pageId)}/children?${qs.toString()}`,
+        { method: "GET" },
+      );
       for (const block of (data.results as any[]) || []) {
-        if (block.type === 'child_database') {
+        if (block.type === "child_database") {
           databases.push({
-            id: (block.id as string).replace(/-/g, ''),
-            title: block.child_database?.title || '',
+            id: (block.id as string).replace(/-/g, ""),
+            title: block.child_database?.title || "",
           });
         }
       }
@@ -1105,20 +1521,30 @@ export class NotionClient {
       cursor = data.has_more ? data.next_cursor : undefined;
     } while (cursor);
 
-    const exact = databases.find((db) => db.title.trim() === SEARCH_DATABASE_TITLE);
+    const exact = databases.find((db) =>
+      db.title.trim() === SEARCH_DATABASE_TITLE
+    );
     if (exact) return exact;
 
     for (const db of databases) {
       try {
-        const info = await this.fetchApi(`databases/${toUuid(db.id)}`, { method: 'GET' });
+        const info = await this.fetchApi(`databases/${toUuid(db.id)}`, {
+          method: "GET",
+        });
         if (isSnappySearchDatabase(info)) {
-          return { id: db.id, title: getObjectTitle(info) || db.title || SEARCH_DATABASE_TITLE };
+          return {
+            id: db.id,
+            title: getObjectTitle(info) || db.title || SEARCH_DATABASE_TITLE,
+          };
         }
       } catch (error) {
-        logger.warn('Failed to inspect child database while finding search DB', {
-          databaseId: db.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        logger.warn(
+          "Failed to inspect child database while finding search DB",
+          {
+            databaseId: db.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
       }
     }
 
@@ -1126,15 +1552,17 @@ export class NotionClient {
   }
 
   private async getDatabaseParentPageId(databaseId: string): Promise<string> {
-    const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, { method: 'GET' });
+    const dbInfo = await this.fetchApi(`databases/${toUuid(databaseId)}`, {
+      method: "GET",
+    });
     const rawParentId: string | undefined = dbInfo.parent?.page_id;
     if (!rawParentId) {
       throw new NotionApiError(
-        'database parent page not found',
-        '검색 DB의 부모 페이지를 찾을 수 없습니다. 복제한 Snappy 메인 페이지를 선택해 다시 연결해주세요.',
+        "database parent page not found",
+        "검색 DB의 부모 페이지를 찾을 수 없습니다. 복제한 Snappy 메인 페이지를 선택해 다시 연결해주세요.",
       );
     }
-    return rawParentId.replace(/-/g, '');
+    return rawParentId.replace(/-/g, "");
   }
 
   // DB 부모 페이지에서 URL fragment가 포함된 임베드 블록 탐색
@@ -1152,15 +1580,23 @@ export class NotionClient {
     const embeds: Array<{ blockId: string; currentUrl: string }> = [];
     let cursor: string | undefined;
     do {
-      const qs = new URLSearchParams({ page_size: '100' });
-      if (cursor) qs.set('start_cursor', cursor);
+      const qs = new URLSearchParams({ page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
 
-      const data = await this.fetchApi(`blocks/${parentPageId}/children?${qs.toString()}`, { method: 'GET' });
+      const data = await this.fetchApi(
+        `blocks/${parentPageId}/children?${qs.toString()}`,
+        { method: "GET" },
+      );
       const blocks = ((data.results as any[]) || []).filter(
-        (b) => b.type === 'embed' && typeof b.embed?.url === 'string' && b.embed.url.includes(urlFragment),
+        (b) =>
+          b.type === "embed" && typeof b.embed?.url === "string" &&
+          b.embed.url.includes(urlFragment),
       );
       for (const block of blocks) {
-        embeds.push({ blockId: block.id, currentUrl: block.embed.url as string });
+        embeds.push({
+          blockId: block.id,
+          currentUrl: block.embed.url as string,
+        });
       }
 
       cursor = data.has_more ? data.next_cursor : undefined;
@@ -1172,75 +1608,93 @@ export class NotionClient {
   private async findSearchEmbedInPage(
     parentPageId: string,
   ): Promise<{ blockId: string; currentUrl: string } | null> {
-    return this.findEmbedInPage(parentPageId, 'search.html');
+    return this.findEmbedInPage(parentPageId, "search.html");
   }
 }
 
 function toUuid(id: string): string {
-  const s = id.replace(/-/g, '');
-  return `${s.slice(0,8)}-${s.slice(8,12)}-${s.slice(12,16)}-${s.slice(16,20)}-${s.slice(20)}`;
+  const s = id.replace(/-/g, "");
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${
+    s.slice(16, 20)
+  }-${s.slice(20)}`;
 }
 
 function getObjectTitle(obj: any): string {
-  if (obj.object === 'database') {
-    return ((obj.title || []) as any[]).map((t: any) => t.plain_text).join('').trim();
+  if (obj.object === "database") {
+    return ((obj.title || []) as any[]).map((t: any) => t.plain_text).join("")
+      .trim();
   }
 
   const titleProp = Object.values(obj.properties || {})
-    .find((p: any) => (p as any)?.type === 'title') as { title?: any[] } | undefined;
-  return (titleProp?.title || []).map((t: any) => t.plain_text).join('').trim();
+    .find((p: any) => (p as any)?.type === "title") as
+      | { title?: any[] }
+      | undefined;
+  return (titleProp?.title || []).map((t: any) => t.plain_text).join("").trim();
 }
 
 function normalizeTitle(title: string): string {
-  return title.replace(/\s+/g, ' ').trim();
+  return title.replace(/\s+/g, " ").trim();
 }
 
 function statusValue(status: string): { status: { name: string } } {
   return { status: { name: status } };
 }
 
-function searchEntryProperties(params: { keyword: string; platforms: Platform[]; period: Period }): Record<string, any> {
+function searchEntryProperties(
+  params: { keyword: string; platforms: Platform[]; period: Period },
+): Record<string, any> {
   return {
-    '키워드': { title: [{ type: 'text', text: { content: params.keyword } }] },
-    '상태': statusValue('검색중'),
-    '매체': { multi_select: params.platforms.map((p) => ({ name: PLATFORM_TO_NOTION[p] })) },
-    '기간': { select: { name: PERIOD_TO_NOTION[params.period] } },
+    "키워드": { title: [{ type: "text", text: { content: params.keyword } }] },
+    "상태": statusValue("검색중"),
+    "매체": {
+      multi_select: params.platforms.map((p) => ({
+        name: PLATFORM_TO_NOTION[p],
+      })),
+    },
+    "기간": { select: { name: PERIOD_TO_NOTION[params.period] } },
   };
 }
 
 function buildRowAnalysisBlocks(result: AnalysisResult): any[] {
   const blocks: any[] = [
     dividerBlock(),
-    heading3Block('AI 분석 노트'),
+    heading3Block("AI 분석 노트"),
   ];
 
-  if (result.status === 'failed') {
+  if (result.status === "failed") {
     blocks.push(calloutBlock(
-      '콘텐츠 분석에 실패했습니다. URL 접근 또는 본문 추출이 제한되었을 수 있습니다.',
-      '⚠️',
-      'red_background',
+      "콘텐츠 분석에 실패했습니다. URL 접근 또는 본문 추출이 제한되었을 수 있습니다.",
+      "⚠️",
+      "red_background",
     ));
     return blocks;
   }
 
   if (result.summary) {
-    const source = result.summarySource ? ` (${result.summarySource})` : '';
-    blocks.push(calloutBlock(`요약${source}\n${result.summary}`, '🧠', 'blue_background'));
+    const source = result.summarySource ? ` (${result.summarySource})` : "";
+    blocks.push(
+      calloutBlock(`요약${source}\n${result.summary}`, "🧠", "blue_background"),
+    );
   } else {
     blocks.push(calloutBlock(
-      'AI 요약을 생성하지 못했습니다. 아래 원문/설명 기반 텍스트를 참고하세요.',
-      'ℹ️',
-      'gray_background',
+      "AI 요약을 생성하지 못했습니다. 아래 원문/설명 기반 텍스트를 참고하세요.",
+      "ℹ️",
+      "gray_background",
     ));
   }
 
   const meta: string[] = [];
-  if (result.keywords.length) meta.push(`키워드: ${result.keywords.join(', ')}`);
+  if (result.keywords.length) {
+    meta.push(`키워드: ${result.keywords.join(", ")}`);
+  }
+  if (typeof result.confidence === "number") {
+    meta.push(`신뢰도: ${formatConfidence(result.confidence)}`);
+  }
   if (result.wordCount) meta.push(`본문 단어 수: ${result.wordCount}`);
-  if (meta.length) blocks.push(paragraphBlock(meta.join(' · '), 'gray'));
+  if (meta.length) blocks.push(paragraphBlock(meta.join(" · "), "gray"));
 
   if (result.sourceText) {
-    const sourceLabel = result.summarySource?.replace(' 기반', '') || '분석';
+    const sourceLabel = result.summarySource?.replace(" 기반", "") || "분석";
     blocks.push(toggleBlock(
       `${sourceLabel} 텍스트`,
       splitText(result.sourceText, 1800).map((chunk) => paragraphBlock(chunk)),
@@ -1251,7 +1705,7 @@ function buildRowAnalysisBlocks(result: AnalysisResult): any[] {
 }
 
 function splitText(text: string, maxLength: number): string[] {
-  const normalized = text.replace(/\s+/g, ' ').trim();
+  const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];
 
   const chunks: string[] = [];
@@ -1261,20 +1715,28 @@ function splitText(text: string, maxLength: number): string[] {
   return chunks;
 }
 
+function normalizeConfidenceNumber(value: number): number {
+  return Math.max(0, Math.min(1, Math.round(value * 100) / 100));
+}
+
+function formatConfidence(value: number): string {
+  return `${Math.round(normalizeConfidenceNumber(value) * 100)}%`;
+}
+
 function heading3Block(text: string): any {
   return {
-    object: 'block',
-    type: 'heading_3',
-    heading_3: { rich_text: [{ type: 'text', text: { content: text } }] },
+    object: "block",
+    type: "heading_3",
+    heading_3: { rich_text: [{ type: "text", text: { content: text } }] },
   };
 }
 
-function paragraphBlock(text: string, color = 'default'): any {
+function paragraphBlock(text: string, color = "default"): any {
   return {
-    object: 'block',
-    type: 'paragraph',
+    object: "block",
+    type: "paragraph",
     paragraph: {
-      rich_text: [{ type: 'text', text: { content: text.slice(0, 2000) } }],
+      rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }],
       color,
     },
   };
@@ -1282,11 +1744,11 @@ function paragraphBlock(text: string, color = 'default'): any {
 
 function calloutBlock(text: string, emoji: string, color: string): any {
   return {
-    object: 'block',
-    type: 'callout',
+    object: "block",
+    type: "callout",
     callout: {
-      rich_text: [{ type: 'text', text: { content: text.slice(0, 2000) } }],
-      icon: { type: 'emoji', emoji },
+      rich_text: [{ type: "text", text: { content: text.slice(0, 2000) } }],
+      icon: { type: "emoji", emoji },
       color,
     },
   };
@@ -1294,87 +1756,91 @@ function calloutBlock(text: string, emoji: string, color: string): any {
 
 function toggleBlock(title: string, children: any[]): any {
   return {
-    object: 'block',
-    type: 'toggle',
+    object: "block",
+    type: "toggle",
     toggle: {
-      rich_text: [{ type: 'text', text: { content: title } }],
+      rich_text: [{ type: "text", text: { content: title } }],
       children: children.length
         ? children
-        : [paragraphBlock('본문 텍스트가 없습니다.', 'gray')],
+        : [paragraphBlock("본문 텍스트가 없습니다.", "gray")],
     },
   };
 }
 
 function dividerBlock(): any {
-  return { object: 'block', type: 'divider', divider: {} };
+  return { object: "block", type: "divider", divider: {} };
 }
 
-function searchDatabaseBody(parentPageId: string, includeLoadMoreButton: boolean): Record<string, any> {
+function searchDatabaseBody(
+  parentPageId: string,
+  includeLoadMoreButton: boolean,
+): Record<string, any> {
   const properties: Record<string, any> = {
-    '키워드': { title: {} },
-    '상태': { status: {} },
-    '매체': {
+    "키워드": { title: {} },
+    "상태": { status: {} },
+    "매체": {
       multi_select: {
         options: [
-          { name: '네이버블로그', color: 'green' },
-          { name: '유튜브', color: 'red' },
-          { name: '유튜브숏츠', color: 'pink' },
-          { name: '티스토리', color: 'orange' },
-          { name: '브런치', color: 'brown' },
-          { name: '틱톡', color: 'gray' },
-          { name: '인스타릴스', color: 'pink' },
+          { name: "네이버블로그", color: "green" },
+          { name: "유튜브", color: "red" },
+          { name: "유튜브숏츠", color: "pink" },
+          { name: "티스토리", color: "orange" },
+          { name: "브런치", color: "brown" },
+          { name: "틱톡", color: "gray" },
+          { name: "인스타릴스", color: "pink" },
         ],
       },
     },
-    '기간': {
+    "기간": {
       select: {
         options: [
-          { name: '1일', color: 'gray' },
-          { name: '1주', color: 'blue' },
-          { name: '1개월', color: 'purple' },
-          { name: '1년', color: 'pink' },
+          { name: "1일", color: "gray" },
+          { name: "1주", color: "blue" },
+          { name: "1개월", color: "purple" },
+          { name: "1년", color: "pink" },
         ],
       },
     },
-    '발견 콘텐츠 수': { number: { format: 'number' } },
-    '검색일시': { created_time: {} },
+    "발견 콘텐츠 수": { number: { format: "number" } },
+    "검색일시": { created_time: {} },
   };
 
   if (includeLoadMoreButton) {
-    properties['📄 더보기'] = { button: {} };
+    properties["📄 더보기"] = { button: {} };
   }
 
   return {
     parent: { page_id: toUuid(parentPageId) },
     is_inline: true,
-    icon: { type: 'emoji', emoji: '🔍' },
-    title: [{ type: 'text', text: { content: SEARCH_DATABASE_TITLE } }],
+    icon: { type: "emoji", emoji: "🔍" },
+    title: [{ type: "text", text: { content: SEARCH_DATABASE_TITLE } }],
     properties,
   };
 }
 
 function isContentDatabaseTitle(title: string): boolean {
   const normalized = title.trim().toLowerCase();
-  return normalized.startsWith('콘텐츠') || normalized.startsWith('content');
+  return normalized.startsWith("콘텐츠") || normalized.startsWith("content");
 }
 
 function isSnappySearchDatabase(db: any): boolean {
   const props = db.properties || {};
   return (
-    props['키워드']?.type === 'title' &&
-    props['상태']?.type === 'status' &&
-    props['매체']?.type === 'multi_select' &&
-    props['기간']?.type === 'select'
+    props["키워드"]?.type === "title" &&
+    props["상태"]?.type === "status" &&
+    props["매체"]?.type === "multi_select" &&
+    props["기간"]?.type === "select"
   );
 }
 
 function isInvalidStatusOption(error: unknown): boolean {
-  return error instanceof NotionApiError && error.message.includes('Invalid status option');
+  return error instanceof NotionApiError &&
+    error.message.includes("Invalid status option");
 }
 
 function isUnsupportedButtonProperty(error: unknown): boolean {
   return error instanceof NotionApiError &&
-    (error.message.includes('button') || error.message.includes('📄 더보기'));
+    (error.message.includes("button") || error.message.includes("📄 더보기"));
 }
 
 function sleep(ms: number): Promise<void> {

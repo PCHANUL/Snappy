@@ -20,8 +20,7 @@ load_env ".env.local"
 SECRETS_TO_SET=(
   "NAVER_CLIENT_ID"
   "NAVER_CLIENT_SECRET"
-  "YOUTUBE_API_KEY"
-  "YOUCOM_API_KEY"
+  "TAVILY_API_KEY"
   "NOTION_KEY_ENCRYPTION_SECRET"
   "NOTION_CLIENT_ID"
   "NOTION_CLIENT_SECRET"
@@ -43,6 +42,12 @@ if [ -n "${ADMIN_SECRET:-}" ]; then
 fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   SECRETS_TO_SET+=("ANTHROPIC_API_KEY")
+fi
+if [ -n "${YOUTUBE_API_KEY:-}" ]; then
+  SECRETS_TO_SET+=("YOUTUBE_API_KEY")
+fi
+if [ -n "${YOUCOM_API_KEY:-}" ]; then
+  SECRETS_TO_SET+=("YOUCOM_API_KEY")
 fi
 log_info "등록할 시크릿: ${#SECRETS_TO_SET[@]}개"
 for var in "${SECRETS_TO_SET[@]}"; do

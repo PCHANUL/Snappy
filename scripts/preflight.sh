@@ -48,8 +48,7 @@ REQUIRED_VARS=(
   "SUPABASE_SERVICE_ROLE_KEY"
   "NAVER_CLIENT_ID"
   "NAVER_CLIENT_SECRET"
-  "YOUTUBE_API_KEY"
-  "YOUCOM_API_KEY"
+  "TAVILY_API_KEY"
   "NOTION_KEY_ENCRYPTION_SECRET"
   "NOTION_CLIENT_ID"
   "NOTION_CLIENT_SECRET"
@@ -93,45 +92,37 @@ fi
 
 log_step "4. 외부 API 키 검증"
 
-# 네이버 API 검증
-log_info "네이버 검색 API 호출 테스트..."
+# 네이버 DataLab API 검증 (연관 키워드/트렌드 분석용)
+log_info "네이버 DataLab API 호출 테스트..."
 naver_response=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST \
   -H "X-Naver-Client-Id: $NAVER_CLIENT_ID" \
   -H "X-Naver-Client-Secret: $NAVER_CLIENT_SECRET" \
-  "https://openapi.naver.com/v1/search/blog.json?query=test&display=1")
+  -H "Content-Type: application/json" \
+  -d '{"startDate":"2024-01-01","endDate":"2024-01-31","timeUnit":"month","keywordGroups":[{"groupName":"test","keywords":["test"]}]}' \
+  "https://openapi.naver.com/v1/datalab/search")
 
 if [ "$naver_response" = "200" ]; then
-  log_success "네이버 API 정상 (200)"
+  log_success "네이버 DataLab API 정상 (200)"
 else
-  log_error "네이버 API 응답 이상 ($naver_response)"
+  log_error "네이버 DataLab API 응답 이상 ($naver_response)"
   log_detail "Client ID/Secret을 확인하세요."
   exit 1
 fi
 
-# YouTube API 검증
-log_info "YouTube Data API 호출 테스트..."
-youtube_response=$(curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.googleapis.com/youtube/v3/search?part=snippet&q=test&maxResults=1&key=$YOUTUBE_API_KEY")
+# Tavily API 검증
+log_info "Tavily API 호출 테스트..."
+tavily_response=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "https://api.tavily.com/search" \
+  -H "Authorization: Bearer $TAVILY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"test","max_results":1,"search_depth":"basic"}')
 
-if [ "$youtube_response" = "200" ]; then
-  log_success "YouTube API 정상 (200)"
+if [ "$tavily_response" = "200" ]; then
+  log_success "Tavily API 정상 (200)"
 else
-  log_error "YouTube API 응답 이상 ($youtube_response)"
-  log_detail "API 키 또는 YouTube Data API v3 활성화 여부 확인"
-  exit 1
-fi
-
-# You.com API 검증
-log_info "You.com API 호출 테스트..."
-youcom_response=$(curl -s -o /dev/null -w "%{http_code}" \
-  -H "X-API-KEY: $YOUCOM_API_KEY" \
-  "https://ydc-index.io/v1/search?query=test&count=1")
-
-if [ "$youcom_response" = "200" ]; then
-  log_success "You.com API 정상 (200)"
-else
-  log_error "You.com API 응답 이상 ($youcom_response)"
-  log_detail "API 키를 확인하세요. https://you.com/platform"
+  log_error "Tavily API 응답 이상 ($tavily_response)"
+  log_detail "API 키를 확인하세요. https://app.tavily.com"
   exit 1
 fi
 

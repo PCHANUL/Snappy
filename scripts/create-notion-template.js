@@ -46,6 +46,7 @@ const SEARCH_URL     = `${PAGES_BASE}/search.html`;
 const USAGE_URL      = `${PAGES_BASE}/usage.html`;
 const HISTORY_URL    = `${PAGES_BASE}/history.html`;
 const SEARCH_TEMPLATE_PAGE_TITLE = '검색 결과 템플릿';
+const CONTENT_PAGE_TEMPLATE_TITLE = '검색 결과 콘텐츠 페이지 템플릿';
 const RUNNING_IN_DEPLOY = process.env.SNAPPY_DEPLOY_FLOW === '1';
 
 // --user-id <value> 플래그: 임베드 URL에 user_id 자동 삽입
@@ -217,6 +218,7 @@ async function createContentDB(parentPageId) {
       // 콘텐츠 분석 결과 컬럼 — 검색 후 백그라운드로 채워짐
       '요약': { rich_text: {} },
       '키워드': { multi_select: {} },
+      '신뢰도': { number: { format: 'percent' } },
       '분석 상태': {
         select: {
           options: [
@@ -293,12 +295,9 @@ function blocksFaq() {
     b.divider(),
     b.h2('검색'),
     b.toggle('어떤 매체를 검색하나요?', [
-      b.bullet('네이버 블로그: 네이버 검색 API'),
-      b.bullet('유튜브: YouTube Data API (공식)'),
-      b.bullet('티스토리: 웹 검색 결과 기반'),
-      b.bullet('브런치: 웹 검색 결과 기반'),
-      b.bullet('틱톡: 웹 검색 결과 기반, 콘텐츠 URL은 Notion에 임베드'),
-      b.bullet('인스타 릴스: 웹 검색 결과 기반, 릴스 URL은 Notion에 임베드'),
+      b.bullet('모든 매체 검색은 Tavily 웹 검색 결과를 기반으로 합니다.'),
+      b.bullet('네이버 블로그, 유튜브, 유튜브 숏츠, 티스토리, 브런치, 틱톡, 인스타 릴스를 선택할 수 있습니다.'),
+      b.bullet('틱톡, 인스타 릴스, 유튜브, 유튜브 숏츠 URL은 콘텐츠 페이지에 임베드됩니다.'),
     ]),
     b.toggle('기간은 어떻게 적용되나요?', [
       b.p('검색 임베드에서 1일, 1주, 1개월, 1년 중 하나를 선택할 수 있습니다. 기본값은 1개월입니다.'),
@@ -397,6 +396,7 @@ function blocksSeoljeong() {
       b.p(`이 설정 페이지 아래의 "${SEARCH_TEMPLATE_PAGE_TITLE}" 페이지는 새 검색 결과 페이지를 만들 때 사용됩니다.`),
       b.bullet('페이지 이름을 바꾸거나 삭제하지 마세요.'),
       b.bullet('안의 콘텐츠 DB 속성은 검색 결과 저장과 분석에 사용됩니다.'),
+      b.bullet(`이 설정 페이지 아래의 "${CONTENT_PAGE_TEMPLATE_TITLE}" 페이지는 콘텐츠 DB 행 페이지를 만들 때 사용됩니다.`),
     ]),
     b.divider(),
     b.h2('플랜'),
@@ -446,12 +446,14 @@ async function main() {
 
   await sleep(300);
 
-  // 5. 설정 하위 검색 결과 템플릿 페이지 + 콘텐츠 DB
+  // 5. 설정 하위 검색 결과 템플릿 페이지 + 콘텐츠 DB + 콘텐츠 페이지 템플릿
   process.stdout.write('📚 콘텐츠 DB 템플릿 페이지 생성 중...');
   const templateSearchPage = await createPage(seoljeongPage.id, SEARCH_TEMPLATE_PAGE_TITLE, '📄');
   await sleep(300);
   const contentDb = await createContentDB(templateSearchPage.id);
-  console.log(` ✅  Page ID: ${templateSearchPage.id}, DB ID: ${contentDb.id}`);
+  await sleep(300);
+  const contentPageTemplate = await createPage(seoljeongPage.id, CONTENT_PAGE_TEMPLATE_TITLE, '📄');
+  console.log(` ✅  Page ID: ${templateSearchPage.id}, DB ID: ${contentDb.id}, Content Template ID: ${contentPageTemplate.id}`);
 
   // 완료
   console.log(`
@@ -472,10 +474,12 @@ ${mainPage.url}
      (user_id는 서버가 검색 기록에서 자동 조회하므로 생략 가능)
 
 2. 검색 결과 템플릿 확인
-   - 스크립트가 설정 페이지 아래에 "${SEARCH_TEMPLATE_PAGE_TITLE}" 페이지를 생성했습니다.
-   - 해당 페이지 안에 "콘텐츠" 인라인 DB도 생성되어 있습니다.
-   - 서버는 새 검색 행 생성 시 이 페이지를 템플릿으로 적용하고, 복제된 콘텐츠 DB에 검색 결과를 추가합니다.
-   - 이 페이지는 삭제하거나 이름을 바꾸지 마세요.
+	   - 스크립트가 설정 페이지 아래에 "${SEARCH_TEMPLATE_PAGE_TITLE}" 페이지를 생성했습니다.
+	   - 해당 페이지 안에 "콘텐츠" 인라인 DB도 생성되어 있습니다.
+	   - 설정 페이지 아래에 "${CONTENT_PAGE_TEMPLATE_TITLE}" 페이지도 생성되어 있습니다.
+	   - 서버는 새 검색 행 생성 시 이 페이지를 템플릿으로 적용하고, 복제된 콘텐츠 DB에 검색 결과를 추가합니다.
+	   - 콘텐츠 DB의 각 행 페이지는 "${CONTENT_PAGE_TEMPLATE_TITLE}" 페이지를 템플릿으로 참조합니다.
+	   - 이 페이지는 삭제하거나 이름을 바꾸지 마세요.
 
 3. 검색 DB 뷰 3개 추가
    - 전체 (테이블, 검색일시 내림차순)

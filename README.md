@@ -23,9 +23,10 @@ supabase/
 │   │   ├── db.ts             # DB 접근
 │   │   └── validator.ts      # 요청 검증
 │   ├── search/               # 검색 모듈
-│   │   ├── naver.ts          # 네이버 검색 API
-│   │   ├── youtube.ts        # YouTube Data API
-│   │   ├── youcom.ts         # You.com (티스토리/브런치/틱톡/인스타 릴스)
+│   │   ├── tavily.ts         # Tavily 통합 검색 (전체 매체)
+│   │   ├── naver.ts          # 레거시 네이버 검색 모듈
+│   │   ├── youtube.ts        # 레거시 YouTube 검색 모듈
+│   │   ├── youcom.ts         # 레거시 You.com 검색 모듈
 │   │   └── orchestrator.ts   # 통합 오케스트레이터
 │   ├── notion/               # 노션 연동
 │   │   ├── client.ts         # 노션 API 클라이언트
@@ -51,9 +52,9 @@ supabase/
 
 ### 1. 사전 준비
 
-- **네이버 검색 API**: https://developers.naver.com 에서 발급
-- **YouTube Data API v3**: Google Cloud Console에서 발급
-- **You.com**: https://you.com/platform 에서 발급 ($100 무료 크레딧)
+- **Tavily API**: https://app.tavily.com 에서 발급 (전체 매체 검색)
+- **네이버 데이터랩 API**: https://developers.naver.com 에서 발급 (연관 키워드/트렌드 분석)
+- **YouTube Data API v3**: 선택 사항. 콘텐츠 분석 단계에서 영상 설명/태그 조회에 사용
 - **Supabase**: https://supabase.com 에서 프로젝트 생성
 - **Notion OAuth**: Notion integration에서 `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` 발급
 - **암호화 시크릿**: `openssl rand -base64 32` 등으로 `NOTION_KEY_ENCRYPTION_SECRET` 생성
@@ -92,11 +93,11 @@ supabase link --project-ref [YOUR_PROJECT_REF]
 node scripts/create-notion-template.js <parent-page-id>
 ```
 
-스크립트는 `설정` 페이지 아래에 `검색 결과 템플릿` 페이지를 만들고, 그 페이지 안에 `콘텐츠`
-인라인 DB를 자동 생성합니다. 이 DB에는 `제목`, `매체`, `URL`, `작성자`, `날짜` 속성이 포함됩니다.
+스크립트는 `설정` 페이지 아래에 `검색 결과 템플릿` 페이지와 `검색 결과 콘텐츠 페이지 템플릿`
+페이지를 만들고, `검색 결과 템플릿` 페이지 안에 `콘텐츠` 인라인 DB를 자동 생성합니다. 이 DB에는 `제목`, `매체`, `URL`, `작성자`, `날짜` 속성이 포함됩니다.
 서버는 새 검색 행 생성 시 `검색 결과 템플릿` 페이지를 `template_id`로 적용하고, 복제된
-`콘텐츠` DB에 검색 결과를 추가합니다. 이 페이지를 찾지 못하면 기존처럼 검색 결과 페이지마다
-`콘텐츠` DB를 직접 생성합니다.
+`콘텐츠` DB에 검색 결과를 추가합니다. 콘텐츠 DB의 각 행 페이지는 `검색 결과 콘텐츠 페이지 템플릿`
+페이지를 참조해 생성됩니다. 이 페이지를 찾지 못하면 기존처럼 검색 결과 페이지마다 `콘텐츠` DB를 직접 생성합니다.
 
 생성된 메인 페이지를 Notion에서 게시한 뒤, 템플릿 복제를 허용하고 복제 링크를 얻습니다.
 사용자에게 노출되는 템플릿 링크는 항상 `https://pchanul.github.io/Snappy/template.html`로 고정하고,
@@ -198,7 +199,7 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/trigger-search' \
     "user_id": "...",
     "notion_page_id": "...",
     "keyword": "비건 디저트",
-    "platforms": ["naver_blog", "youtube", "tistory", "brunch", "tiktok", "instagram_reels"],
+    "platforms": ["naver_blog", "youtube", "youtube_shorts", "tistory", "brunch", "tiktok", "instagram_reels"],
     "period": "month",
     "result_count": 10
   }'
@@ -208,10 +209,15 @@ curl -X POST 'https://[ref].supabase.co/functions/v1/trigger-search' \
 
 | API | 비용 |
 |---|---|
-| 네이버 | 무료 |
-| YouTube | 무료 |
-| You.com (티스토리+브런치+틱톡+인스타 릴스) | 약 2,800원 |
-| **합계** | **약 2,800원** |
+| Tavily Search | 선택 매체 1개당 basic search 1회 |
+| Tavily Extract | 콘텐츠 분석 시 URL별 advanced extract 1회 |
+| 네이버 데이터랩 | 무료 |
+| YouTube Data API v3 | 선택 사항 |
+| **합계** | 검색 매체 수와 Tavily 플랜에 따라 변동 |
+
+콘텐츠 분석은 먼저 Tavily Extract(`extract_depth=advanced`, `format=text`)로 본문/메타데이터를 가져오고,
+LLM이 raw text에서 요약, 키워드, 신뢰도를 구조화합니다. Extract가 실패하면 기존 플랫폼별 크롤러와 검색 결과
+설명/스니펫으로 fallback하고, LLM 분석이 실패하면 규칙 기반 키워드 추출로 보강합니다.
 
 ## 다음 단계
 

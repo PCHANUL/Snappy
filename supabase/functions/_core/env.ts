@@ -23,11 +23,14 @@ export const env = {
     clientId: required('NAVER_CLIENT_ID'),
     clientSecret: required('NAVER_CLIENT_SECRET'),
   },
+  tavily: {
+    apiKey: required('TAVILY_API_KEY'),
+  },
   youtube: {
-    apiKey: required('YOUTUBE_API_KEY'),
+    apiKey: optional('YOUTUBE_API_KEY', ''),
   },
   youcom: {
-    apiKey: required('YOUCOM_API_KEY'),
+    apiKey: optional('YOUCOM_API_KEY', ''),
   },
   security: {
     notionKeyEncryptionSecret: required('NOTION_KEY_ENCRYPTION_SECRET'),

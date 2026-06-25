@@ -127,9 +127,8 @@ export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
   if (item.published_at) metaParts.push(`📅 ${item.published_at.slice(0, 10)}`);
   blocks.push(paragraph(metaParts.join('  ·  '), 'gray'));
 
-  // 콘텐츠 상세 페이지는 영상/숏폼 매체를 본문에 바로 임베딩한다.
-  const mediaBlock = buildSubPageMediaBlock(item);
-  blocks.push(mediaBlock ?? { object: 'block', type: 'bookmark', bookmark: { url: item.url } });
+  // 콘텐츠 상세 페이지는 매체와 상관없이 원문 URL을 임베딩한다.
+  blocks.push(buildUrlEmbedBlock(item.url));
 
   const desc = item.snippet || item.description;
   if (desc) {
@@ -170,16 +169,12 @@ function buildMediaBlock(item: ContentItem): NotionBlock | null {
   return null;
 }
 
-function buildSubPageMediaBlock(item: ContentItem): NotionBlock | null {
-  if (item.platform === 'youtube' || item.platform === 'youtube_shorts') {
-    return {
-      object: 'block',
-      type: 'video',
-      video: { type: 'external', external: { url: item.url } },
-    };
-  }
-
-  return buildMediaBlock(item);
+function buildUrlEmbedBlock(url: string): NotionBlock {
+  return {
+    object: 'block',
+    type: 'embed',
+    embed: { url },
+  };
 }
 
 function toggle(title: string, children: NotionBlock[]): NotionBlock {

@@ -3,22 +3,29 @@
 
 import { logger } from '../_core/logger.ts';
 import { ExternalApiError } from '../_core/errors.ts';
-import { searchNaverBlog } from './naver.ts';
-import { searchYouTube } from './youtube.ts';
-import { searchTistory, searchBrunch, searchTikTok, searchInstagramReels } from './youcom.ts';
+import {
+  searchBrunchWithTavily,
+  searchInstagramReelsWithTavily,
+  searchNaverBlogWithTavily,
+  searchTikTokWithTavily,
+  searchTistoryWithTavily,
+  searchYouTubeShortsWithTavily,
+  searchYouTubeWithTavily,
+  TAVILY_PAYG_USD_PER_CREDIT,
+} from './tavily.ts';
 import type { Platform, Period, SearchResult, ContentItem } from '../_core/types.ts';
 
 // 플랫폼별 검색 함수 매핑
 type SearcherFn = (keyword: string, count: number, period: Period) => Promise<ContentItem[]>;
 
 const searchers: Record<Platform, SearcherFn> = {
-  naver_blog: searchNaverBlog,
-  youtube: searchYouTube,
-  youtube_shorts: (keyword, count, period) => searchYouTube(keyword, count, period, { shorts: true }),
-  tistory: searchTistory,
-  brunch: searchBrunch,
-  tiktok: searchTikTok,
-  instagram_reels: searchInstagramReels,
+  naver_blog: searchNaverBlogWithTavily,
+  youtube: searchYouTubeWithTavily,
+  youtube_shorts: searchYouTubeShortsWithTavily,
+  tistory: searchTistoryWithTavily,
+  brunch: searchBrunchWithTavily,
+  tiktok: searchTikTokWithTavily,
+  instagram_reels: searchInstagramReelsWithTavily,
 };
 
 const PLATFORM_TIMEOUT_MS = 25_000;
@@ -37,15 +44,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// 플랫폼별 비용 (USD)
+// Tavily basic search = 1 credit. USD는 pay-as-you-go 기준 추정치다.
 const COST_PER_SEARCH: Record<Platform, number> = {
-  naver_blog: 0,
-  youtube: 0,
-  youtube_shorts: 0,
-  tistory: 0.005,
-  brunch: 0.005,
-  tiktok: 0.005,
-  instagram_reels: 0.005,
+  naver_blog: TAVILY_PAYG_USD_PER_CREDIT,
+  youtube: TAVILY_PAYG_USD_PER_CREDIT,
+  youtube_shorts: TAVILY_PAYG_USD_PER_CREDIT,
+  tistory: TAVILY_PAYG_USD_PER_CREDIT,
+  brunch: TAVILY_PAYG_USD_PER_CREDIT,
+  tiktok: TAVILY_PAYG_USD_PER_CREDIT,
+  instagram_reels: TAVILY_PAYG_USD_PER_CREDIT,
 };
 
 export interface OrchestratorResult {

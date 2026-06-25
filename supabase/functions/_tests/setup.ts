@@ -7,6 +7,7 @@ Deno.env.set('SUPABASE_ANON_KEY', 'test-anon-key');
 Deno.env.set('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key');
 Deno.env.set('NAVER_CLIENT_ID', 'test-naver-id');
 Deno.env.set('NAVER_CLIENT_SECRET', 'test-naver-secret');
+Deno.env.set('TAVILY_API_KEY', 'test-tavily-key');
 Deno.env.set('YOUTUBE_API_KEY', 'test-youtube-key');
 Deno.env.set('YOUCOM_API_KEY', 'test-youcom-key');
 Deno.env.set('NOTION_KEY_ENCRYPTION_SECRET', 'test-secret-32-chars-long-abcdefg');
