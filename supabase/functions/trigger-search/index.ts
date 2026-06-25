@@ -15,6 +15,7 @@ import { validateSearchRequest } from "../_core/validator.ts";
 import {
   getUserAndCheckQuota,
   incrementUsage,
+  isSearchCancelRequested,
   logSearch,
   markSearchingEnd,
   markSearchingStart,
@@ -32,6 +33,15 @@ import { env } from "../_core/env.ts";
 import type { Platform, User } from "../_core/types.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<any>): void };
+
+const SEARCH_CANCELLED_MESSAGE = "검색이 취소되었습니다.";
+
+class SearchCancelledError extends Error {
+  constructor() {
+    super(SEARCH_CANCELLED_MESSAGE);
+    this.name = "SearchCancelledError";
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -98,6 +108,11 @@ async function processSearch(
   // 진행 메시지를 DB에 기록 — 폴링 응답에 포함되어 임베드 UI에 표시됨
   const onProgress = (message: string) =>
     updateSearchProgress(user.id, message);
+  const throwIfCancelled = async () => {
+    if (await isSearchCancelRequested(user.id)) {
+      throw new SearchCancelledError();
+    }
+  };
 
   let pageId: string | undefined;
   try {
@@ -127,6 +142,7 @@ async function processSearch(
       period: rawBody.period,
       result_count: rawBody.result_count,
     });
+    await throwIfCancelled();
 
     // 1. 검색 DB에 새 행 생성 (상태: 검색중) — 결과 서브페이지의 부모가 됨
     await onProgress("노션에 검색 항목 생성 중...");
@@ -135,15 +151,18 @@ async function processSearch(
       platforms: request.platforms,
       period: request.period,
     });
+    await throwIfCancelled();
 
     // 2. 매체별 검색 실행 — 매체당 10개씩
     await onProgress(`${request.platforms.length}개 매체 검색 중...`);
+    await throwIfCancelled();
     const orchestratorResult = await searchAllPlatforms(
       request.keyword,
       request.platforms,
       10,
       request.period,
     );
+    await throwIfCancelled();
 
     const metadata = {
       duration_ms: Date.now() - startTime,
@@ -156,6 +175,7 @@ async function processSearch(
 
     // 3. 검색 이력 저장
     await onProgress(`${totalFound}개 발견, 저장 중...`);
+    await throwIfCancelled();
     await saveSearchResults(
       pageId,
       request.user_id,
@@ -165,12 +185,14 @@ async function processSearch(
       orchestratorResult.results,
       metadata,
     );
+    await throwIfCancelled();
 
     // 4. 연관 인기 키워드 추출 + DataLab 개별 ratio 랭킹 (비차단)
     // 빈도순 상위 후보를 1회 호출(최대 5그룹)로 개별 ratio 조회 후 ratio순 정렬
     let relatedKeywords: RankedKeyword[] = [];
     try {
       await onProgress("연관 키워드 분석 중...");
+      await throwIfCancelled();
       const candidates = extractCandidateKeywords(
         orchestratorResult.results,
         request.keyword,
@@ -182,7 +204,9 @@ async function processSearch(
           candidates,
         );
       }
+      await throwIfCancelled();
     } catch (err) {
+      if (err instanceof SearchCancelledError) throw err;
       logger.warn("Related keyword analysis failed (non-fatal)", {
         error: String(err),
       });
@@ -193,6 +217,7 @@ async function processSearch(
     }
 
     // 5. 요약 callout + child DB(매체별 행)로 결과 표시 (상태 → 완료)
+    await throwIfCancelled();
     const { rows, analysisProps } = await notion.updatePageWithChildDatabase(
       pageId,
       request.keyword,
@@ -201,6 +226,7 @@ async function processSearch(
       totalFound,
       onProgress,
     );
+    await throwIfCancelled();
 
     if (totalFound > 0 && rows.length === 0) {
       throw new Error("No content rows were created in Notion");
@@ -209,8 +235,10 @@ async function processSearch(
     // 6. 연관 인기 키워드 Notion 블록 추가
     if (relatedKeywords.length) {
       try {
+        await throwIfCancelled();
         await notion.appendRelatedKeywords(pageId, relatedKeywords);
       } catch (err) {
+        if (err instanceof SearchCancelledError) throw err;
         logger.warn("Failed to append related keywords to Notion (non-fatal)", {
           error: String(err),
         });
@@ -222,6 +250,7 @@ async function processSearch(
     const hasAnalysisProps = analysisProps.get("분석 상태") === "select" ||
       analysisProps.get("요약") === "rich_text" ||
       analysisProps.get("키워드") === "multi_select";
+    await throwIfCancelled();
     if (rows.length && hasAnalysisProps) {
       let statusBlockId: string | null = null;
       try {
@@ -245,6 +274,7 @@ async function processSearch(
       );
     }
 
+    await throwIfCancelled();
     await incrementUsage(request.user_id);
     await logSearch({
       user_id: request.user_id,
@@ -265,13 +295,20 @@ async function processSearch(
       duration_ms: Date.now() - startTime,
     });
   } catch (error) {
+    const cancelled = error instanceof SearchCancelledError;
     const errorMessage = error instanceof Error
       ? error.message
       : "Unknown error";
-    logger.error("Search failed", error, { user_id: user.id, keyword });
+    if (cancelled) {
+      logger.info("Search cancelled", { user_id: user.id, keyword });
+    } else {
+      logger.error("Search failed", error, { user_id: user.id, keyword });
+    }
 
     // 사용자에게 표시할 메시지 기록 — 폴링이 검색 종료 후 읽어 표시
-    const userMessage = error instanceof AppError
+    const userMessage = cancelled
+      ? SEARCH_CANCELLED_MESSAGE
+      : error instanceof AppError
       ? (error.userMessage || "검색에 실패했습니다.")
       : "검색에 실패했습니다. 잠시 후 다시 시도해주세요.";
     await setSearchError(user.id, userMessage);

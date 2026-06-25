@@ -1,11 +1,26 @@
 // Supabase DB 접근 유틸리티
 
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { decryptNotionKey } from './crypto.ts';
-import { env } from './env.ts';
-import { AppError, AuthError, QuotaExceededError, ValidationError } from './errors.ts';
-import { DAILY_QUOTAS, getEffectiveTier } from './types.ts';
-import type { FlatResult, Platform, SearchMetadata, SearchResult, SubscriptionTier, User } from './types.ts';
+import {
+  createClient,
+  SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { decryptNotionKey } from "./crypto.ts";
+import { env } from "./env.ts";
+import {
+  AppError,
+  AuthError,
+  QuotaExceededError,
+  ValidationError,
+} from "./errors.ts";
+import { DAILY_QUOTAS, getEffectiveTier } from "./types.ts";
+import type {
+  FlatResult,
+  Platform,
+  SearchMetadata,
+  SearchResult,
+  SubscriptionTier,
+  User,
+} from "./types.ts";
 
 let _client: SupabaseClient | null = null;
 
@@ -22,15 +37,20 @@ export function getSupabase(): SupabaseClient {
 
 export async function getUser(userId: string): Promise<User> {
   const { data, error } = await getSupabase()
-    .from('users')
-    .select('id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id')
-    .eq('id', userId)
+    .from("users")
+    .select(
+      "id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id",
+    )
+    .eq("id", userId)
     .single();
 
-  if (error || !data) throw new AuthError('User not found');
+  if (error || !data) throw new AuthError("User not found");
 
   if (!data.notion_api_key_encrypted || !data.notion_database_id) {
-    throw new ValidationError('Notion integration not configured', '노션 연동을 먼저 완료해주세요.');
+    throw new ValidationError(
+      "Notion integration not configured",
+      "노션 연동을 먼저 완료해주세요.",
+    );
   }
 
   return {
@@ -50,56 +70,81 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
 
   const [userResult, quotaResult] = await Promise.all([
     getSupabase()
-      .from('users')
-      .select('id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id, searching_since')
-      .eq('id', userId)
+      .from("users")
+      .select(
+        "id, email, subscription_tier, subscription_expires_at, notion_api_key_encrypted, notion_database_id, searching_since",
+      )
+      .eq("id", userId)
       .single(),
     getSupabase()
-      .from('usage_quotas')
-      .select('search_count')
-      .eq('user_id', userId)
-      .eq('date', today)
+      .from("usage_quotas")
+      .select("search_count")
+      .eq("user_id", userId)
+      .eq("date", today)
       .maybeSingle(),
   ]);
 
-  if (userResult.error || !userResult.data) throw new AuthError('User not found');
+  if (userResult.error || !userResult.data) {
+    throw new AuthError("User not found");
+  }
 
   const data = userResult.data;
   if (!data.notion_api_key_encrypted || !data.notion_database_id) {
-    throw new ValidationError('Notion integration not configured', '노션 연동을 먼저 완료해주세요.');
+    throw new ValidationError(
+      "Notion integration not configured",
+      "노션 연동을 먼저 완료해주세요.",
+    );
   }
 
-  const effectiveTier = getEffectiveTier(data.subscription_tier as SubscriptionTier, data.subscription_expires_at);
+  const effectiveTier = getEffectiveTier(
+    data.subscription_tier as SubscriptionTier,
+    data.subscription_expires_at,
+  );
 
   if (effectiveTier !== data.subscription_tier) {
     getSupabase()
-      .from('users')
-      .update({ subscription_tier: 'free', subscription_expires_at: null })
-      .eq('id', data.id)
-      .then(({ error }) => { if (error) console.error('Auto-downgrade failed', error); });
+      .from("users")
+      .update({ subscription_tier: "free", subscription_expires_at: null })
+      .eq("id", data.id)
+      .then(({ error }) => {
+        if (error) console.error("Auto-downgrade failed", error);
+      });
   }
 
   const limit = DAILY_QUOTAS[effectiveTier] ?? DAILY_QUOTAS.free;
-  if ((quotaResult.data?.search_count ?? 0) >= limit) throw new QuotaExceededError(limit);
+  if ((quotaResult.data?.search_count ?? 0) >= limit) {
+    throw new QuotaExceededError(limit);
+  }
 
   // 검색 중 상태 확인 — stale(3분 초과)이 아니면 중복 요청 차단
   if (data.searching_since) {
     const elapsed = Date.now() - new Date(data.searching_since).getTime();
     if (elapsed < STALE_MS) {
-      throw new ValidationError('Search already in progress', '이미 검색이 진행 중입니다. 잠시 후 다시 시도해주세요.');
+      throw new ValidationError(
+        "Search already in progress",
+        "이미 검색이 진행 중입니다. 잠시 후 다시 시도해주세요.",
+      );
     }
     // stale → 자동 해제 후 계속 진행
-    getSupabase().from('users').update({ searching_since: null }).eq('id', data.id)
-      .then(({ error }) => { if (error) console.error('Failed to clear stale searching_since', error); });
+    getSupabase().from("users").update({ searching_since: null }).eq(
+      "id",
+      data.id,
+    )
+      .then(({ error }) => {
+        if (error) {
+          console.error("Failed to clear stale searching_since", error);
+        }
+      });
   }
 
   return {
     id: data.id,
     email: data.email,
     subscription_tier: effectiveTier,
-    subscription_expires_at: effectiveTier === 'free' && effectiveTier !== data.subscription_tier
-      ? null
-      : data.subscription_expires_at,
+    subscription_expires_at:
+      effectiveTier === "free" && effectiveTier !== data.subscription_tier
+        ? null
+        : data.subscription_expires_at,
     notion_api_key: await decryptNotionKey(data.notion_api_key_encrypted),
     notion_database_id: data.notion_database_id,
   };
@@ -109,10 +154,16 @@ export async function getUserAndCheckQuota(userId: string): Promise<User> {
 
 export async function markSearchingStart(userId: string): Promise<void> {
   const { error } = await getSupabase()
-    .from('users')
-    .update({ searching_since: new Date().toISOString(), search_progress: null, last_search_error: null, last_related_keywords: null })
-    .eq('id', userId);
-  if (error) console.error('Failed to mark searching start', error);
+    .from("users")
+    .update({
+      searching_since: new Date().toISOString(),
+      search_progress: null,
+      last_search_error: null,
+      last_related_keywords: null,
+      search_cancel_requested_at: null,
+    })
+    .eq("id", userId);
+  if (error) console.error("Failed to mark searching start", error);
 }
 
 export async function setRelatedKeywords(
@@ -120,46 +171,83 @@ export async function setRelatedKeywords(
   related: { keywords: Array<{ keyword: string; ratio: number }> },
 ): Promise<void> {
   const { error } = await getSupabase()
-    .from('users')
+    .from("users")
     .update({ last_related_keywords: related })
-    .eq('id', userId);
-  if (error) console.error('Failed to set related keywords', error);
+    .eq("id", userId);
+  if (error) console.error("Failed to set related keywords", error);
 }
 
 // 검색 종료 — 진행 상태만 해제. last_search_error는 보존(실패 시 폴링이 읽음)
 export async function markSearchingEnd(userId: string): Promise<void> {
   const { error } = await getSupabase()
-    .from('users')
-    .update({ searching_since: null, search_progress: null })
-    .eq('id', userId);
-  if (error) console.error('Failed to mark searching end', error);
+    .from("users")
+    .update({
+      searching_since: null,
+      search_progress: null,
+      search_cancel_requested_at: null,
+    })
+    .eq("id", userId);
+  if (error) console.error("Failed to mark searching end", error);
 }
 
-export async function updateSearchProgress(userId: string, message: string): Promise<void> {
+export async function requestSearchCancel(userId: string): Promise<void> {
   const { error } = await getSupabase()
-    .from('users')
+    .from("users")
+    .update({
+      search_cancel_requested_at: new Date().toISOString(),
+      search_progress: "검색을 취소하고 있어요...",
+    })
+    .eq("id", userId)
+    .not("searching_since", "is", null);
+  if (error) console.error("Failed to request search cancel", error);
+}
+
+export async function isSearchCancelRequested(
+  userId: string,
+): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from("users")
+    .select("search_cancel_requested_at")
+    .eq("id", userId)
+    .single();
+  if (error) {
+    console.error("Failed to read search cancel state", error);
+    return false;
+  }
+  return data?.search_cancel_requested_at !== null;
+}
+
+export async function updateSearchProgress(
+  userId: string,
+  message: string,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from("users")
     .update({ search_progress: message })
-    .eq('id', userId);
-  if (error) console.error('Failed to update search progress', error);
+    .eq("id", userId);
+  if (error) console.error("Failed to update search progress", error);
 }
 
-export async function setSearchError(userId: string, message: string): Promise<void> {
+export async function setSearchError(
+  userId: string,
+  message: string,
+): Promise<void> {
   const { error } = await getSupabase()
-    .from('users')
+    .from("users")
     .update({ last_search_error: message })
-    .eq('id', userId);
-  if (error) console.error('Failed to set search error', error);
+    .eq("id", userId);
+  if (error) console.error("Failed to set search error", error);
 }
 
 // ── 사용량 ────────────────────────────────────────────────────────────────────
 
 export async function incrementUsage(userId: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  const { error } = await getSupabase().rpc('increment_search_count', {
+  const { error } = await getSupabase().rpc("increment_search_count", {
     p_user_id: userId,
     p_date: today,
   });
-  if (error) console.error('Failed to increment usage', error);
+  if (error) console.error("Failed to increment usage", error);
 }
 
 // ── 검색 결과 저장 (정규화 3-테이블 구조) ─────────────────────────────────────
@@ -177,13 +265,13 @@ export async function saveSearchResults(
   results: SearchResult[],
   metadata: SearchMetadata,
 ): Promise<void> {
-  const flatResults: FlatResult[] = results.flatMap(r =>
-    r.items.map(item => ({ ...item, platform: r.platform }))
+  const flatResults: FlatResult[] = results.flatMap((r) =>
+    r.items.map((item) => ({ ...item, platform: r.platform }))
   );
 
   // 1. 검색 이벤트 INSERT
   const { data: sr, error: srErr } = await getSupabase()
-    .from('search_results')
+    .from("search_results")
     .insert({
       notion_page_id: notionPageId,
       user_id: userId,
@@ -194,68 +282,76 @@ export async function saveSearchResults(
       shown_count: 0,
       metadata,
     })
-    .select('id')
+    .select("id")
     .single();
 
   if (srErr || !sr) {
-    throwSearchResultSaveError('Failed to insert search_result', srErr ?? 'No search_result row returned');
+    throwSearchResultSaveError(
+      "Failed to insert search_result",
+      srErr ?? "No search_result row returned",
+    );
   }
 
   if (flatResults.length === 0) return;
 
   // 2. content_items 배치 upsert (RPC — search_count 증가 + keywords 누적)
   const { data: contentItems, error: ciErr } = await getSupabase()
-    .rpc('upsert_content_items', {
+    .rpc("upsert_content_items", {
       p_keyword: keyword,
       p_items: flatResults,
     });
 
   if (ciErr || !contentItems) {
-    throwSearchResultSaveError('Failed to upsert content_items', ciErr ?? 'No content_items rows returned');
+    throwSearchResultSaveError(
+      "Failed to upsert content_items",
+      ciErr ?? "No content_items rows returned",
+    );
   }
 
   // 3. junction INSERT (search_result_id + content_item_id + rank)
   const urlToId = new Map<string, string>(
-    (contentItems as Array<{ id: string; url: string }>).map(c => [c.url, c.id])
+    (contentItems as Array<{ id: string; url: string }>).map(
+      (c) => [c.url, c.id],
+    ),
   );
 
   const junctionRows = flatResults
     .map((item, idx) => ({
       search_result_id: sr.id,
-      content_item_id:  urlToId.get(item.url),
+      content_item_id: urlToId.get(item.url),
       rank: idx + 1,
     }))
-    .filter(r => r.content_item_id != null);
+    .filter((r) => r.content_item_id != null);
 
   if (junctionRows.length !== flatResults.length) {
     throwSearchResultSaveError(
-      'Failed to match content_items for every search result',
+      "Failed to match content_items for every search result",
       `matched ${junctionRows.length}/${flatResults.length}`,
     );
   }
 
   const { error: jiErr } = await getSupabase()
-    .from('search_result_items')
+    .from("search_result_items")
     .insert(junctionRows);
 
   if (jiErr) {
-    throwSearchResultSaveError('Failed to insert search_result_items', jiErr);
+    throwSearchResultSaveError("Failed to insert search_result_items", jiErr);
   }
 }
 
 function throwSearchResultSaveError(context: string, error: unknown): never {
-  const detail = typeof error === 'string'
+  const detail = typeof error === "string"
     ? error
     : error instanceof Error
-      ? error.message
-      : JSON.stringify(error) ?? String(error);
+    ? error.message
+    : JSON.stringify(error) ?? String(error);
 
   console.error(context, error);
   throw new AppError(
     `${context}: ${detail}`,
-    'SEARCH_RESULT_SAVE_ERROR',
+    "SEARCH_RESULT_SAVE_ERROR",
     500,
-    '검색 결과 저장에 실패했습니다. 잠시 후 다시 시도해주세요.',
+    "검색 결과 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
   );
 }
 
@@ -276,11 +372,11 @@ export async function getNextBatch(
 ): Promise<NextBatch | null> {
   // 해당 페이지의 가장 최근 검색 결과
   const { data: sr } = await getSupabase()
-    .from('search_results')
-    .select('id, keyword, metadata, shown_count, total_count')
-    .eq('notion_page_id', notionPageId)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .from("search_results")
+    .select("id, keyword, metadata, shown_count, total_count")
+    .eq("notion_page_id", notionPageId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
     .limit(1)
     .single();
 
@@ -288,23 +384,23 @@ export async function getNextBatch(
 
   // junction → content_items 조인으로 다음 배치
   const { data: rows } = await getSupabase()
-    .from('search_result_items')
-    .select('rank, content_items(*)')
-    .eq('search_result_id', sr.id)
-    .gt('rank', sr.shown_count)
-    .lte('rank', sr.shown_count + batchSize)
-    .order('rank');
+    .from("search_result_items")
+    .select("rank, content_items(*)")
+    .eq("search_result_id", sr.id)
+    .gt("rank", sr.shown_count)
+    .lte("rank", sr.shown_count + batchSize)
+    .order("rank");
 
   if (!rows || rows.length === 0) return null;
 
-  const items = rows.map(r => r.content_items as unknown as FlatResult);
+  const items = rows.map((r) => r.content_items as unknown as FlatResult);
   const newShownCount = sr.shown_count + items.length;
   const hasMore = newShownCount < sr.total_count;
 
   await getSupabase()
-    .from('search_results')
+    .from("search_results")
     .update({ shown_count: newShownCount })
-    .eq('id', sr.id);
+    .eq("id", sr.id);
 
   return {
     items,
@@ -334,14 +430,16 @@ export async function getSearchHistory(
   limit = 50,
 ): Promise<SearchHistoryEntry[]> {
   const { data, error } = await getSupabase()
-    .from('search_results')
-    .select('id, notion_page_id, keyword, platforms, period, total_count, shown_count, metadata, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .from("search_results")
+    .select(
+      "id, notion_page_id, keyword, platforms, period, total_count, shown_count, metadata, created_at",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
-    console.error('Failed to fetch search history', error);
+    console.error("Failed to fetch search history", error);
     return [];
   }
   return (data ?? []) as SearchHistoryEntry[];
@@ -352,12 +450,12 @@ export async function getKeywordFrequency(
   opts: { userId?: string; since?: string; limit?: number } = {},
 ): Promise<Array<{ keyword: string; count: number; last_searched: string }>> {
   let query = getSupabase()
-    .from('search_results')
-    .select('keyword, created_at')
-    .order('created_at', { ascending: false });
+    .from("search_results")
+    .select("keyword, created_at")
+    .order("created_at", { ascending: false });
 
-  if (opts.userId) query = query.eq('user_id', opts.userId);
-  if (opts.since)  query = query.gte('created_at', opts.since);
+  if (opts.userId) query = query.eq("user_id", opts.userId);
+  if (opts.since) query = query.gte("created_at", opts.since);
 
   const { data, error } = await query;
   if (error || !data) return [];
@@ -373,7 +471,11 @@ export async function getKeywordFrequency(
   }
 
   const result = Array.from(freq.entries())
-    .map(([keyword, { count, last_searched }]) => ({ keyword, count, last_searched }))
+    .map(([keyword, { count, last_searched }]) => ({
+      keyword,
+      count,
+      last_searched,
+    }))
     .sort((a, b) => b.count - a.count);
 
   return opts.limit ? result.slice(0, opts.limit) : result;
@@ -383,12 +485,14 @@ export async function getKeywordFrequency(
 export async function getTopContentByKeyword(
   keyword: string,
   limit = 20,
-): Promise<Array<{ url: string; title: string; platform: string; search_count: number }>> {
+): Promise<
+  Array<{ url: string; title: string; platform: string; search_count: number }>
+> {
   const { data, error } = await getSupabase()
-    .from('content_items')
-    .select('url, title, platform, search_count')
-    .contains('keywords', [keyword])
-    .order('search_count', { ascending: false })
+    .from("content_items")
+    .select("url, title, platform, search_count")
+    .contains("keywords", [keyword])
+    .order("search_count", { ascending: false })
     .limit(limit);
 
   if (error) return [];
@@ -405,12 +509,12 @@ export interface SearchLogEntry {
   result_count: number;
   duration_ms: number;
   cost_usd: number;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   error_message?: string;
 }
 
 export async function logSearch(entry: SearchLogEntry): Promise<void> {
-  const { error } = await getSupabase().from('search_logs').insert({
+  const { error } = await getSupabase().from("search_logs").insert({
     user_id: entry.user_id,
     keyword: entry.keyword,
     platforms: entry.platforms,
@@ -421,5 +525,5 @@ export async function logSearch(entry: SearchLogEntry): Promise<void> {
     status: entry.status,
     error_message: entry.error_message,
   });
-  if (error) console.error('Failed to log search', error);
+  if (error) console.error("Failed to log search", error);
 }
