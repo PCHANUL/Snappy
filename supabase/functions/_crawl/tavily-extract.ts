@@ -7,6 +7,7 @@ import { logger } from "../_core/logger.ts";
 
 const TAVILY_EXTRACT_URL = "https://api.tavily.com/extract";
 const MIN_TEXT_LENGTH = 10;
+const TAVILY_EXTRACT_TIMEOUT_MS = 20_000;
 
 export interface TavilyExtractContent {
   status: "done" | "failed";
@@ -31,6 +32,7 @@ export async function extractUrlWithTavily(
 ): Promise<TavilyExtractContent> {
   const response = await fetch(TAVILY_EXTRACT_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(TAVILY_EXTRACT_TIMEOUT_MS),
     headers: {
       "Authorization": `Bearer ${env.tavily.apiKey}`,
       "Content-Type": "application/json",

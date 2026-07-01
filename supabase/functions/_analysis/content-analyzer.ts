@@ -16,6 +16,7 @@ export interface AnalysisResult {
   summarySource?: string; // 본문 기반 / 설명 기반 / 제목 기반
   keywords: string[];
   confidence?: number; // 0~1, LLM이 실제 콘텐츠를 근거로 분석했다고 본 정도
+  author?: string;
   wordCount?: number;
   sourceText?: string;
 
@@ -36,7 +37,7 @@ export async function analyzeContentItem(opts: {
   const { data: content } = await getSupabase()
     .from("content_items")
     .select(
-      "full_text, crawl_status, platform, title, description, word_count, published_at",
+      "full_text, crawl_status, platform, title, description, author, word_count, published_at",
     )
     .eq("url", url)
     .maybeSingle();
@@ -132,6 +133,7 @@ export async function analyzeContentItem(opts: {
   let summary: string | undefined;
   let llmKeywords: string[] = [];
   let confidence: number | undefined;
+  let llmAuthor: string | undefined;
   if (env.anthropic.apiKey && keyword) {
     try {
       const analysis = await analyzeContentWithLLM(
@@ -142,6 +144,7 @@ export async function analyzeContentItem(opts: {
       summary = analysis.summary;
       llmKeywords = analysis.keywords;
       confidence = analysis.confidence;
+      llmAuthor = analysis.author;
     } catch (err) {
       logger.warn("LLM content analysis failed (non-fatal)", {
         url,
@@ -176,12 +179,20 @@ export async function analyzeContentItem(opts: {
     });
   }
   const keywords = mergeKeywords(llmKeywords, localKeywords, 5);
+  const author = content?.author || llmAuthor;
+  if (!content?.author && author) {
+    await getSupabase()
+      .from("content_items")
+      .update({ author })
+      .eq("url", url);
+  }
 
   return {
     summary,
     summarySource: summary ? summarySource : undefined,
     keywords,
     confidence,
+    author,
     wordCount: wordCount || undefined,
     sourceText: sourceText.slice(0, 6000),
     status: "done",

@@ -56,6 +56,7 @@
     }
 
     .wrap {
+      position: relative;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
@@ -180,74 +181,7 @@
       background: rgba(55, 53, 47, 0.08);
       color: var(--ink);
     }
-    .suggestions {
-      display: none;
-      flex-wrap: wrap;
-      gap: 6px;
-      min-height: 0;
-      padding-top: 2px;
-    }
-    .suggestions.open {
-      display: flex;
-      max-height: 76px;
-      overflow-y: auto;
-      scrollbar-gutter: stable;
-    }
-    .suggestion-item {
-      max-width: 100%;
-      min-height: 32px;
-      padding: 6px 9px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--paper-soft);
-      color: var(--muted);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-family: inherit;
-      font-size: 0.8rem;
-      font-weight: 600;
-      line-height: 1.35;
-      text-align: left;
-      transition: background 0.15s, border-color 0.15s, color 0.15s;
-    }
-    .suggestion-item:hover,
-    .suggestion-item.active {
-      border-color: var(--line-strong);
-      background: rgba(55, 53, 47, 0.08);
-      color: var(--ink);
-    }
-    .suggestion-more {
-      border-color: rgba(55, 53, 47, 0.22);
-      background: #fff;
-      color: var(--ink);
-      font-weight: 700;
-    }
-    .suggestion-icon {
-      width: 14px;
-      height: 14px;
-      color: rgba(55, 53, 47, 0.44);
-      flex: 0 0 auto;
-    }
-    .suggestion-icon svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-      stroke: currentColor;
-      fill: none;
-      stroke-width: 1.9;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    .suggestion-text {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
     .keyword-clear:focus-visible,
-    .suggestion-item:focus-visible,
     .segment-btn:focus-visible,
     .chip:focus-visible,
     .mini-action:focus-visible,
@@ -521,8 +455,7 @@
     #status.message.searching,
     #status.message.accepted,
     #status.message.cancelled,
-    #status.message.error,
-    .config-guide.visible {
+    #status.message.error {
       display: grid;
     }
 
@@ -569,14 +502,6 @@
       font-weight: 500;
       line-height: 1.45;
     }
-    .message-link {
-      color: var(--warn);
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
-    }
-    .message-link:hover { text-decoration: underline; text-underline-offset: 2px; }
-
     .message.searching {
       background: var(--accent-soft);
       color: var(--ink);
@@ -628,16 +553,6 @@
     }
     .cancel-search[hidden] { display: none; }
 
-    /* ── 설정 안내 (파라미터 없을 때) ── */
-    .config-guide {
-      background: var(--warn-soft);
-      border: 1px solid rgba(167, 106, 31, 0.22);
-      color: var(--warn);
-    }
-    .config-guide .message-title {
-      color: var(--warn);
-    }
-
     .field-error {
       display: none;
       color: var(--danger);
@@ -652,6 +567,73 @@
       flex-direction: column;
       gap: 12px;
       min-width: 0;
+    }
+
+    .setup-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      border-radius: inherit;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    .setup-overlay.visible {
+      display: grid;
+    }
+    .setup-overlay-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-align: center;
+    }
+    .setup-overlay-title {
+      color: var(--ink);
+      font-size: 0.88rem;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .setup-start-button {
+      min-height: 42px;
+      padding: 10px 16px;
+      border: 1px solid var(--ink);
+      border-radius: 7px;
+      background: var(--ink);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-size: 0.84rem;
+      font-weight: 650;
+      line-height: 1;
+      text-decoration: none;
+      box-shadow: 0 1px 2px rgba(15, 15, 15, 0.18);
+      transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
+    }
+    .setup-start-button:hover {
+      background: #2f2d29;
+      box-shadow: 0 2px 5px rgba(15, 15, 15, 0.18);
+    }
+    .setup-start-button:active {
+      transform: translateY(0.5px);
+    }
+    .setup-start-button:focus-visible {
+      outline: 2px solid rgba(55, 53, 47, 0.28);
+      outline-offset: 3px;
+    }
+    .setup-start-button svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .search-row {
       display: grid;
@@ -800,7 +782,7 @@
                   <path d="m16 16 4 4"></path>
                 </svg>
               </span>
-              <input id="keyword" type="text" placeholder="검색할 단어를 입력하세요" maxlength="100" autocomplete="off" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="keywordSuggest" aria-describedby="keywordError">
+              <input id="keyword" type="text" placeholder="검색할 단어를 입력하세요" maxlength="100" autocomplete="off" enterkeyhint="search" aria-describedby="keywordError">
               <button type="button" class="keyword-clear" id="keywordClearBtn" aria-label="키워드 지우기">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M18 6 6 18"></path>
@@ -819,31 +801,27 @@
             <span class="search-label">검색하기</span>
           </button>
         </div>
-        <div class="suggestions" id="keywordSuggest" role="listbox" aria-label="추천 키워드"></div>
         <div class="field-error" id="keywordError"></div>
       </div>
+      </div>
+
+      <div class="setup-overlay" id="setupOverlay" role="region" aria-label="셋업 안내" aria-hidden="true">
+        <div class="setup-overlay-content">
+          <p class="setup-overlay-title">검색을 시작하려면 셋업이 필요합니다</p>
+          <a class="setup-start-button" href="https://pchanul.github.io/Snappy/" target="_blank" rel="noopener">
+            <span>시작하기</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 17 17 7"></path>
+              <path d="M8 7h9v9"></path>
+            </svg>
+          </a>
+        </div>
       </div>
     </div>
 
     <div class="notice-zone" aria-label="알림">
       <div id="status" class="message" role="status" aria-live="polite"></div>
       <button type="button" class="cancel-search" id="cancelSearchBtn" hidden>검색 취소</button>
-      <div class="message config-guide" id="configGuide">
-        <span class="message-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="8"></circle>
-            <path d="M12 11v5"></path>
-            <path d="M12 8h.01"></path>
-          </svg>
-        </span>
-        <span class="message-body">
-          <span class="message-title">셋업 필요</span>
-          <span class="message-description">
-            셋업을 완료하면 검색하기 버튼이 활성화됩니다.
-            <a class="message-link" href="https://pchanul.github.io/Snappy/" target="_blank" rel="noopener">시작하기</a>
-          </span>
-        </span>
-      </div>
     </div>
   </div>
 
@@ -861,12 +839,11 @@
     const btn         = document.getElementById('searchBtn');
     const status      = document.getElementById('status');
     const cancelBtn   = document.getElementById('cancelSearchBtn');
-    const configGuide = document.getElementById('configGuide');
+    const setupOverlay = document.getElementById('setupOverlay');
     const form        = document.getElementById('form');
     const keywordEl   = document.getElementById('keyword');
     const keywordShell = document.getElementById('keywordShell');
     const keywordClearBtn = document.getElementById('keywordClearBtn');
-    const keywordSuggest = document.getElementById('keywordSuggest');
     const periodEl    = document.getElementById('period');
     const periodBtns  = [...document.querySelectorAll('#periods .segment-btn')];
     const chipsEl     = document.getElementById('platforms');
@@ -877,18 +854,7 @@
     const platformError = document.getElementById('platformError');
     const PREFERENCE_KEY = 'snappy.search.preferences.v3';
     const LEGACY_PREFERENCE_KEY = 'snappy.search.preferences.v1';
-    const SUGGEST_MIN_LENGTH = 2;
-    const SUGGEST_DEBOUNCE_MS = 250;
-    const SUGGEST_INITIAL_LIMIT = 5;
-    const SUGGEST_MAX_RESULTS = 20;
     let platformsExpanded = false;
-    let suggestTimer = null;
-    let suggestAbortController = null;
-    let suggestItems = [];
-    let activeSuggestIndex = -1;
-    let lastSuggestQuery = '';
-    let suggestRequestSeq = 0;
-    let suggestionsExpanded = false;
 
 
     const configured = !!(userId && pageId);
@@ -1088,170 +1054,6 @@
       keywordShell.classList.toggle('has-value', keywordEl.value.trim().length > 0);
     }
 
-    function resetSuggestionTokens() {
-      suggestItems = [];
-      activeSuggestIndex = -1;
-      suggestionsExpanded = false;
-      keywordSuggest.classList.remove('open');
-      keywordSuggest.replaceChildren();
-      keywordEl.setAttribute('aria-expanded', 'false');
-      keywordEl.removeAttribute('aria-activedescendant');
-    }
-
-    function closeSuggestions() {
-      if (suggestTimer) clearTimeout(suggestTimer);
-      suggestTimer = null;
-      if (suggestAbortController) suggestAbortController.abort();
-      suggestAbortController = null;
-      suggestRequestSeq++;
-      resetSuggestionTokens();
-    }
-
-    function setActiveSuggestion(index) {
-      const items = [...keywordSuggest.querySelectorAll('[role="option"]')];
-      items.forEach((item, itemIndex) => {
-        const active = itemIndex === index;
-        item.classList.toggle('active', active);
-        item.setAttribute('aria-selected', String(active));
-      });
-      activeSuggestIndex = index;
-      if (index >= 0) {
-        keywordEl.setAttribute('aria-activedescendant', `suggestion-${index}`);
-      } else {
-        keywordEl.removeAttribute('aria-activedescendant');
-      }
-    }
-
-    function moveSuggestion(delta) {
-      const optionCount = keywordSuggest.querySelectorAll('[role="option"]').length;
-      if (!optionCount) return;
-      const nextIndex =
-        activeSuggestIndex < 0
-          ? (delta > 0 ? 0 : optionCount - 1)
-          : (activeSuggestIndex + delta + optionCount) % optionCount;
-      setActiveSuggestion(nextIndex);
-    }
-
-    function applySuggestion(value) {
-      keywordEl.value = value;
-      clearValidation('keyword');
-      syncKeywordControls();
-      closeSuggestions();
-      keywordEl.focus();
-    }
-
-    function renderSuggestions(words) {
-      suggestItems = words;
-      activeSuggestIndex = -1;
-      keywordSuggest.replaceChildren();
-
-      if (!words.length) {
-        closeSuggestions();
-        return;
-      }
-
-      const visibleWords = suggestionsExpanded ? words : words.slice(0, SUGGEST_INITIAL_LIMIT);
-      visibleWords.forEach((word, index) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'suggestion-item suggestion-option';
-        item.id = `suggestion-${index}`;
-        item.setAttribute('role', 'option');
-        item.setAttribute('aria-selected', 'false');
-
-        const icon = document.createElement('span');
-        icon.className = 'suggestion-icon';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.innerHTML = SEARCH_BUTTON_ICON;
-
-        const text = document.createElement('span');
-        text.className = 'suggestion-text';
-        text.textContent = word;
-
-        item.replaceChildren(icon, text);
-        item.addEventListener('mousedown', (event) => event.preventDefault());
-        item.addEventListener('click', () => applySuggestion(word));
-        keywordSuggest.append(item);
-      });
-
-      if (!suggestionsExpanded && words.length > SUGGEST_INITIAL_LIMIT) {
-        const more = document.createElement('button');
-        more.type = 'button';
-        more.className = 'suggestion-item suggestion-more';
-        more.setAttribute('role', 'button');
-        more.setAttribute('aria-label', `추천 키워드 ${words.length - SUGGEST_INITIAL_LIMIT}개 더 보기`);
-
-        const icon = document.createElement('span');
-        icon.className = 'suggestion-icon';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>';
-
-        const text = document.createElement('span');
-        text.className = 'suggestion-text';
-        text.textContent = `더보기 ${words.length - SUGGEST_INITIAL_LIMIT}개`;
-
-        more.replaceChildren(icon, text);
-        more.addEventListener('mousedown', (event) => event.preventDefault());
-        more.addEventListener('click', () => {
-          suggestionsExpanded = true;
-          renderSuggestions(suggestItems);
-        });
-        keywordSuggest.append(more);
-      }
-
-      keywordSuggest.classList.add('open');
-      keywordEl.setAttribute('aria-expanded', 'true');
-    }
-
-    function scheduleSuggestions() {
-      const query = keywordEl.value.trim();
-      if (suggestTimer) clearTimeout(suggestTimer);
-
-      if (query.length < SUGGEST_MIN_LENGTH) {
-        closeSuggestions();
-        lastSuggestQuery = '';
-        return;
-      }
-      if (query === lastSuggestQuery && suggestItems.length) return;
-
-      if (query !== lastSuggestQuery) {
-        if (suggestAbortController) suggestAbortController.abort();
-        suggestAbortController = null;
-        suggestRequestSeq++;
-        resetSuggestionTokens();
-      }
-
-      suggestTimer = setTimeout(() => fetchSuggestions(query), SUGGEST_DEBOUNCE_MS);
-    }
-
-    async function fetchSuggestions(query) {
-      suggestTimer = null;
-      lastSuggestQuery = query;
-      if (suggestAbortController) suggestAbortController.abort();
-      suggestAbortController = new AbortController();
-      const requestSeq = ++suggestRequestSeq;
-
-      try {
-        const response = await fetch(
-          `${FUNCTION_BASE}/manage-user?action=trend-suggest&keyword=${encodeURIComponent(query)}&t=${Date.now()}`,
-          { signal: suggestAbortController.signal }
-        );
-        if (!response.ok) return closeSuggestions();
-        const data = await response.json();
-        if (requestSeq !== suggestRequestSeq) return;
-        if (keywordEl.value.trim() !== query) return;
-
-        const normalized = [...new Set((data.suggestions || [])
-          .map((item) => String(item).trim())
-          .filter((item) => item && item !== query))]
-          .slice(0, SUGGEST_MAX_RESULTS);
-        suggestionsExpanded = false;
-        renderSuggestions(normalized);
-      } catch (error) {
-        if (error?.name !== 'AbortError') closeSuggestions();
-      }
-    }
-
     function setReadyButton() {
       const icon = document.createElement('span');
       icon.className = 'button-icon';
@@ -1340,9 +1142,12 @@
 
     // ── 초기 상태 렌더링 ─────────────────────────────────────────────────────
     if (!configured) {
+      btn.disabled = true;
       btn.classList.add('unconfigured');
       form.classList.add('disabled-overlay');
-      configGuide.classList.add('visible');
+      form.setAttribute('inert', '');
+      setupOverlay.classList.add('visible');
+      setupOverlay.setAttribute('aria-hidden', 'false');
     } else if (searching) {
       // URL에 ?searching=1 → 다른 기기/새 탭에서 진행 중인 검색 표시
       btn.disabled = true;
@@ -1361,7 +1166,6 @@
       const keyword   = keywordEl.value.trim();
       const platforms = selectedPlatforms();
       const period    = periodEl.value;
-      closeSuggestions();
 
       // 클라이언트 검증
       if (!keyword) {
@@ -1566,50 +1370,20 @@
     keywordEl.addEventListener('input', () => {
       clearValidation('keyword');
       syncKeywordControls();
-      scheduleSuggestions();
-    });
-
-    keywordEl.addEventListener('focus', () => {
-      scheduleSuggestions();
     });
 
     keywordClearBtn.addEventListener('click', () => {
       keywordEl.value = '';
       clearValidation('keyword');
       syncKeywordControls();
-      closeSuggestions();
       keywordEl.focus();
     });
 
     keywordEl.addEventListener('keydown', (e) => {
-      const suggestionsOpen = keywordSuggest.classList.contains('open');
-      if (suggestionsOpen && e.key === 'ArrowDown') {
-        e.preventDefault();
-        moveSuggestion(1);
-        return;
-      }
-      if (suggestionsOpen && e.key === 'ArrowUp') {
-        e.preventDefault();
-        moveSuggestion(-1);
-        return;
-      }
-      if (suggestionsOpen && e.key === 'Escape') {
-        e.preventDefault();
-        closeSuggestions();
-        return;
-      }
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (suggestionsOpen && activeSuggestIndex >= 0) {
-          applySuggestion(suggestItems[activeSuggestIndex]);
-          return;
-        }
         btn.click();
       }
-    });
-
-    document.addEventListener('mousedown', (event) => {
-      if (!event.target.closest('.keyword-field')) closeSuggestions();
     });
   </script>
 </body>

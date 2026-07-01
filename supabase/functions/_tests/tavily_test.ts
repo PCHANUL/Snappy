@@ -18,11 +18,14 @@ function parseBody(init?: RequestInit): Record<string, unknown> {
   return JSON.parse(String(init?.body ?? "{}"));
 }
 
-Deno.test("searchTavilyPlatform: Tistory 정상 응답 파싱", async () => {
+Deno.test("searchTavilyPlatform: Tistory는 .tistory.com 하위 블로그 URL만 반환", async () => {
   const originalFetch = globalThis.fetch;
   let capturedBody: Record<string, unknown> = {};
   let capturedHeaders: Record<string, string> = {};
-  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     capturedBody = parseBody(init);
     capturedHeaders = Object.fromEntries(
       new Headers(init?.headers as HeadersInit).entries(),
@@ -34,6 +37,11 @@ Deno.test("searchTavilyPlatform: Tistory 정상 응답 파싱", async () => {
         content: "맛있는 디저트 만들기",
         published_date: "2026-06-01",
         favicon: "https://tistory.com/favicon.ico",
+      },
+      {
+        url: "https://tistory.com/category",
+        title: "티스토리 홈",
+        content: "루트 도메인 페이지",
       },
     ]);
   };
@@ -51,6 +59,7 @@ Deno.test("searchTavilyPlatform: Tistory 정상 응답 파싱", async () => {
     assertEquals(results[0].published_at, "2026-06-01");
     assertEquals(results[0].thumbnail, "https://tistory.com/favicon.ico");
     assertEquals(capturedBody.include_domains, ["tistory.com"]);
+    assert(String(capturedBody.query).includes("site:.tistory.com/"));
     assertEquals(capturedBody.time_range, "month");
     assertEquals(capturedBody.search_depth, "basic");
     assertEquals(capturedBody.max_results, 10);
@@ -66,7 +75,10 @@ Deno.test("searchTavilyPlatform: Tistory 정상 응답 파싱", async () => {
 Deno.test("searchTavilyPlatform: TikTok 영상 URL만 www.tiktok.com/@user/video 형식으로 반환", async () => {
   const originalFetch = globalThis.fetch;
   let capturedBody: Record<string, unknown> = {};
-  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     capturedBody = parseBody(init);
     return makeResponse([
       {
@@ -125,11 +137,14 @@ Deno.test("searchTavilyPlatform: TikTok 영상 URL만 www.tiktok.com/@user/video
   }
 });
 
-Deno.test("searchTavilyPlatform: TikTok 기간 필터 결과가 없으면 무기간 fallback 사용", async () => {
+Deno.test("searchTavilyPlatform: TikTok fallback 요청에도 기간 필터 유지", async () => {
   const originalFetch = globalThis.fetch;
   const capturedQueries: string[] = [];
   const capturedTimeRanges: unknown[] = [];
-  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const body = parseBody(init);
     capturedQueries.push(String(body.query ?? ""));
     capturedTimeRanges.push(body.time_range);
@@ -154,7 +169,7 @@ Deno.test("searchTavilyPlatform: TikTok 기간 필터 결과가 없으면 무기
     assert(capturedQueries[0].includes("site:tiktok.com/@"));
     assertEquals(capturedQueries[1], "댄스");
     assert(capturedQueries[2].includes("site:tiktok.com/@"));
-    assertEquals(capturedTimeRanges, ["month", "month", undefined]);
+    assertEquals(capturedTimeRanges, ["month", "month", "month"]);
     assertEquals(results.length, 1);
   } finally {
     globalThis.fetch = originalFetch;
@@ -212,7 +227,25 @@ Deno.test("searchTavilyPlatform: Instagram Reel URL만 정규화해서 반환", 
 
 Deno.test("searchTavilyPlatform: YouTube와 Shorts URL을 구분", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (_url: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    if (String(url).includes("www.googleapis.com/youtube/v3/videos")) {
+      const ids = new URL(String(url)).searchParams.get("id")?.split(",") ?? [];
+      return new Response(
+        JSON.stringify({
+          items: ids.map((id) => ({
+            id,
+            snippet: {
+              channelTitle: id === "short1" ? "숏츠 채널" : "긴 영상 채널",
+            },
+          })),
+        }),
+        { status: 200 },
+      );
+    }
+
     const body = parseBody(init);
     const query = String(body.query ?? "");
     if (query.includes("/shorts")) {
@@ -252,9 +285,11 @@ Deno.test("searchTavilyPlatform: YouTube와 Shorts URL을 구분", async () => {
     assertEquals(youtube.length, 1);
     assertEquals(youtube[0].url, "https://www.youtube.com/watch?v=long1");
     assertEquals(youtube[0].platform, "youtube");
+    assertEquals(youtube[0].author, "긴 영상 채널");
     assertEquals(shorts.length, 1);
     assertEquals(shorts[0].url, "https://www.youtube.com/shorts/short1");
     assertEquals(shorts[0].platform, "youtube_shorts");
+    assertEquals(shorts[0].author, "숏츠 채널");
   } finally {
     globalThis.fetch = originalFetch;
   }

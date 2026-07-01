@@ -9,7 +9,8 @@ Deno.test("parseContentAnalysisJson: 요약과 키워드 JSON을 파싱하고 �
   const result = parseContentAnalysisJson(`{
     "summary": "  비건 디저트 트렌드를 소개합니다.   카페 방문 의도가 뚜렷합니다. ",
     "keywords": ["비건 디저트", "카페,투어", "", "비건 디저트", "릴스"],
-    "confidence": "82%"
+    "confidence": "82%",
+    "author": "  비건 작가  "
   }`);
 
   assertEquals(
@@ -18,6 +19,7 @@ Deno.test("parseContentAnalysisJson: 요약과 키워드 JSON을 파싱하고 �
   );
   assertEquals(result.keywords, ["비건 디저트", "카페 투어", "릴스"]);
   assertEquals(result.confidence, 0.82);
+  assertEquals(result.author, "비건 작가");
 });
 
 Deno.test("parseContentAnalysisJson: 코드블록과 앞뒤 설명이 있어도 JSON만 추출", () => {
@@ -56,6 +58,7 @@ Deno.test("analyzeContentWithLLM: raw text 분석 프롬프트와 JSON 응답 �
             summary: "비건 디저트 콘텐츠의 핵심을 요약했습니다.",
             keywords: ["비건 디저트", "카페 투어", "숏폼"],
             confidence: 0.74,
+            author: "@vegan.creator",
           }),
         }],
       }),
@@ -87,9 +90,14 @@ Deno.test("analyzeContentWithLLM: raw text 분석 프롬프트와 JSON 응답 �
       String(prompt).includes("confidence"),
       `신뢰도 출력 지시 필요: ${prompt}`,
     );
+    assert(
+      String(prompt).includes("절대 추측하지 마세요"),
+      `작성자 추측 금지 지시 필요: ${prompt}`,
+    );
     assertEquals(result.summary, "비건 디저트 콘텐츠의 핵심을 요약했습니다.");
     assertEquals(result.keywords, ["비건 디저트", "카페 투어", "숏폼"]);
     assertEquals(result.confidence, 0.74);
+    assertEquals(result.author, "@vegan.creator");
   } finally {
     globalThis.fetch = originalFetch;
   }

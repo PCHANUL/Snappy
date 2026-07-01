@@ -5,6 +5,7 @@ import { env } from "../_core/env.ts";
 import { ExternalApiError } from "../_core/errors.ts";
 import { logger } from "../_core/logger.ts";
 import type { ContentItem, Period, Platform } from "../_core/types.ts";
+import { enrichPlatformAuthors, inferPlatformAuthor } from "./author.ts";
 
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 
@@ -37,7 +38,8 @@ interface TavilySearchResponse {
 interface PlatformConfig {
   domains: string[];
   buildQuery: (keyword: string) => string;
-  fallbackWithoutTimeRange?: boolean;
+  retryOnEmpty?: boolean;
+  urlPattern?: RegExp;
 }
 
 const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
@@ -55,7 +57,8 @@ const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   },
   tistory: {
     domains: ["tistory.com"],
-    buildQuery: (keyword) => `${keyword} site:tistory.com`,
+    buildQuery: (keyword) => `${keyword} site:.tistory.com/`,
+    urlPattern: /^https?:\/\/[^/]+\.tistory\.com\//i,
   },
   brunch: {
     domains: ["brunch.co.kr"],
@@ -64,12 +67,12 @@ const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   tiktok: {
     domains: ["tiktok.com", "www.tiktok.com", "m.tiktok.com"],
     buildQuery: (keyword) => `${keyword} site:tiktok.com/@ /video/`,
-    fallbackWithoutTimeRange: true,
+    retryOnEmpty: true,
   },
   instagram_reels: {
     domains: ["instagram.com", "www.instagram.com", "m.instagram.com"],
     buildQuery: (keyword) => `${keyword} site:instagram.com/reel/`,
-    fallbackWithoutTimeRange: true,
+    retryOnEmpty: true,
   },
 };
 
@@ -78,11 +81,17 @@ interface SearchAttempt {
   timeRange?: Period;
 }
 
+interface TavilySearchOptions {
+  signal?: AbortSignal;
+  throwIfCancelled?: () => Promise<void>;
+}
+
 export async function searchTavilyPlatform(
   platform: Platform,
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options: TavilySearchOptions = {},
 ): Promise<ContentItem[]> {
   const config = PLATFORM_CONFIG[platform];
   const fetchCount = Math.min(Math.max(count * 2, count), 20);
@@ -98,16 +107,19 @@ export async function searchTavilyPlatform(
   let usedQuery = queries[0];
 
   for (const [index, attempt] of attempts.entries()) {
+    await options.throwIfCancelled?.();
     const data = await requestTavilySearch(
       attempt.query,
       config.domains,
       fetchCount,
       attempt.timeRange,
+      options.signal,
     );
+    await options.throwIfCancelled?.();
     const candidateResults = data.results ?? [];
     const candidateFiltered = filterPlatformResults(
       candidateResults,
-      config.domains,
+      config,
       platform,
     );
 
@@ -123,7 +135,7 @@ export async function searchTavilyPlatform(
       platform,
       query: attempt.query,
       timeRange: attempt.timeRange,
-      nextWithoutTimeRange: attempts[index + 1]?.timeRange === undefined,
+      nextTimeRange: attempts[index + 1]?.timeRange,
     });
   }
 
@@ -146,6 +158,9 @@ export async function searchTavilyPlatform(
     items.push(item);
     if (items.length >= count) break;
   }
+  await options.throwIfCancelled?.();
+  await enrichPlatformAuthors(items, platform, options.signal);
+  await options.throwIfCancelled?.();
 
   logger.info("Tavily search completed", {
     keyword,
@@ -154,6 +169,7 @@ export async function searchTavilyPlatform(
     afterDomainFilter: domainFiltered.length,
     afterRelevanceFilter: relevant.length,
     returned: items.length,
+    authors: items.filter((item) => item.author).length,
     query: usedQuery,
     responseTime,
     credits,
@@ -166,56 +182,75 @@ export function searchNaverBlogWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("naver_blog", keyword, count, period);
+  return searchTavilyPlatform("naver_blog", keyword, count, period, options);
 }
 
 export function searchYouTubeWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("youtube", keyword, count, period);
+  return searchTavilyPlatform("youtube", keyword, count, period, options);
 }
 
 export function searchYouTubeShortsWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("youtube_shorts", keyword, count, period);
+  return searchTavilyPlatform(
+    "youtube_shorts",
+    keyword,
+    count,
+    period,
+    options,
+  );
 }
 
 export function searchTistoryWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("tistory", keyword, count, period);
+  return searchTavilyPlatform("tistory", keyword, count, period, options);
 }
 
 export function searchBrunchWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("brunch", keyword, count, period);
+  return searchTavilyPlatform("brunch", keyword, count, period, options);
 }
 
 export function searchTikTokWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("tiktok", keyword, count, period);
+  return searchTavilyPlatform("tiktok", keyword, count, period, options);
 }
 
 export function searchInstagramReelsWithTavily(
   keyword: string,
   count: number = 10,
   period: Period = "month",
+  options?: TavilySearchOptions,
 ): Promise<ContentItem[]> {
-  return searchTavilyPlatform("instagram_reels", keyword, count, period);
+  return searchTavilyPlatform(
+    "instagram_reels",
+    keyword,
+    count,
+    period,
+    options,
+  );
 }
 
 async function requestTavilySearch(
@@ -223,6 +258,7 @@ async function requestTavilySearch(
   domains: string[],
   maxResults: number,
   timeRange?: Period,
+  signal?: AbortSignal,
 ): Promise<TavilySearchResponse> {
   const body: Record<string, unknown> = {
     query,
@@ -241,6 +277,7 @@ async function requestTavilySearch(
 
   const response = await fetch(TAVILY_SEARCH_URL, {
     method: "POST",
+    signal,
     headers: {
       "Authorization": `Bearer ${env.tavily.apiKey}`,
       "Content-Type": "application/json",
@@ -267,8 +304,8 @@ function buildSearchAttempts(
     timeRange: period,
   }));
 
-  if (config.fallbackWithoutTimeRange) {
-    attempts.push(...queries.map((query) => ({ query })));
+  if (config.retryOnEmpty) {
+    attempts.push(...queries.map((query) => ({ query, timeRange: period })));
   }
 
   return attempts;
@@ -276,11 +313,14 @@ function buildSearchAttempts(
 
 function filterPlatformResults(
   results: TavilySearchResult[],
-  domains: string[],
+  config: PlatformConfig,
   platform: Platform,
 ): TavilySearchResult[] {
   return results
-    .filter((item) => item.url && matchesAnyDomain(item.url, domains))
+    .filter((item) => item.url && matchesAnyDomain(item.url, config.domains))
+    .filter((item) =>
+      !config.urlPattern || config.urlPattern.test(item.url ?? "")
+    )
     .map((item) => normalizePlatformResult(item, platform))
     .filter((item): item is TavilySearchResult => item !== null);
 }
@@ -311,11 +351,17 @@ function normalizeItem(
     snippet: cleanText(item.content ?? "") || undefined,
     thumbnail: extractImageUrl(item.images) || item.favicon || undefined,
     published_at: item.published_date || undefined,
-    author: extractAuthor(normalizedUrl, platform),
+    author: inferPlatformAuthor(platform, {
+      url: normalizedUrl,
+      title: item.title,
+      description: item.content,
+    }),
   };
 }
 
-function extractImageUrl(images?: Array<TavilyImage | string>): string | undefined {
+function extractImageUrl(
+  images?: Array<TavilyImage | string>,
+): string | undefined {
   if (!images) return undefined;
   for (const image of images) {
     if (typeof image === "string" && image) return image;
@@ -439,7 +485,9 @@ function normalizeNaverBlogUrl(url: string): string | null {
 function normalizeDomainUrl(url: string, domains: string[]): string | null {
   try {
     const parsed = new URL(url);
-    return matchesAnyDomain(parsed.toString(), domains) ? parsed.toString() : null;
+    return matchesAnyDomain(parsed.toString(), domains)
+      ? parsed.toString()
+      : null;
   } catch {
     return null;
   }
@@ -457,30 +505,10 @@ function matchesAnyDomain(url: string, domains: string[]): boolean {
   }
 }
 
-function extractAuthor(url: string, platform: Platform): string | undefined {
-  try {
-    const parsed = new URL(url);
-
-    if (platform === "tistory") {
-      const host = parsed.hostname;
-      const sub = host.split(".")[0];
-      return sub && sub !== "tistory" ? sub : undefined;
-    }
-
-    if (platform === "tiktok") {
-      const match = parsed.pathname.match(/^\/@([^/]+)/);
-      return match ? `@${match[1]}` : undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
 function cleanText(text: string): string {
   return text
     .replace(/<[^>]*>/g, "")
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")

@@ -8,7 +8,11 @@
 //
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { decryptNotionKey } from "../_core/crypto.ts";
-import { getSupabase, requestSearchCancel } from "../_core/db.ts";
+import {
+  getSupabase,
+  requestSearchCancel,
+  SEARCH_STALE_MS,
+} from "../_core/db.ts";
 import { env } from "../_core/env.ts";
 import { logger } from "../_core/logger.ts";
 import { fetchNaverTrendTopics } from "../_trends/naver-trends.ts";
@@ -539,6 +543,43 @@ async function handleGetSearchStatus(url: URL): Promise<Response> {
     .single();
 
   if (error || !data) throw new AuthError("User not found");
+
+  if (
+    data.searching_since &&
+    Date.now() - new Date(data.searching_since).getTime() >= SEARCH_STALE_MS
+  ) {
+    const staleMessage =
+      "검색 작업이 제한 시간을 초과해 중단되었습니다. 다시 검색해주세요.";
+    const { error: clearError } = await getSupabase()
+      .from("users")
+      .update({
+        searching_since: null,
+        search_progress: null,
+        search_cancel_requested_at: null,
+        last_search_error: staleMessage,
+      })
+      .eq("id", user_id)
+      .eq("searching_since", data.searching_since);
+
+    if (clearError) {
+      logger.error("Failed to clear stale search status", clearError, {
+        user_id,
+      });
+    } else {
+      logger.warn("Stale search status cleared", {
+        user_id,
+        searching_since: data.searching_since,
+        last_progress: data.search_progress,
+      });
+      return jsonResponse({
+        searching: false,
+        cancel_requested: false,
+        message: null,
+        error: staleMessage,
+        related: data.last_related_keywords ?? null,
+      });
+    }
+  }
 
   return jsonResponse({
     searching: data.searching_since !== null,

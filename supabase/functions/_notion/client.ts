@@ -33,6 +33,7 @@ export interface CreatedRow {
 
 // 콘텐츠 분석 결과를 담는 DB 속성 이름 (템플릿/프로그램 DB 공통)
 const ANALYSIS_PROPS = {
+  author: "작성자",
   summary: "요약",
   keywords: "키워드",
   confidence: "신뢰도",
@@ -74,6 +75,8 @@ const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_API_VERSION = "2022-06-28";
 const NOTION_TEMPLATE_API_VERSION = "2026-03-11";
 const MAX_BLOCKS_PER_REQUEST = 100;
+const NOTION_REQUEST_TIMEOUT_MS = 20_000;
+const CONTENT_PAGE_BATCH_SIZE = 3;
 const SEARCH_DATABASE_TITLE = "검색 DB";
 const SEARCH_TEMPLATE_PAGE_TITLE = "검색 결과 템플릿";
 const CONTENT_PAGE_TEMPLATE_TITLE = "검색 결과 콘텐츠 페이지 템플릿";
@@ -390,7 +393,8 @@ export class NotionClient {
     }
   }
 
-  // 콘텐츠 아이템을 child DB에 페이지(행)로 추가 — Notion 속도 제한 고려 직렬 처리
+  // 콘텐츠 아이템을 child DB에 페이지(행)로 추가.
+  // Notion의 평균 3 req/s 제한과 Edge Function 실행 한도를 함께 고려해 3개씩 처리한다.
   // analysisProps에 '분석 상태'가 있으면 각 행을 '분석중'으로 표시한다.
   // 생성된 행 정보를 반환 — 이후 백그라운드 분석 루프의 대상이 된다.
   async addItemsToDatabase(
@@ -399,6 +403,7 @@ export class NotionClient {
     onProgress?: (message: string) => Promise<void>,
     analysisProps?: Map<string, string>,
     contentPageTemplateId?: string | null,
+    control: { throwIfCancelled?: () => Promise<void> } = {},
   ): Promise<CreatedRow[]> {
     const hasStatus = analysisProps?.get(ANALYSIS_PROPS.status) === "select";
     const rows: CreatedRow[] = [];
@@ -412,59 +417,73 @@ export class NotionClient {
       })
       : null;
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const info = PLATFORM_INFO[item.platform];
-      const properties: Record<string, any> = {
-        "제목": { title: [{ type: "text", text: { content: item.title } }] },
-        "매체": { select: { name: PLATFORM_TO_NOTION[item.platform] } },
-      };
-      if (item.url) properties["URL"] = { url: item.url };
-      if (item.author) {
-        properties["작성자"] = {
-          rich_text: [{ type: "text", text: { content: item.author } }],
+    for (let i = 0; i < items.length; i += CONTENT_PAGE_BATCH_SIZE) {
+      await control.throwIfCancelled?.();
+      const batch = items.slice(i, i + CONTENT_PAGE_BATCH_SIZE);
+      const batchRows = await Promise.all(batch.map(async (item) => {
+        await control.throwIfCancelled?.();
+        const info = PLATFORM_INFO[item.platform];
+        const properties: Record<string, any> = {
+          "제목": { title: [{ type: "text", text: { content: item.title } }] },
+          "매체": { select: { name: PLATFORM_TO_NOTION[item.platform] } },
         };
-      }
-      if (item.published_at) {
-        properties["날짜"] = {
-          date: { start: item.published_at.slice(0, 10) },
-        };
-      }
-      if (hasStatus) {
-        properties[ANALYSIS_PROPS.status] = {
-          select: { name: ANALYSIS_STATUS.analyzing },
-        };
-      }
+        if (item.url) properties["URL"] = { url: item.url };
+        if (item.author) {
+          properties["작성자"] = {
+            rich_text: [{ type: "text", text: { content: item.author } }],
+          };
+        }
+        if (item.published_at) {
+          properties["날짜"] = {
+            date: { start: item.published_at.slice(0, 10) },
+          };
+        }
+        if (hasStatus) {
+          properties[ANALYSIS_PROPS.status] = {
+            select: { name: ANALYSIS_STATUS.analyzing },
+          };
+        }
 
-      const body: Record<string, any> = {
-        parent: { database_id: toUuid(databaseId) },
-        icon: { type: "emoji", emoji: info.emoji },
-        properties,
-      };
-      if (item.thumbnail) {
-        body.cover = { type: "external", external: { url: item.thumbnail } };
-      }
+        const body: Record<string, any> = {
+          parent: { database_id: toUuid(databaseId) },
+          icon: { type: "emoji", emoji: info.emoji },
+          properties,
+        };
+        if (item.thumbnail) {
+          body.cover = { type: "external", external: { url: item.thumbnail } };
+        }
 
-      const created = await this.createContentItemPage(
-        databaseId,
-        body,
-        item,
-        dataSourceId,
-        contentPageTemplateId,
-      );
-      if (item.url) {
-        rows.push({
+        const created = await this.createContentItemPage(
+          databaseId,
+          body,
+          item,
+          dataSourceId,
+          contentPageTemplateId,
+        );
+        await control.throwIfCancelled?.();
+        if (!item.url) return null;
+
+        return {
           rowId: created.id as string,
           url: item.url,
           platform: item.platform,
           title: item.title,
           description: item.description,
           snippet: item.snippet,
-        });
+        } satisfies CreatedRow;
+      }));
+      for (const row of batchRows) {
+        if (row) rows.push(row);
       }
 
-      await onProgress?.(`노션에 콘텐츠 추가 중... (${i + 1}/${items.length})`);
-      if (i + 1 < items.length) await sleep(350);
+      const completed = Math.min(i + batch.length, items.length);
+      await onProgress?.(
+        `노션에 콘텐츠 추가 중... (${completed}/${items.length})`,
+      );
+      if (completed < items.length) {
+        await sleep(350);
+        await control.throwIfCancelled?.();
+      }
     }
 
     return rows;
@@ -541,6 +560,17 @@ export class NotionClient {
             ? ANALYSIS_STATUS.done
             : ANALYSIS_STATUS.failed,
         },
+      };
+    }
+    if (
+      analysisProps.get(ANALYSIS_PROPS.author) === "rich_text" &&
+      result.author
+    ) {
+      properties[ANALYSIS_PROPS.author] = {
+        rich_text: [{
+          type: "text",
+          text: { content: result.author.slice(0, 100) },
+        }],
       };
     }
     if (
@@ -673,7 +703,9 @@ export class NotionClient {
     metadata: SearchMetadata,
     totalCount: number,
     onProgress?: (message: string) => Promise<void>,
+    control: { throwIfCancelled?: () => Promise<void> } = {},
   ): Promise<{ rows: CreatedRow[]; analysisProps: Map<string, string> }> {
+    await control.throwIfCancelled?.();
     // 1. 속성 업데이트 (상태 → 완료)
     await this.fetchApiWithStatusFallback(`pages/${pageId}`, {
       method: "PATCH",
@@ -685,6 +717,7 @@ export class NotionClient {
         },
       }),
     }, "완료");
+    await control.throwIfCancelled?.();
 
     const summaryBlocks = buildSummaryBlocks(keyword, results, metadata);
     const createdWithTemplate = this.pagesCreatedWithTemplate.has(
@@ -695,21 +728,29 @@ export class NotionClient {
     if (createdWithTemplate) {
       // 템플릿 적용은 비동기라, 콘텐츠 DB 복제가 끝난 뒤 결과 블록을 추가한다.
       await onProgress?.("콘텐츠 DB 확인 중...");
+      await control.throwIfCancelled?.();
       databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
+      await control.throwIfCancelled?.();
 
       await onProgress?.("노션에 요약 작성 중...");
       await this.appendBlocks(pageId, summaryBlocks);
+      await control.throwIfCancelled?.();
     } else {
       await onProgress?.("노션에 요약 작성 중...");
+      await control.throwIfCancelled?.();
       await this.appendBlocks(pageId, summaryBlocks);
+      await control.throwIfCancelled?.();
 
       await onProgress?.("콘텐츠 DB 확인 중...");
       databaseId = await this.findOrCreateContentDatabase(pageId, keyword);
+      await control.throwIfCancelled?.();
     }
 
     // 4. DB에 분석 컬럼이 있는지 확인 (없으면 분석 단계 스킵)
+    await control.throwIfCancelled?.();
     await this.ensureContentDatabaseAnalysisProperties(databaseId);
     const analysisProps = await this.getDatabaseProperties(databaseId);
+    await control.throwIfCancelled?.();
     const contentPageTemplateId = await this
       .findOrCreateContentPageTemplatePage(
         pageId,
@@ -723,6 +764,7 @@ export class NotionClient {
         );
         return null;
       });
+    await control.throwIfCancelled?.();
 
     // 5. 모든 콘텐츠 아이템을 DB에 추가 (매체 순서 유지), 분석중 상태로 표시
     const allItems: FlatResult[] = results.flatMap((r) =>
@@ -734,6 +776,7 @@ export class NotionClient {
       onProgress,
       analysisProps,
       contentPageTemplateId,
+      control,
     );
 
     logger.info("Notion page updated with child database", {
@@ -1269,15 +1312,32 @@ export class NotionClient {
     init: RequestInit,
     retries = 2,
   ): Promise<any> {
-    const response = await fetch(`${NOTION_API_BASE}/${path}`, {
-      ...init,
-      headers: {
-        "Authorization": `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_API_VERSION,
-        ...(init.headers || {}),
-      },
-    });
+    let response: Response;
+    try {
+      const timeoutSignal = AbortSignal.timeout(NOTION_REQUEST_TIMEOUT_MS);
+      const signal = init.signal
+        ? AbortSignal.any([init.signal, timeoutSignal])
+        : timeoutSignal;
+      response = await fetch(`${NOTION_API_BASE}/${path}`, {
+        ...init,
+        signal,
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "Notion-Version": NOTION_API_VERSION,
+          ...(init.headers || {}),
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("Notion API request failed", error, {
+        path,
+        timeoutMs: NOTION_REQUEST_TIMEOUT_MS,
+      });
+      throw new NotionApiError(
+        `Request failed for ${path}: ${message}`,
+      );
+    }
 
     if (!response.ok) {
       if (retries > 0 && (response.status === 429 || response.status >= 500)) {

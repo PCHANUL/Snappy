@@ -25,10 +25,9 @@ import {
   updateSearchProgress,
 } from "../_core/db.ts";
 import { extractCandidateKeywords } from "../_analysis/keyword-extractor.ts";
+import { enqueueAnalysisBatch } from "../_analysis/analysis-queue.ts";
 import { rankCandidatesByTrend } from "../_trends/naver-trends.ts";
 import type { RankedKeyword } from "../_trends/naver-trends.ts";
-import { analyzeContentItem } from "../_analysis/content-analyzer.ts";
-import type { CreatedRow } from "../_notion/client.ts";
 import { env } from "../_core/env.ts";
 import type { Platform, User } from "../_core/types.ts";
 
@@ -161,6 +160,7 @@ async function processSearch(
       request.platforms,
       10,
       request.period,
+      { throwIfCancelled },
     );
     await throwIfCancelled();
 
@@ -225,6 +225,7 @@ async function processSearch(
       metadata,
       totalFound,
       onProgress,
+      { throwIfCancelled },
     );
     await throwIfCancelled();
 
@@ -263,15 +264,15 @@ async function processSearch(
           error: String(err),
         });
       }
-      EdgeRuntime.waitUntil(
-        analyzeRows(
-          notion,
-          statusBlockId,
-          rows,
-          request.keyword,
-          analysisProps,
-        ),
-      );
+      await enqueueAnalysisBatch({
+        userId: request.user_id,
+        keyword: request.keyword,
+        rows,
+        analysisProps: [...analysisProps.entries()],
+        statusBlockId,
+        done: 0,
+        total: rows.length,
+      });
     }
 
     await throwIfCancelled();
@@ -340,74 +341,5 @@ async function processSearch(
     try {
       await notion.setSearchEmbedStatus(user.notion_database_id, false);
     } catch { /* non-fatal */ }
-  }
-}
-
-// 각 콘텐츠 행을 분석해 DB 속성을 채운다. 진행 상태는 callout으로 갱신.
-// 동시성 3으로 제한 — 크롤/요약 지연을 흡수하면서 Notion rate limit(3/s)도 보호
-async function analyzeRows(
-  notion: NotionClient,
-  statusBlockId: string | null,
-  rows: CreatedRow[],
-  keyword: string,
-  analysisProps: Map<string, string>,
-): Promise<void> {
-  const CONCURRENCY = 3;
-  const total = rows.length;
-  let done = 0;
-
-  try {
-    for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      const batch = rows.slice(i, i + CONCURRENCY);
-      await Promise.allSettled(batch.map(async (row) => {
-        try {
-          const result = await analyzeContentItem({
-            url: row.url,
-            platform: row.platform,
-            title: row.title,
-            description: row.description,
-            snippet: row.snippet,
-            keyword,
-          });
-          await notion.updateRowAnalysis(row.rowId, result, analysisProps);
-          await notion.appendRowAnalysisContent(row.rowId, result)
-            .catch((appendError) => {
-              logger.warn("Failed to append row analysis content (non-fatal)", {
-                url: row.url,
-                error: String(appendError),
-              });
-            });
-        } catch (err) {
-          logger.warn("Row analysis failed (non-fatal)", {
-            url: row.url,
-            error: String(err),
-          });
-          await notion.updateRowAnalysis(row.rowId, {
-            keywords: [],
-            status: "failed",
-          }, analysisProps)
-            .catch(() => {/* 상태 갱신 실패는 무시 */});
-        }
-      }));
-
-      done += batch.length;
-      if (statusBlockId) {
-        await notion.updateAnalysisStatusCallout(
-          statusBlockId,
-          done,
-          total,
-          false,
-        )
-          .catch(() => {/* 진행률 갱신 실패는 무시 */});
-      }
-    }
-
-    if (statusBlockId) {
-      await notion.updateAnalysisStatusCallout(statusBlockId, done, total, true)
-        .catch(() => {/* 완료 표시 실패는 무시 */});
-    }
-    logger.info("Content analysis completed", { total });
-  } catch (err) {
-    logger.error("Content analysis loop failed", err, { total, done });
   }
 }

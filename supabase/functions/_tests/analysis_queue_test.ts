@@ -1,0 +1,51 @@
+import "./setup.ts";
+import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { enqueueAnalysisBatch } from "../_analysis/analysis-queue.ts";
+
+Deno.test("enqueueAnalysisBatch: 내부 분석 함수에 진행 상태와 행 전달", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = "";
+  let capturedInit: RequestInit | undefined;
+
+  globalThis.fetch = (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    capturedUrl = String(input);
+    capturedInit = init;
+    return Promise.resolve(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+  };
+
+  try {
+    await enqueueAnalysisBatch({
+      userId: "user-1",
+      keyword: "고양이",
+      rows: [{
+        rowId: "row-1",
+        url: "https://example.com/1",
+        platform: "tistory",
+        title: "고양이 글",
+      }],
+      analysisProps: [["분석 상태", "select"]],
+      statusBlockId: "block-1",
+      done: 3,
+      total: 10,
+    });
+
+    const headers = new Headers(capturedInit?.headers);
+    const body = JSON.parse(String(capturedInit?.body));
+    assertEquals(
+      capturedUrl,
+      "https://test.supabase.co/functions/v1/analyze-search",
+    );
+    assertEquals(headers.get("authorization"), "Bearer test-service-role-key");
+    assertEquals(headers.get("apikey"), "test-service-role-key");
+    assertEquals(body.done, 3);
+    assertEquals(body.total, 10);
+    assertEquals(body.rows[0].rowId, "row-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
