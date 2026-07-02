@@ -25,7 +25,12 @@ import {
   updateSearchProgress,
 } from "../_core/db.ts";
 import { extractCandidateKeywords } from "../_analysis/keyword-extractor.ts";
-import { enqueueAnalysisBatch } from "../_analysis/analysis-queue.ts";
+import {
+  createAnalysisJob,
+  cancelAnalysisJob,
+  enqueueAnalysisRows,
+} from "../_analysis/analysis-job.ts";
+import { enqueueAnalysisJob } from "../_analysis/analysis-queue.ts";
 import { rankCandidatesByTrend } from "../_trends/naver-trends.ts";
 import type { RankedKeyword } from "../_trends/naver-trends.ts";
 import { env } from "../_core/env.ts";
@@ -114,6 +119,7 @@ async function processSearch(
   };
 
   let pageId: string | undefined;
+  let analysisJobId: string | null = null;
   try {
     // 키워드 누락 시 사용자에게 명확한 안내
     if (!keyword) {
@@ -218,7 +224,7 @@ async function processSearch(
 
     // 5. 요약 callout + child DB(매체별 행)로 결과 표시 (상태 → 완료)
     await throwIfCancelled();
-    const { rows, analysisProps } = await notion.updatePageWithChildDatabase(
+    const { rows } = await notion.updatePageWithChildDatabase(
       pageId,
       request.keyword,
       orchestratorResult.results,
@@ -226,6 +232,45 @@ async function processSearch(
       totalFound,
       onProgress,
       { throwIfCancelled },
+      {
+        onAnalysisReady: async (analysisProps, total) => {
+          const hasAnalysisProps =
+            analysisProps.get("분석 상태") === "select" ||
+            analysisProps.get("요약") === "rich_text" ||
+            analysisProps.get("키워드") === "multi_select";
+          if (!hasAnalysisProps || total === 0) return;
+
+          let statusBlockId: string | null = null;
+          try {
+            statusBlockId = await notion.appendAnalysisStatusCallout(
+              pageId!,
+              total,
+            );
+          } catch (error) {
+            logger.warn(
+              "Failed to add analysis status callout (non-fatal)",
+              { error: String(error) },
+            );
+          }
+
+          analysisJobId = await createAnalysisJob({
+            userId: request.user_id,
+            keyword: request.keyword,
+            analysisProps: [...analysisProps.entries()],
+            statusBlockId,
+            total,
+          });
+        },
+        onRowsCreated: async (createdRows, startPosition) => {
+          if (!analysisJobId) return;
+          const shouldStart = await enqueueAnalysisRows(
+            analysisJobId,
+            createdRows,
+            startPosition,
+          );
+          if (shouldStart) await enqueueAnalysisJob(analysisJobId);
+        },
+      },
     );
     await throwIfCancelled();
 
@@ -244,35 +289,6 @@ async function processSearch(
           error: String(err),
         });
       }
-    }
-
-    // 7. 콘텐츠 분석 — DB에 분석 컬럼이 있으면 백그라운드로 각 행 분석
-    //    검색 자체는 여기서 완료 처리(상태 해제)되고, 분석은 별도로 진행 + callout으로 안내
-    const hasAnalysisProps = analysisProps.get("분석 상태") === "select" ||
-      analysisProps.get("요약") === "rich_text" ||
-      analysisProps.get("키워드") === "multi_select";
-    await throwIfCancelled();
-    if (rows.length && hasAnalysisProps) {
-      let statusBlockId: string | null = null;
-      try {
-        statusBlockId = await notion.appendAnalysisStatusCallout(
-          pageId,
-          rows.length,
-        );
-      } catch (err) {
-        logger.warn("Failed to add analysis status callout (non-fatal)", {
-          error: String(err),
-        });
-      }
-      await enqueueAnalysisBatch({
-        userId: request.user_id,
-        keyword: request.keyword,
-        rows,
-        analysisProps: [...analysisProps.entries()],
-        statusBlockId,
-        done: 0,
-        total: rows.length,
-      });
     }
 
     await throwIfCancelled();
@@ -296,6 +312,14 @@ async function processSearch(
       duration_ms: Date.now() - startTime,
     });
   } catch (error) {
+    if (analysisJobId) {
+      await cancelAnalysisJob(analysisJobId).catch((cancelError) => {
+        logger.warn("Failed to cancel analysis job", {
+          analysisJobId,
+          error: String(cancelError),
+        });
+      });
+    }
     const cancelled = error instanceof SearchCancelledError;
     const errorMessage = error instanceof Error
       ? error.message

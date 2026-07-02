@@ -1,6 +1,9 @@
 import "./setup.ts";
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { enqueueAnalysisBatch } from "../_analysis/analysis-queue.ts";
+import {
+  enqueueAnalysisBatch,
+  enqueueAnalysisJob,
+} from "../_analysis/analysis-queue.ts";
 
 Deno.test("enqueueAnalysisBatch: 내부 분석 함수에 진행 상태와 행 전달", async () => {
   const originalFetch = globalThis.fetch;
@@ -42,9 +45,37 @@ Deno.test("enqueueAnalysisBatch: 내부 분석 함수에 진행 상태와 행 �
     );
     assertEquals(headers.get("authorization"), "Bearer test-service-role-key");
     assertEquals(headers.get("apikey"), "test-service-role-key");
+    assertEquals(
+      headers.get("x-analysis-queue-secret"),
+      "test-service-role-key",
+    );
     assertEquals(body.done, 3);
     assertEquals(body.total, 10);
     assertEquals(body.rows[0].rowId, "row-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("enqueueAnalysisJob: FIFO 작업 ID를 분석 함수에 전달", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> = {};
+
+  globalThis.fetch = (
+    _input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    capturedBody = JSON.parse(String(init?.body));
+    return Promise.resolve(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+  };
+
+  try {
+    await enqueueAnalysisJob("11111111-1111-1111-1111-111111111111");
+    assertEquals(capturedBody, {
+      jobId: "11111111-1111-1111-1111-111111111111",
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

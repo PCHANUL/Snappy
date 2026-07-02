@@ -3,7 +3,14 @@ import { analyzeContentItem } from "../_analysis/content-analyzer.ts";
 import {
   type AnalysisBatchPayload,
   enqueueAnalysisBatch,
+  enqueueAnalysisJob,
 } from "../_analysis/analysis-queue.ts";
+import {
+  claimAnalysisRows,
+  completeAnalysisRows,
+  getAnalysisJob,
+  shouldContinueAnalysisJob,
+} from "../_analysis/analysis-job.ts";
 import { decryptNotionKey } from "../_core/crypto.ts";
 import { getSupabase } from "../_core/db.ts";
 import { env } from "../_core/env.ts";
@@ -35,19 +42,80 @@ serve(async (req) => {
   try {
     assertInternalRequest(req);
     const payload = validatePayload(await req.json());
-
-    EdgeRuntime.waitUntil(processAnalysisBatch(payload));
+    if ("jobId" in payload) {
+      EdgeRuntime.waitUntil(processAnalysisJob(payload.jobId));
+    } else {
+      EdgeRuntime.waitUntil(processAnalysisBatch(payload));
+    }
 
     return jsonResponse({
       status: "accepted",
-      batchSize: Math.min(payload.rows.length, ANALYSIS_BATCH_SIZE),
-      remaining: Math.max(payload.rows.length - ANALYSIS_BATCH_SIZE, 0),
+      ...("jobId" in payload
+        ? { jobId: payload.jobId }
+        : {
+          batchSize: Math.min(payload.rows.length, ANALYSIS_BATCH_SIZE),
+          remaining: Math.max(
+            payload.rows.length - ANALYSIS_BATCH_SIZE,
+            0,
+          ),
+        }),
     }, 202);
   } catch (error) {
     logger.error("Analyze search request failed", error);
     return errorToResponse(error);
   }
 });
+
+async function processAnalysisJob(jobId: string): Promise<void> {
+  try {
+    const job = await getAnalysisJob(jobId);
+    if (!job || job.status === "completed" || job.status === "cancelled") {
+      return;
+    }
+
+    const claimed = await claimAnalysisRows(jobId, ANALYSIS_BATCH_SIZE);
+    if (claimed.length === 0) {
+      await shouldContinueAnalysisJob(jobId);
+      return;
+    }
+
+    const notion = await createNotionClient(job.userId);
+    const analysisProps = new Map(job.analysisProps);
+    const results = await Promise.all(
+      claimed.map(({ row }) =>
+        analyzeRow(notion, row, job.keyword, analysisProps)
+      ),
+    );
+    const progress = await completeAnalysisRows(
+      jobId,
+      claimed.map(({ itemId }) => itemId),
+      results.filter((success) => !success).length,
+    );
+    const finished = progress.completed >= progress.total;
+
+    if (progress.statusBlockId) {
+      await notion.updateAnalysisStatusCallout(
+        progress.statusBlockId,
+        progress.completed,
+        progress.total,
+        finished,
+      ).catch(() => {/* 진행률 표시는 분석 흐름을 막지 않는다. */});
+    }
+
+    const shouldContinue = await shouldContinueAnalysisJob(jobId);
+    if (shouldContinue) await enqueueAnalysisJob(jobId);
+
+    logger.info("Content analysis job batch completed", {
+      jobId,
+      completed: progress.completed,
+      total: progress.total,
+      failed: progress.failed,
+      continued: shouldContinue,
+    });
+  } catch (error) {
+    logger.error("Content analysis job failed", error, { jobId });
+  }
+}
 
 async function processAnalysisBatch(
   payload: AnalysisBatchPayload,
@@ -103,7 +171,7 @@ async function analyzeRow(
   row: CreatedRow,
   keyword: string,
   analysisProps: Map<string, string>,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const result = await analyzeContentItem({
       url: row.url,
@@ -121,6 +189,7 @@ async function analyzeRow(
           error: error instanceof Error ? error.message : String(error),
         });
       });
+    return result.status === "done";
   } catch (error) {
     logger.warn("Row analysis failed", {
       url: row.url,
@@ -130,6 +199,7 @@ async function analyzeRow(
       keywords: [],
       status: "failed",
     }, analysisProps).catch(() => {/* 실패 상태 기록 오류는 무시한다. */});
+    return false;
   }
 }
 
@@ -151,17 +221,29 @@ async function createNotionClient(userId: string): Promise<NotionClient> {
 
 function assertInternalRequest(req: Request): void {
   const authorization = req.headers.get("Authorization");
-  if (authorization !== `Bearer ${env.supabase.serviceRoleKey}`) {
+  const queueSecret = req.headers.get("X-Analysis-Queue-Secret");
+  if (
+    authorization !== `Bearer ${env.supabase.serviceRoleKey}` &&
+    queueSecret !== env.analysis.queueSecret
+  ) {
     throw new AuthError("Internal analysis request required");
   }
 }
 
-function validatePayload(value: unknown): AnalysisBatchPayload {
+function validatePayload(
+  value: unknown,
+): AnalysisBatchPayload | { jobId: string } {
   if (!value || typeof value !== "object") {
     throw new ValidationError("Invalid analysis payload");
   }
 
   const payload = value as Partial<AnalysisBatchPayload>;
+  if (
+    "jobId" in payload &&
+    typeof (payload as { jobId?: unknown }).jobId === "string"
+  ) {
+    return { jobId: (payload as { jobId: string }).jobId };
+  }
   if (!payload.userId || typeof payload.userId !== "string") {
     throw new ValidationError("userId required");
   }

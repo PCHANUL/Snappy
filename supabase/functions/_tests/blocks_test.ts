@@ -1,5 +1,6 @@
 import { assertEquals, assert } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
 import {
+  buildContentPageTemplateBlocks,
   buildResultBlocks,
   buildSummaryBlocks,
   buildLoadMoreCallout,
@@ -287,4 +288,15 @@ Deno.test('buildSubPageBlocks: description/snippet 모두 없으면 텍스트 �
     .filter(b => b.type === 'paragraph')
     .filter(b => b.paragraph.rich_text[0].text.content.length > 50);
   assertEquals(textParagraphs.length, 0, '긴 텍스트 paragraph 없어야 함');
+});
+
+Deno.test('buildContentPageTemplateBlocks: 원문 콘텐츠 섹션을 생성', () => {
+  const blocks = buildContentPageTemplateBlocks();
+
+  assertEquals(blocks.length, 1);
+  assertEquals(blocks[0].type, 'heading_2');
+  assertEquals(
+    blocks[0].heading_2.rich_text[0].text.content,
+    '원문 콘텐츠',
+  );
 });

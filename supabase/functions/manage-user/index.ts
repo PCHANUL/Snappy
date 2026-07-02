@@ -696,6 +696,13 @@ async function handleSetupSearchButton(req: Request): Promise<Response> {
     user.notion_database_id,
     user_id,
   );
+  await notion.moveGettingStartedToggleNextToSettings(user.notion_database_id)
+    .catch((error) => {
+      logger.warn("Failed to move getting started toggle (non-fatal)", {
+        user_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   await notion.removeTrendsEmbed(user.notion_database_id);
 
   logger.info("Search button embed updated", { user_id, embedUrl });

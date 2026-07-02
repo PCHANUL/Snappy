@@ -45,6 +45,12 @@ export const env = {
   anthropic: {
     apiKey: optional('ANTHROPIC_API_KEY', ''),
   },
+  analysis: {
+    queueSecret: optional(
+      'ANALYSIS_QUEUE_SECRET',
+      required('SUPABASE_SERVICE_ROLE_KEY'),
+    ),
+  },
   notion: {
     clientId: optional('NOTION_CLIENT_ID', ''),
     clientSecret: optional('NOTION_CLIENT_SECRET', ''),

@@ -15,8 +15,19 @@ export interface AnalysisBatchPayload {
   total: number;
 }
 
+export async function enqueueAnalysisJob(jobId: string): Promise<void> {
+  await postAnalysisRequest({ jobId });
+}
+
 export async function enqueueAnalysisBatch(
   payload: AnalysisBatchPayload,
+  retries = QUEUE_RETRIES,
+): Promise<void> {
+  await postAnalysisRequest(payload, retries);
+}
+
+async function postAnalysisRequest(
+  payload: AnalysisBatchPayload | { jobId: string },
   retries = QUEUE_RETRIES,
 ): Promise<void> {
   let response: Response;
@@ -27,6 +38,7 @@ export async function enqueueAnalysisBatch(
       headers: {
         "Authorization": `Bearer ${env.supabase.serviceRoleKey}`,
         "apikey": env.supabase.serviceRoleKey,
+        "X-Analysis-Queue-Secret": env.analysis.queueSecret,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -34,7 +46,7 @@ export async function enqueueAnalysisBatch(
   } catch (error) {
     if (retries > 0) {
       await sleep(500);
-      return await enqueueAnalysisBatch(payload, retries - 1);
+      return await postAnalysisRequest(payload, retries - 1);
     }
     throw error;
   }
@@ -42,7 +54,7 @@ export async function enqueueAnalysisBatch(
   if (!response.ok) {
     if (retries > 0 && (response.status === 429 || response.status >= 500)) {
       await sleep(response.status === 429 ? 1_500 : 800);
-      return await enqueueAnalysisBatch(payload, retries - 1);
+      return await postAnalysisRequest(payload, retries - 1);
     }
     const body = await response.text();
     throw new Error(

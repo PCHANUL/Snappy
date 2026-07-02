@@ -139,6 +139,12 @@ export function buildSubPageBlocks(item: FlatResult): NotionBlock[] {
   return blocks;
 }
 
+// 설정 페이지의 콘텐츠 템플릿이 비어 있을 때 사용하는 기본 구조.
+// 이후 사용자가 이 페이지를 편집하면 Notion 템플릿 API가 변경된 구조를 그대로 복제한다.
+export function buildContentPageTemplateBlocks(): NotionBlock[] {
+  return [heading2('원문 콘텐츠')];
+}
+
 // === Helper 함수들 ===
 
 function buildMediaBlock(item: ContentItem): NotionBlock | null {

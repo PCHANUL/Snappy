@@ -4,6 +4,7 @@
 import { NotionApiError } from "../_core/errors.ts";
 import { logger } from "../_core/logger.ts";
 import {
+  buildContentPageTemplateBlocks,
   buildLoadMoreCallout,
   buildResultBlocks,
   buildSubPageBlocks,
@@ -20,6 +21,7 @@ import type {
 } from "../_core/types.ts";
 import { PLATFORM_INFO } from "../_core/types.ts";
 import type { AnalysisResult } from "../_analysis/content-analyzer.ts";
+import { waitForNotionRequestSlot } from "./rate-limiter.ts";
 
 // 검색 결과 행에 추가된 콘텐츠 — 분석 루프 대상
 export interface CreatedRow {
@@ -29,6 +31,22 @@ export interface CreatedRow {
   title: string;
   description?: string;
   snippet?: string;
+}
+
+interface ContentPageTemplate {
+  pageId: string;
+  topLevelBlockCount: number;
+}
+
+interface ContentCreationHooks {
+  onAnalysisReady?: (
+    analysisProps: Map<string, string>,
+    total: number,
+  ) => Promise<void>;
+  onRowsCreated?: (
+    rows: CreatedRow[],
+    startPosition: number,
+  ) => Promise<void>;
 }
 
 // 콘텐츠 분석 결과를 담는 DB 속성 이름 (템플릿/프로그램 DB 공통)
@@ -402,12 +420,16 @@ export class NotionClient {
     items: FlatResult[],
     onProgress?: (message: string) => Promise<void>,
     analysisProps?: Map<string, string>,
-    contentPageTemplateId?: string | null,
+    contentPageTemplate?: ContentPageTemplate | null,
     control: { throwIfCancelled?: () => Promise<void> } = {},
+    onBatchCreated?: (
+      rows: CreatedRow[],
+      startPosition: number,
+    ) => Promise<void>,
   ): Promise<CreatedRow[]> {
     const hasStatus = analysisProps?.get(ANALYSIS_PROPS.status) === "select";
     const rows: CreatedRow[] = [];
-    const dataSourceId = contentPageTemplateId
+    const dataSourceId = contentPageTemplate
       ? await this.getDataSourceId(databaseId).catch((error) => {
         logger.warn("Failed to resolve content database data source", {
           databaseId,
@@ -420,60 +442,74 @@ export class NotionClient {
     for (let i = 0; i < items.length; i += CONTENT_PAGE_BATCH_SIZE) {
       await control.throwIfCancelled?.();
       const batch = items.slice(i, i + CONTENT_PAGE_BATCH_SIZE);
-      const batchRows = await Promise.all(batch.map(async (item) => {
-        await control.throwIfCancelled?.();
-        const info = PLATFORM_INFO[item.platform];
-        const properties: Record<string, any> = {
-          "제목": { title: [{ type: "text", text: { content: item.title } }] },
-          "매체": { select: { name: PLATFORM_TO_NOTION[item.platform] } },
-        };
-        if (item.url) properties["URL"] = { url: item.url };
-        if (item.author) {
-          properties["작성자"] = {
-            rich_text: [{ type: "text", text: { content: item.author } }],
+      const batchRows: Array<CreatedRow | null> = await Promise.all(
+        batch.map(async (item): Promise<CreatedRow | null> => {
+          await control.throwIfCancelled?.();
+          const info = PLATFORM_INFO[item.platform];
+          const properties: Record<string, any> = {
+            "제목": {
+              title: [{ type: "text", text: { content: item.title } }],
+            },
+            "매체": { select: { name: PLATFORM_TO_NOTION[item.platform] } },
           };
-        }
-        if (item.published_at) {
-          properties["날짜"] = {
-            date: { start: item.published_at.slice(0, 10) },
+          if (item.url) properties["URL"] = { url: item.url };
+          if (item.author) {
+            properties["작성자"] = {
+              rich_text: [{ type: "text", text: { content: item.author } }],
+            };
+          }
+          if (item.published_at) {
+            properties["날짜"] = {
+              date: { start: item.published_at.slice(0, 10) },
+            };
+          }
+          if (hasStatus) {
+            properties[ANALYSIS_PROPS.status] = {
+              select: { name: ANALYSIS_STATUS.analyzing },
+            };
+          }
+
+          const body: Record<string, any> = {
+            parent: { database_id: toUuid(databaseId) },
+            icon: { type: "emoji", emoji: info.emoji },
+            properties,
           };
-        }
-        if (hasStatus) {
-          properties[ANALYSIS_PROPS.status] = {
-            select: { name: ANALYSIS_STATUS.analyzing },
-          };
-        }
+          if (item.thumbnail) {
+            body.cover = {
+              type: "external",
+              external: { url: item.thumbnail },
+            };
+          }
 
-        const body: Record<string, any> = {
-          parent: { database_id: toUuid(databaseId) },
-          icon: { type: "emoji", emoji: info.emoji },
-          properties,
-        };
-        if (item.thumbnail) {
-          body.cover = { type: "external", external: { url: item.thumbnail } };
-        }
+          const created = await this.createContentItemPage(
+            databaseId,
+            body,
+            item,
+            dataSourceId,
+            contentPageTemplate?.pageId,
+            contentPageTemplate?.topLevelBlockCount,
+          );
+          await control.throwIfCancelled?.();
+          if (!item.url) return null;
 
-        const created = await this.createContentItemPage(
-          databaseId,
-          body,
-          item,
-          dataSourceId,
-          contentPageTemplateId,
-        );
-        await control.throwIfCancelled?.();
-        if (!item.url) return null;
-
-        return {
-          rowId: created.id as string,
-          url: item.url,
-          platform: item.platform,
-          title: item.title,
-          description: item.description,
-          snippet: item.snippet,
-        } satisfies CreatedRow;
-      }));
+          return {
+            rowId: created.id as string,
+            url: item.url,
+            platform: item.platform,
+            title: item.title,
+            description: item.description,
+            snippet: item.snippet,
+          } satisfies CreatedRow;
+        }),
+      );
       for (const row of batchRows) {
         if (row) rows.push(row);
+      }
+      const createdBatchRows = batchRows.filter(
+        (row): row is CreatedRow => row !== null,
+      );
+      if (createdBatchRows.length > 0) {
+        await onBatchCreated?.(createdBatchRows, i + 1);
       }
 
       const completed = Math.min(i + batch.length, items.length);
@@ -495,10 +531,12 @@ export class NotionClient {
     item: FlatResult,
     dataSourceId?: string | null,
     templatePageId?: string | null,
+    templateBlockCount = 0,
   ): Promise<any> {
     if (dataSourceId && templatePageId) {
+      let created: any;
       try {
-        const created = await this.fetchApi("pages", {
+        created = await this.fetchApi("pages", {
           method: "POST",
           headers: { "Notion-Version": NOTION_TEMPLATE_API_VERSION },
           body: JSON.stringify({
@@ -513,18 +551,6 @@ export class NotionClient {
             },
           }),
         });
-
-        await sleep(250);
-        await this.appendBlocks(created.id as string, buildSubPageBlocks(item))
-          .catch((error) => {
-            logger.warn("Failed to append content page blocks after template", {
-              pageId: created.id,
-              url: item.url,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          });
-
-        return created;
       } catch (error) {
         logger.warn(
           "Content page template was not applied; falling back to direct page body",
@@ -535,7 +561,27 @@ export class NotionClient {
             error: error instanceof Error ? error.message : String(error),
           },
         );
+        body.children = buildSubPageBlocks(item);
+        return await this.fetchApi("pages", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
       }
+
+      const applied = await this.waitForTemplateBlocks(
+        created.id as string,
+        templateBlockCount,
+      );
+      if (!applied) {
+        logger.warn("Timed out waiting for content page template blocks", {
+          pageId: created.id,
+          templatePageId,
+          expectedBlocks: templateBlockCount,
+          url: item.url,
+        });
+      }
+      await this.appendBlocks(created.id as string, buildSubPageBlocks(item));
+      return created;
     }
 
     body.children = buildSubPageBlocks(item);
@@ -704,6 +750,7 @@ export class NotionClient {
     totalCount: number,
     onProgress?: (message: string) => Promise<void>,
     control: { throwIfCancelled?: () => Promise<void> } = {},
+    hooks: ContentCreationHooks = {},
   ): Promise<{ rows: CreatedRow[]; analysisProps: Map<string, string> }> {
     await control.throwIfCancelled?.();
     // 1. 속성 업데이트 (상태 → 완료)
@@ -751,7 +798,7 @@ export class NotionClient {
     await this.ensureContentDatabaseAnalysisProperties(databaseId);
     const analysisProps = await this.getDatabaseProperties(databaseId);
     await control.throwIfCancelled?.();
-    const contentPageTemplateId = await this
+    const contentPageTemplate = await this
       .findOrCreateContentPageTemplatePage(
         pageId,
       ).catch((error) => {
@@ -770,13 +817,16 @@ export class NotionClient {
     const allItems: FlatResult[] = results.flatMap((r) =>
       r.items.map((item) => ({ ...item, platform: r.platform }))
     );
+    await hooks.onAnalysisReady?.(analysisProps, allItems.length);
+    await control.throwIfCancelled?.();
     const rows = await this.addItemsToDatabase(
       databaseId,
       allItems,
       onProgress,
       analysisProps,
-      contentPageTemplateId,
+      contentPageTemplate,
       control,
+      hooks.onRowsCreated,
     );
 
     logger.info("Notion page updated with child database", {
@@ -956,7 +1006,7 @@ export class NotionClient {
 
   private async findOrCreateContentPageTemplatePage(
     searchEntryPageId: string,
-  ): Promise<string | null> {
+  ): Promise<ContentPageTemplate | null> {
     const settingsPageId = await this.findSettingsPageFromEntry(
       searchEntryPageId,
     );
@@ -966,20 +1016,45 @@ export class NotionClient {
       settingsPageId,
       CONTENT_PAGE_TEMPLATE_TITLE,
     );
-    if (existing) return existing;
+    const templatePageId = existing ??
+      await this.createChildPage(
+        settingsPageId,
+        CONTENT_PAGE_TEMPLATE_TITLE,
+        "📄",
+      );
 
-    const created = await this.createChildPage(
-      settingsPageId,
-      CONTENT_PAGE_TEMPLATE_TITLE,
-      "📄",
-    );
-    logger.info("Content page template created", {
-      searchEntryPageId,
-      settingsPageId,
-      templatePageId: created,
-      title: CONTENT_PAGE_TEMPLATE_TITLE,
-    });
-    return created;
+    let blocks = await this.listAllBlockChildren(templatePageId);
+    if (blocks.length === 0) {
+      const defaultBlocks = buildContentPageTemplateBlocks();
+      await this.appendBlocks(templatePageId, defaultBlocks);
+      blocks = defaultBlocks;
+      logger.info("Content page template initialized", {
+        searchEntryPageId,
+        settingsPageId,
+        templatePageId,
+        title: CONTENT_PAGE_TEMPLATE_TITLE,
+      });
+    }
+
+    return {
+      pageId: templatePageId,
+      topLevelBlockCount: blocks.length,
+    };
+  }
+
+  private async waitForTemplateBlocks(
+    pageId: string,
+    expectedCount: number,
+  ): Promise<boolean> {
+    if (expectedCount <= 0) return true;
+
+    const deadline = Date.now() + 12_000;
+    while (Date.now() < deadline) {
+      const blocks = await this.listAllBlockChildren(pageId);
+      if (blocks.length >= expectedCount) return true;
+      await sleep(400);
+    }
+    return false;
   }
 
   private async findSettingsPageFromEntry(
@@ -1074,6 +1149,68 @@ export class NotionClient {
     } while (cursor);
 
     return null;
+  }
+
+  private async listAllBlockChildren(blockId: string): Promise<any[]> {
+    const blocks: any[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const qs = new URLSearchParams({ page_size: "100" });
+      if (cursor) qs.set("start_cursor", cursor);
+      const data = await this.fetchApi(
+        `blocks/${toUuid(blockId)}/children?${qs.toString()}`,
+        { method: "GET" },
+      );
+      blocks.push(...((data.results as any[]) || []));
+      cursor = data.has_more ? data.next_cursor : undefined;
+    } while (cursor);
+
+    return blocks;
+  }
+
+  private async cloneBlockTree(
+    source: any,
+    targetParentId: string,
+    afterBlockId?: string,
+  ): Promise<string> {
+    const body: Record<string, unknown> = {
+      children: [toCreatableBlock(source)],
+    };
+    if (afterBlockId) {
+      body.position = {
+        type: "after_block",
+        after_block: { id: toUuid(afterBlockId) },
+      };
+    }
+
+    const response = await this.fetchApi(
+      `blocks/${toUuid(targetParentId)}/children`,
+      {
+        method: "PATCH",
+        headers: { "Notion-Version": NOTION_TEMPLATE_API_VERSION },
+        body: JSON.stringify(body),
+      },
+    );
+    const createdId = response.results?.[0]?.id as string | undefined;
+    if (!createdId) {
+      throw new NotionApiError("cloned block id was not returned");
+    }
+
+    if (source.has_children) {
+      try {
+        const children = await this.listAllBlockChildren(source.id as string);
+        for (const child of children) {
+          await this.cloneBlockTree(child, createdId);
+        }
+      } catch (error) {
+        await this.fetchApi(`blocks/${createdId}`, { method: "DELETE" })
+          .catch(() => {/* 원본이 남아 있으므로 정리 실패는 무시 */});
+        throw error;
+      }
+    }
+
+    return createdId;
   }
 
   private async createSearchEntryWithTemplate(
@@ -1314,6 +1451,7 @@ export class NotionClient {
   ): Promise<any> {
     let response: Response;
     try {
+      await waitForNotionRequestSlot(this.apiKey);
       const timeoutSignal = AbortSignal.timeout(NOTION_REQUEST_TIMEOUT_MS);
       const signal = init.signal
         ? AbortSignal.any([init.signal, timeoutSignal])
@@ -1341,7 +1479,12 @@ export class NotionClient {
 
     if (!response.ok) {
       if (retries > 0 && (response.status === 429 || response.status >= 500)) {
-        const delay = response.status === 429 ? 1500 : 800;
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        const delay = response.status === 429 && Number.isFinite(retryAfter)
+          ? Math.max(retryAfter * 1000, 500)
+          : response.status === 429
+          ? 1500
+          : 800;
         await sleep(delay);
         return this.fetchApi(path, init, retries - 1);
       }
@@ -1421,6 +1564,69 @@ export class NotionClient {
       }
       throw error;
     }
+  }
+
+  // 메인 페이지 상단의 '시작하기' 토글을 '설정' 하위 페이지 링크 바로 뒤로 이동한다.
+  // Notion API는 블록 이동을 지원하지 않아 전체 트리를 복제한 뒤 원본을 삭제한다.
+  async moveGettingStartedToggleNextToSettings(
+    databaseId: string,
+  ): Promise<void> {
+    const parentPageId = await this.getDatabaseParentPageId(databaseId);
+    const blocks = await this.listAllBlockChildren(parentPageId);
+    const settingsIndex = blocks.findIndex((block) =>
+      block.type === "child_page" && block.child_page?.title === "설정"
+    );
+    const startBlocks = blocks
+      .map((block, index) => ({ block, index }))
+      .filter(({ block }) =>
+        block.type === "toggle" &&
+        getBlockPlainText(block).includes("시작하기")
+      );
+
+    if (settingsIndex < 0 || startBlocks.length === 0) {
+      logger.info("Getting started toggle move skipped", {
+        parentPageId,
+        hasSettingsPage: settingsIndex >= 0,
+        hasGettingStartedToggle: startBlocks.length > 0,
+      });
+      return;
+    }
+
+    const positioned = startBlocks.find(
+      ({ index }) => index === settingsIndex + 1,
+    );
+    if (positioned) {
+      for (const duplicate of startBlocks) {
+        if (duplicate.block.id === positioned.block.id) continue;
+        await this.fetchApi(`blocks/${duplicate.block.id}`, {
+          method: "DELETE",
+        });
+      }
+      return;
+    }
+
+    const source = startBlocks[0].block;
+    let copiedId: string | null = null;
+    try {
+      copiedId = await this.cloneBlockTree(
+        source,
+        parentPageId,
+        blocks[settingsIndex].id as string,
+      );
+    } catch (error) {
+      if (copiedId) {
+        await this.fetchApi(`blocks/${copiedId}`, { method: "DELETE" })
+          .catch(() => {/* 원본이 남아 있으므로 정리 실패는 무시 */});
+      }
+      throw error;
+    }
+
+    await this.fetchApi(`blocks/${source.id}`, { method: "DELETE" });
+    logger.info("Getting started toggle moved next to settings page", {
+      parentPageId,
+      sourceBlockId: source.id,
+      copiedBlockId: copiedId,
+    });
   }
 
   // 검색 진행 중 상태를 임베드 URL 파라미터로 표현
@@ -1698,6 +1904,42 @@ function normalizeTitle(title: string): string {
 
 function statusValue(status: string): { status: { name: string } } {
   return { status: { name: status } };
+}
+
+function getBlockPlainText(block: any): string {
+  const value = block?.[block?.type];
+  const richText = Array.isArray(value?.rich_text) ? value.rich_text : [];
+  return richText.map((item: any) => item.plain_text ?? "").join("").trim();
+}
+
+function toCreatableBlock(block: any): Record<string, unknown> {
+  const type = block?.type;
+  if (!type || !block[type]) {
+    throw new NotionApiError(`unsupported block type: ${String(type)}`);
+  }
+
+  return {
+    object: "block",
+    type,
+    [type]: sanitizeNotionWriteValue(block[type]),
+  };
+}
+
+function sanitizeNotionWriteValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeNotionWriteValue);
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (nested === null) continue;
+    if (["plain_text", "href"].includes(key)) {
+      continue;
+    }
+    output[key] = sanitizeNotionWriteValue(nested);
+  }
+  return output;
 }
 
 function searchEntryProperties(
